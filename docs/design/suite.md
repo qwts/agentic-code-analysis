@@ -156,9 +156,11 @@ build on.
 *which* files are judged; the verdict is about the file's current state, with
 statically derived context (import edges, growth) so the judge reasons rather
 than guesses. *Why:* the rule is a property of files, not of diffs; judging
-diff quality invites relitigating history. *Downside:* a PR can be failed for
-debt it merely touched, not created. Accepted deliberately — that is how
-ratchets already work here, and `warn` exists for the boundary.
+diff quality invites relitigating history. Import edges count toward the
+load-set only when comprehension requires opening them, not merely naming
+them — see the check design's load-set accounting. *Downside:* a PR can be
+failed for debt it merely touched, not created. Accepted deliberately — that
+is how ratchets already work here, and `warn` exists for the boundary.
 
 **D6 — model choice follows the tier registry pattern.** Checks declare a
 tier; config maps tier → provider/model; nothing hardcodes a model name.

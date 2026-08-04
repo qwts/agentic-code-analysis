@@ -37,6 +37,18 @@ Items 2–5 are cheap static derivations. They exist so the judge reasons about
 footprint (who must load this file, what this file forces into context)
 instead of guessing from content alone.
 
+**Load-set accounting (review clarification, 2026-08-04).** The practical
+test counts an import toward the load-set whenever the imported file must be
+*opened* to understand this one — not when its name at the boundary is
+enough. A well-bounded file is comprehensible from its own content plus the
+names it imports; needing to pull an import's contents into context is the
+edge case, not the norm. A short file so fragmented that nearly every line
+leans on an imported symbol therefore has a large effective footprint despite
+its line count — `over-fragmentation` or `incomplete-concept` territory.
+Conversely, a leaf file swept into the change set is still judged as it
+stands: its verdict describes its own footprint, never a neighbor's problem
+inherited through the diff.
+
 ## Judge output
 
 Structured output against a strict schema (`additionalProperties: false`, all
