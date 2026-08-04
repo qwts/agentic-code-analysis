@@ -19,6 +19,9 @@ changing anything:
 2. **Interfaces are frozen as designed.** Checks talk to JudgeClient, never a
    vendor SDK; checks never import each other; the three core libraries stay
    narrow — fork rather than widen.
+   Language: TypeScript 7 on Node ≥ 24, erasable syntax only, `.ts` import
+   specifiers, run via native type stripping — no build step, no `dist/`.
+   `npm run typecheck` (tsgo) and `npm test` (Node's runner) must pass.
 3. **No recalled model names.** Model/provider selection follows the tier map
    (ENG-0151); cite the registry or say unknown.
 4. **Judge prompts are gated by the calibration self-test.** Fix the prompt,

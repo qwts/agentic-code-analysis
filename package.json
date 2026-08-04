@@ -1,0 +1,21 @@
+{
+  "name": "agentic-code-analysis",
+  "version": "0.0.0",
+  "description": "Semantic, agent-powered checks for code structure and maintainability.",
+  "type": "module",
+  "bin": {
+    "aca": "./src/cli.ts"
+  },
+  "engines": {
+    "node": ">=24"
+  },
+  "scripts": {
+    "test": "node --test 'tests/*.test.ts'",
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "@anthropic-ai/sdk": "^0.115.0",
+    "@types/node": "^24.0.0",
+    "typescript": "^7.0.0"
+  }
+}
