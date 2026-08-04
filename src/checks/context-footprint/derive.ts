@@ -70,7 +70,10 @@ export function importedBy(index: Map<string, string[]>, file: string): string[]
 }
 
 function git(repoRoot: string, args: string[]): string {
-  return execFileSync('git', args, { cwd: repoRoot, encoding: 'utf8' });
+  // stderr is piped, not inherited: an absent path at the merge-base is
+  // expected control flow (new file), and findings-only output (D4) must not
+  // carry git's noise.
+  return execFileSync('git', args, { cwd: repoRoot, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] });
 }
 
 export function repoFiles(repoRoot: string): string[] {
