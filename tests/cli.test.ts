@@ -34,6 +34,12 @@ test('--help exits 0; missing and unknown checks exit 2', async () => {
   assert.equal(await run(['nonexistent'], deps([])), EXIT.usage);
 });
 
+test('usage lists the checks of the injected registry, not the built-in one', async () => {
+  const out: string[] = [];
+  await run(['--help'], deps([], out));
+  assert.match(out[0]!, /checks: fake/);
+});
+
 test('advisory mode always exits 0, even on fail verdicts', async () => {
   assert.equal(await run(['fake', 'a.ts'], deps([FAIL])), EXIT.ok);
 });

@@ -21,8 +21,9 @@ export interface RunDeps {
   stderr: (line: string) => void;
 }
 
-const USAGE = `usage: aca <check> [paths...] [--enforce] [--json] [--base <ref>]
-checks: ${[...checks.keys()].join(', ') || '(none registered yet)'}
+const usage = (registry: ReadonlyMap<string, CheckLoader>): string =>
+  `usage: aca <check> [paths...] [--enforce] [--json] [--base <ref>]
+checks: ${[...registry.keys()].join(', ') || '(none registered yet)'}
   --enforce   exit 1 on any fail verdict (default: advisory, always exit 0)
   --json      machine-readable output
   --base      diff base ref (default: origin/main)`;
@@ -53,12 +54,12 @@ export async function run(argv: string[], deps?: Partial<RunDeps>): Promise<numb
     return EXIT.usage;
   }
   if (args.values.help) {
-    d.stdout(USAGE);
+    d.stdout(usage(d.registry));
     return EXIT.ok;
   }
   const [checkName, ...paths] = args.positionals;
   if (!checkName) {
-    d.stderr(USAGE);
+    d.stderr(usage(d.registry));
     return EXIT.usage;
   }
   const loader = d.registry.get(checkName);

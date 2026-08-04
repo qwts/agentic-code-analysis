@@ -11,9 +11,10 @@ export function createAnthropicJudge(model: string, client?: Anthropic): JudgeCl
   if (client) {
     anthropic = client;
   } else {
-    try {
-      anthropic = new Anthropic();
-    } catch {
+    // The SDK constructs with null credentials and errors only on the first
+    // request; the exit-code contract (D3) needs the miss at creation time.
+    anthropic = new Anthropic();
+    if (anthropic.apiKey === null && anthropic.authToken === null) {
       throw new MissingCredentialsError('anthropic');
     }
   }

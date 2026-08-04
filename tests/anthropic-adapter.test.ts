@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import type Anthropic from '@anthropic-ai/sdk';
 import { createAnthropicJudge } from '../src/core/adapters/anthropic.ts';
+import { MissingCredentialsError } from '../src/core/judge-client.ts';
 
 const REQUEST = { system: 'rule text', user: 'file payload', schema: { type: 'object' }, maxTokens: 64 };
 
@@ -20,6 +21,20 @@ function stub(response: unknown, capture?: { params?: unknown }): Anthropic {
 function message(overrides: Record<string, unknown>): unknown {
   return { stop_reason: 'end_turn', stop_details: null, content: [], ...overrides };
 }
+
+test('missing credentials throw at creation, not at first request', () => {
+  // The SDK constructs fine with null credentials (review finding, PR #7);
+  // the adapter must surface the miss when the client is created.
+  const saved = { key: process.env['ANTHROPIC_API_KEY'], token: process.env['ANTHROPIC_AUTH_TOKEN'] };
+  delete process.env['ANTHROPIC_API_KEY'];
+  delete process.env['ANTHROPIC_AUTH_TOKEN'];
+  try {
+    assert.throws(() => createAnthropicJudge('model-x'), MissingCredentialsError);
+  } finally {
+    if (saved.key !== undefined) process.env['ANTHROPIC_API_KEY'] = saved.key;
+    if (saved.token !== undefined) process.env['ANTHROPIC_AUTH_TOKEN'] = saved.token;
+  }
+});
 
 test('valid structured output returns the parsed verdict', async () => {
   const capture: { params?: unknown } = {};
