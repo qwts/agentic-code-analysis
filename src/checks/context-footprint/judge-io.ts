@@ -108,6 +108,17 @@ interface JudgeVerdict {
   reasoning_summary: string;
 }
 
+function isViolation(value: unknown): value is Violation {
+  const v = value as Violation;
+  return (
+    typeof v === 'object' &&
+    v !== null &&
+    (CRITERIA as readonly string[]).includes(v.criterion) &&
+    typeof v.evidence === 'string' &&
+    typeof v.suggestion === 'string'
+  );
+}
+
 function isJudgeVerdict(value: unknown): value is JudgeVerdict {
   const v = value as JudgeVerdict;
   return (
@@ -115,8 +126,9 @@ function isJudgeVerdict(value: unknown): value is JudgeVerdict {
     v !== null &&
     ['pass', 'warn', 'fail'].includes(v.verdict) &&
     typeof v.reasoning_summary === 'string' &&
+    typeof v.practical_test_answer === 'string' &&
     Array.isArray(v.violations) &&
-    v.violations.every((violation) => (CRITERIA as readonly string[]).includes(violation.criterion))
+    v.violations.every(isViolation)
   );
 }
 

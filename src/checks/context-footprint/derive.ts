@@ -38,23 +38,35 @@ export function importsOf(file: string, content: string): string[] {
   return [...new Set(importSpecifiers(content).map((spec) => resolveSpecifier(file, spec)))].sort();
 }
 
-export function importedBy(repoRoot: string, file: string, repoFiles: string[]): string[] {
-  const target = comparable(file);
-  const importers: string[] = [];
+/**
+ * One pass over the repo builds the reverse import graph; per-file lookups
+ * are then O(1). Scanning per changed file instead would be
+ * O(changed × repo) sync I/O (review finding, PR #8).
+ */
+export function buildImporterIndex(repoRoot: string, repoFiles: string[]): Map<string, string[]> {
+  const index = new Map<string, string[]>();
   for (const candidate of repoFiles) {
-    if (candidate === file || !CODE_EXT.test(candidate)) continue;
+    if (!CODE_EXT.test(candidate)) continue;
     let content: string;
     try {
       content = readFileSync(join(repoRoot, candidate), 'utf8');
     } catch {
       continue;
     }
-    const hit = importSpecifiers(content).some(
-      (spec) => comparable(resolveSpecifier(candidate, spec)) === target,
-    );
-    if (hit) importers.push(candidate);
+    for (const spec of new Set(importSpecifiers(content))) {
+      const resolved = comparable(resolveSpecifier(candidate, spec));
+      const importers = index.get(resolved) ?? [];
+      importers.push(candidate);
+      index.set(resolved, importers);
+    }
   }
-  return importers.sort();
+  for (const importers of index.values()) importers.sort();
+  return index;
+}
+
+export function importedBy(index: Map<string, string[]>, file: string): string[] {
+  const target = normalize(file);
+  return (index.get(comparable(target)) ?? []).filter((importer) => importer !== target);
 }
 
 function git(repoRoot: string, args: string[]): string {
@@ -65,9 +77,14 @@ export function repoFiles(repoRoot: string): string[] {
   return git(repoRoot, ['ls-files']).split('\n').filter(Boolean);
 }
 
+function lineCount(text: string): number {
+  if (text === '') return 0;
+  return text.split('\n').length - (text.endsWith('\n') ? 1 : 0);
+}
+
 /** Diff hunks and the growth line for one file vs the merge-base of baseRef. */
 export function changeFacts(repoRoot: string, baseRef: string, file: string, content: string): { hunks: string; growth: string } {
-  const lines = content.split('\n').length;
+  const lines = lineCount(content);
   let base: string | undefined;
   try {
     base = git(repoRoot, ['merge-base', baseRef, 'HEAD']).trim();
@@ -83,7 +100,7 @@ export function changeFacts(repoRoot: string, baseRef: string, file: string, con
     hunks = '';
   }
   try {
-    const before = git(repoRoot, ['show', `${base}:${file}`]).split('\n').length;
+    const before = lineCount(git(repoRoot, ['show', `${base}:${file}`]));
     if (before === lines) return { hunks, growth: `unchanged at ${lines} lines` };
     return { hunks, growth: `${before < lines ? 'grew' : 'shrank'} from ${before} to ${lines} lines` };
   } catch {

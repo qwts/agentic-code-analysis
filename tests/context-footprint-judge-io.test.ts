@@ -51,11 +51,13 @@ test('transport degradation maps to warn with the note, not cacheable', () => {
   assert.deepEqual([verdict.verdict, verdict.note], ['warn', 'judge refused (cyber)']);
 });
 
-test('shape violations degrade to warn: bad criterion, bad verdict, fail without evidence', () => {
+test('shape violations degrade to warn: bad criterion, bad verdict, fail without evidence, null entries', () => {
   const badCriterion = judgeOutcome('x', { ok: true, verdict: { ...JUDGED, violations: [{ criterion: 'vibes', evidence: '', suggestion: '' }] } });
   const badVerdict = judgeOutcome('x', { ok: true, verdict: { ...JUDGED, verdict: 'maybe' } });
   const failNoEvidence = judgeOutcome('x', { ok: true, verdict: { ...JUDGED, violations: [] } });
-  for (const { verdict, cacheable } of [badCriterion, badVerdict, failNoEvidence]) {
+  const nullViolation = judgeOutcome('x', { ok: true, verdict: { ...JUDGED, violations: [null] } });
+  const nonStringFields = judgeOutcome('x', { ok: true, verdict: { ...JUDGED, violations: [{ criterion: 'duplicated-context', evidence: 5, suggestion: null }] } });
+  for (const { verdict, cacheable } of [badCriterion, badVerdict, failNoEvidence, nullViolation, nonStringFields]) {
     assert.equal(verdict.verdict, 'warn');
     assert.equal(cacheable, false);
     assert.ok(verdict.note);

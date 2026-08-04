@@ -2,10 +2,10 @@
 // verdict cache, and the judge (operational bounds per the check design: one
 // file per request, concurrency 3, max_tokens 4096).
 import { readFileSync } from 'node:fs';
-import { join } from 'node:path';
+import { join, normalize } from 'node:path';
 import type { Check, CheckContext, FileVerdict } from '../registry.ts';
 import { VerdictCache } from '../../core/verdict-cache.ts';
-import { changeFacts, importedBy, importsOf, repoFiles, type FileFacts } from './derive.ts';
+import { buildImporterIndex, changeFacts, importedBy, importsOf, repoFiles, type FileFacts } from './derive.ts';
 import { judgeOutcome, MAX_TOKENS, PROMPT_VERSION, ruleText, systemPrompt, userPrompt, VERDICT_SCHEMA } from './judge-io.ts';
 import { selfTest } from './self-test.ts';
 
@@ -14,8 +14,11 @@ const CONCURRENCY = 3;
 async function run(context: CheckContext): Promise<FileVerdict[]> {
   const rule = ruleText();
   const system = systemPrompt(rule);
-  const all = repoFiles(context.repoRoot);
-  return mapPool(context.files, CONCURRENCY, async (file) => {
+  const importerIndex = buildImporterIndex(context.repoRoot, repoFiles(context.repoRoot));
+  // Explicit CLI paths like ./src/x.ts must match the repo-relative form the
+  // import graph and cache key use (review finding, PR #8).
+  const files = context.files.map((file) => normalize(file));
+  return mapPool(files, CONCURRENCY, async (file) => {
     let content: string;
     try {
       content = readFileSync(join(context.repoRoot, file), 'utf8');
@@ -24,7 +27,7 @@ async function run(context: CheckContext): Promise<FileVerdict[]> {
     }
     const facts: FileFacts = {
       imports: importsOf(file, content),
-      importedBy: importedBy(context.repoRoot, file, all),
+      importedBy: importedBy(importerIndex, file),
       ...changeFacts(context.repoRoot, context.baseRef, file, content),
     };
     // Key per ACA-0003 D7: hunks and growth are orientation, not semantic
