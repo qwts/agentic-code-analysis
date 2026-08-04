@@ -60,14 +60,21 @@ verdicts; how a repo surfaces them is the consumer's business.
 aca <check> [--enforce] [--json] [--base <ref>] [--self-test] [paths…]
 
 src/
-  cli.mjs                 dispatcher: parse args, route to a check, map exit code
+  cli.ts                  dispatcher: parse args, route to a check, map exit code
   core/
-    change-scope.mjs      changed files vs merge-base(origin/main), include/exclude globs
-    judge-client/         the JudgeClient interface + one adapter per provider
-    verdict-cache.mjs     content-addressed memoization of judge verdicts
+    config.ts             aca.config.json (scope globs, tier -> provider/model map)
+    change-scope.ts       changed files vs merge-base(origin/main), include/exclude globs
+    judge-client.ts       the JudgeClient port; adapters/ holds one file per provider
+    verdict-cache.ts      content-addressed memoization of judge verdicts
   checks/
+    registry.ts           check contract + name -> loader map (one entry per check)
     context-footprint/    first check — prompt, schema, verdict mapping, fixtures
 ```
+
+Language (decided 2026-08-04, issue #3): TypeScript 7 on Node ≥ 24 —
+erasable-syntax-only `.ts` run directly via Node's native type stripping, no
+build step or `dist/`; `tsgo` type-checks in CI. Tests use Node's built-in
+runner; type-aware linting waits for the TS 7.1 programmatic API.
 
 ### The JudgeClient interface (decision D2)
 
