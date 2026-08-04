@@ -1,12 +1,22 @@
 # Plan: implementation issues
 
 Five issues, each one reviewable PR-sized objective, in dependency order
-(1 → 2 → 3; 4 and 5 independent after 3). Drafted here for design review;
-on approval each is filed with the shared
-[feature-lifecycle form](https://github.com/qwts/playbook-engineering/blob/main/docs/sop/feature-lifecycle.md)
-and the decisions in [suite.md](../design/suite.md) take their `ACA-NNNN`
-numbers from these issues (ENG-0035 convention). Every issue closes via a PR
-with `Closes #N`, opened by the bot identity, one approving human review.
+(1 → 2 → 3; 4 and 5 independent after 3). Drafted here for design review and
+**filed on approval (2026-08-04)** with the shared
+[feature-lifecycle form](https://github.com/qwts/playbook-engineering/blob/main/docs/sop/feature-lifecycle.md):
+plan issue 1 → [#2](https://github.com/qwts/agentic-code-analysis/issues/2),
+2 → [#3](https://github.com/qwts/agentic-code-analysis/issues/3),
+3 → [#4](https://github.com/qwts/agentic-code-analysis/issues/4),
+4 → [#5](https://github.com/qwts/agentic-code-analysis/issues/5),
+5 → [#6](https://github.com/qwts/agentic-code-analysis/issues/6).
+Every issue closes via a PR with `Closes #N`, opened by the bot identity, one
+approving human review.
+
+Decisions D1–D8 harden into `ACA-NNNN` records during #2. The ENG-0035
+convention gives one record one originating issue number; eight decisions from
+one design review is the known wrinkle — #2's implementer either consolidates
+related decisions into records per embodying issue (suite contracts → 0003,
+check judgment → 0004) or files one issue per decision, and records the choice.
 
 **Routing note (all issues, per ENG-0151):** registry `verified_at` is
 *never* — no refresh has run. Anthropic slots are seeded/provisional
