@@ -1,0 +1,51 @@
+// Extension message contract, composed from the sub-unions each
+// domain module already exports. Adding a message type touches
+// exactly one domain file, never this one.
+import type { BlobRequest, BlobResponse } from '../blob/messages.ts';
+import type { BookmarkRequest, BookmarkResponse } from '../bookmark/messages.ts';
+import type { PanelRequest, PanelResponse } from '../panel/messages.ts';
+import type { PcloudRequest, PcloudResponse } from '../pcloud/messages.ts';
+import type { ImageFetchRequest, ImageFetchResponse } from '../image-fetch/messages.ts';
+import type { RecallRequest, RecallResponse } from '../recall/messages.ts';
+import type { UrlTemplateRequest, UrlTemplateResponse } from '../url-template/messages.ts';
+import type { CommonRequest, CommonResponse } from '../common/messages.ts';
+import type { AlbumRequest, AlbumResponse } from '../album/messages.ts';
+import type { BlobKeyRequest, BlobKeyResponse } from '../blob-key/messages.ts';
+import type { DestinationRequest, DestinationResponse } from '../destination/messages.ts';
+import type { OriginalBlobRequest, OriginalBlobResponse } from '../original-blob/messages.ts';
+import type { RecentHistoryRequest, RecentHistoryResponse } from '../recent-history/messages.ts';
+
+export type ExtensionRequest =
+  | BlobRequest
+  | BookmarkRequest
+  | PanelRequest
+  | PcloudRequest
+  | ImageFetchRequest
+  | RecallRequest
+  | UrlTemplateRequest
+  | CommonRequest
+  | AlbumRequest
+  | BlobKeyRequest
+  | DestinationRequest
+  | OriginalBlobRequest
+  | RecentHistoryRequest;
+
+export type ExtensionResponse =
+  | BlobResponse
+  | BookmarkResponse
+  | PanelResponse
+  | PcloudResponse
+  | ImageFetchResponse
+  | RecallResponse
+  | UrlTemplateResponse
+  | CommonResponse
+  | AlbumResponse
+  | BlobKeyResponse
+  | DestinationResponse
+  | OriginalBlobResponse
+  | RecentHistoryResponse;
+
+export interface Envelope<T extends ExtensionRequest> {
+  id: string;
+  payload: T;
+}

@@ -64,6 +64,34 @@ test('missing credentials: one line, exit 0 advisory / 78 enforce', async () => 
   assert.equal(await run(['fake', 'a.ts', '--enforce'], noCreds), EXIT.noCredentials);
 });
 
+test('--self-test: exit 0 on pass, 1 on miss, 2 when the check has none', async () => {
+  const out: string[] = [];
+  const withSelfTest = (passed: boolean) => {
+    const base = deps([], out);
+    const check: Check = {
+      name: 'fake',
+      tier: 'T1',
+      run: async () => [],
+      selfTest: async () => ({ passed, lines: ['fixture line'] }),
+    };
+    return { ...base, registry: new Map([['fake', async () => check]]) };
+  };
+  assert.equal(await run(['fake', '--self-test'], withSelfTest(true)), EXIT.ok);
+  assert.ok(out.includes('fixture line'));
+  assert.equal(await run(['fake', '--self-test'], withSelfTest(false)), EXIT.fail);
+  assert.equal(await run(['fake', '--self-test'], deps([])), EXIT.usage);
+});
+
+test('--self-test without credentials exits 78 even without --enforce', async () => {
+  const noCreds = {
+    ...deps([]),
+    clientFactory: async () => {
+      throw new MissingCredentialsError('anthropic');
+    },
+  };
+  assert.equal(await run(['fake', '--self-test'], noCreds), EXIT.noCredentials);
+});
+
 test('--json emits cache visibility per verdict', async () => {
   const out: string[] = [];
   await run(['fake', 'a.ts', '--json'], deps([PASS], out));

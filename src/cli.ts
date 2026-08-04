@@ -22,11 +22,12 @@ export interface RunDeps {
 }
 
 const usage = (registry: ReadonlyMap<string, CheckLoader>): string =>
-  `usage: aca <check> [paths...] [--enforce] [--json] [--base <ref>]
+  `usage: aca <check> [paths...] [--enforce] [--json] [--base <ref>] [--self-test]
 checks: ${[...registry.keys()].join(', ') || '(none registered yet)'}
-  --enforce   exit 1 on any fail verdict (default: advisory, always exit 0)
-  --json      machine-readable output
-  --base      diff base ref (default: origin/main)`;
+  --enforce    exit 1 on any fail verdict (default: advisory, always exit 0)
+  --json       machine-readable output
+  --base       diff base ref (default: origin/main)
+  --self-test  run the check's calibration fixtures (exit 1 on miss, 78 without credentials)`;
 
 export async function run(argv: string[], deps?: Partial<RunDeps>): Promise<number> {
   const d: RunDeps = {
@@ -46,6 +47,7 @@ export async function run(argv: string[], deps?: Partial<RunDeps>): Promise<numb
         enforce: { type: 'boolean', default: false },
         json: { type: 'boolean', default: false },
         base: { type: 'string', default: 'origin/main' },
+        'self-test': { type: 'boolean', default: false },
         help: { type: 'boolean', short: 'h', default: false },
       },
     });
@@ -69,6 +71,7 @@ export async function run(argv: string[], deps?: Partial<RunDeps>): Promise<numb
   }
 
   const enforce = args.values.enforce;
+  const selfTest = args.values['self-test'];
   try {
     const check = await loader();
     const root = repoRoot(d.cwd);
@@ -79,13 +82,25 @@ export async function run(argv: string[], deps?: Partial<RunDeps>): Promise<numb
     } catch (err) {
       if (err instanceof MissingCredentialsError) {
         d.stderr(`${check.name}: skipped — ${err.message}`);
-        return enforce ? EXIT.noCredentials : EXIT.ok;
+        // A self-test without credentials cannot assert anything; exiting 0
+        // would report a calibration that never ran.
+        return enforce || selfTest ? EXIT.noCredentials : EXIT.ok;
       }
       throw err;
+    }
+    if (selfTest) {
+      if (!check.selfTest) {
+        d.stderr(`${check.name}: no self-test`);
+        return EXIT.usage;
+      }
+      const result = await check.selfTest(client);
+      for (const line of result.lines) d.stdout(line);
+      return result.passed ? EXIT.ok : EXIT.fail;
     }
     const files = paths.length > 0 ? paths : filterScope(changedFiles(args.values.base, root), config);
     const verdicts = await check.run({
       repoRoot: root,
+      baseRef: args.values.base,
       files,
       client,
       cache: new VerdictCache(join(root, '.cache', 'aca'), check.name),
