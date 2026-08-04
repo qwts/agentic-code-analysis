@@ -106,13 +106,8 @@ not the fixture.** Iterate on the prompt until all fixtures hold, then bump
 the pinned prompt-version string (which invalidates the verdict cache by
 construction). CI runs the self-test whenever the prompt or fixtures change.
 
-**D8 — golden fixtures gate prompt changes.** *Why:* an LLM judge without a
-regression harness drifts silently; the self-test makes prompt quality a
-tested property, and per-provider runs make D2's "supported provider" claim
-falsifiable. *Downside:* fixtures can overfit — two fixtures are a floor, not
-a suite; every future false positive/negative found in real use is added as a
-fixture before the prompt is touched. Fixture verdicts bill real API calls,
-so the self-test is on-demand and prompt-change-triggered, not per-PR.
+Full decision text, rationale, and downsides:
+[ACA-0004](../decisions/ACA-0004-context-footprint-judgment.md) (D5, D8).
 
 ## Consuming-repo wiring (reference, not part of this repo)
 

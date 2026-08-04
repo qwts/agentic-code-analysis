@@ -100,10 +100,16 @@ on the CLI bypass diff selection for local iteration.
 ### Verdict cache (decision D7)
 
 `.cache/aca/<check>/` (gitignored), keyed
-`sha256(file content ‖ rule text ‖ prompt version ‖ provider ‖ model id)`.
-Unchanged files across runs cost zero API calls — verifiably: a cache hit is
-observable in `--json` output. Iterating on the judge prompt invalidates the
-cache by construction; that re-billing spike is accepted.
+`sha256(file content ‖ sorted import paths ‖ sorted imported-by paths ‖ rule text ‖ prompt version ‖ provider ‖ model id)`.
+The import edges are in the key because the verdict depends on them (review
+finding, PR #1): a new importer changes the footprint question even when the
+file's content is unchanged. Diff hunks and the growth line are deliberately
+*excluded* — they are orientation, not semantic state, and they change
+whenever the merge-base moves; keying on them would re-bill every file on
+every push and defeat the guarantee. So: semantically unchanged files across
+runs cost zero API calls — verifiably, cache hits are observable in `--json`
+output. Iterating on the judge prompt invalidates the cache by construction;
+that re-billing spike is accepted.
 
 ### Exit codes (decision D3)
 
@@ -118,61 +124,19 @@ Advisory mode with no credentials prints one line and exits 0.
 
 ## Decisions
 
-Recorded inline while Proposed; on acceptance each hardens into a repo-local
-`ACA-NNNN` record named after its originating issue number (the
+Accepted 2026-08-04 and extracted to repo-local records (numbering per
 [ENG-0035](https://github.com/qwts/playbook-engineering/blob/main/docs/decisions/ENG-0035-issue-derived-record-numbers.md)
-convention; this repo's decisions are single-repo, so they live here, not in
-the ENG series).
+with the consolidation delta recorded in the
+[decisions index](../decisions/README.md); single-repo decisions live here,
+not in the ENG series):
 
-**D1 — one entrypoint, loosely coupled checks.** `aca <check>` subcommands in
-one npm package; checks share only the three core libraries. *Why:* the
-commonly-trained CLI shape, and one install for consumers. *Downside:* the
-core libraries are a real coupling point and a change to one touches every
-check; mitigated by keeping their interfaces narrow and frozen — a check
-needing more forks the library rather than widening it.
-
-**D2 — provider-agnostic JudgeClient.** As specified above. *Why:*
-declaration; also survivability — model churn is the steady state (ENG-0151).
-*Downside:* lowest-common-denominator features; prompt caching and pricing
-differ per provider, so cost characteristics are not portable even though
-behavior is. Calibration fixtures must pass per provider, and a provider that
-cannot pass them is documented as unsupported for that check rather than
-quietly worse.
-
-**D3 — advisory by default, `--enforce` opt-in, `EX_CONFIG` for missing
-credentials.** *Why:* an agent mid-loop needs signal, not a blocked build; CI
-promotion is an owner decision per consuming repo. *Downside:* advisory
-findings can be ignored forever. Accepted; the promotion path exists and the
-data to justify it accumulates in advisory runs.
-
-**D4 — output is a token budget, not a report.** Compact findings-only text by
-default; `--json` is the stable machine contract (schema versioned with the
-suite). *Why:* ENG-0012 — agents are the primary readers; token efficiency is
-economic policy. *Downside:* terse for humans; per ENG-0012 humans read the
-agent-optimized form, and the `--json` output is what a richer surface would
-build on.
-
-**D5 — judge the file as it stands, selected by the change.** The diff decides
-*which* files are judged; the verdict is about the file's current state, with
-statically derived context (import edges, growth) so the judge reasons rather
-than guesses. *Why:* the rule is a property of files, not of diffs; judging
-diff quality invites relitigating history. Import edges count toward the
-load-set only when comprehension requires opening them, not merely naming
-them — see the check design's load-set accounting. *Downside:* a PR can be
-failed for debt it merely touched, not created. Accepted deliberately — that
-is how ratchets already work here, and `warn` exists for the boundary.
-
-**D6 — model choice follows the tier registry pattern.** Checks declare a
-tier; config maps tier → provider/model; nothing hardcodes a model name.
-*Why:* ENG-0151 — recalled model names fail confidently. *Downside:*
-indirection for a suite with one check; accepted because the second check is
-the plan, not a hypothesis.
-
-**D7 — content-addressed verdict memoization.** As specified above. *Why:*
-unchanged files must never re-bill; cache correctness is provable from the
-key. *Downside:* no cross-machine sharing in v1 (each CI runner pays once per
-content) — a shared cache backend is a later, separate tool if the spend data
-says so.
+- **[ACA-0003](../decisions/ACA-0003-suite-contracts.md)** — suite contracts:
+  D1 one entrypoint / loose coupling, D2 provider-agnostic JudgeClient,
+  D3 advisory-default + `EX_CONFIG`, D4 token-budget output, D6 tier-registry
+  model routing, D7 content-addressed verdict memoization.
+- **[ACA-0004](../decisions/ACA-0004-context-footprint-judgment.md)** —
+  judgment semantics: D5 file-as-it-stands with load-set accounting,
+  D8 fixture-gated prompts.
 
 ## Security posture (ENG-0012 priority 1)
 
