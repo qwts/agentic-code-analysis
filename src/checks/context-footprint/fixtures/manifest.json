@@ -1,0 +1,36 @@
+[
+  {
+    "name": "enumerated-messages",
+    "file": "extension/src/background/extension-messages.ts",
+    "content": "enumerated-messages.txt",
+    "importedBy": [
+      "extension/src/background/router.ts",
+      "extension/src/background/dispatch.ts",
+      "extension/src/content/bridge.ts",
+      "extension/src/panel/client.ts"
+    ],
+    "growth": "new file, 246 lines (extracted from a 552-line messages.ts to satisfy a size ratchet)",
+    "expect": {
+      "verdict": "fail",
+      "criteriaAnyOf": [
+        "relocation-not-design",
+        "duplicated-context"
+      ]
+    }
+  },
+  {
+    "name": "composed-messages",
+    "file": "extension/src/background/extension-messages.ts",
+    "content": "composed-messages.txt",
+    "importedBy": [
+      "extension/src/background/router.ts",
+      "extension/src/background/dispatch.ts",
+      "extension/src/content/bridge.ts",
+      "extension/src/panel/client.ts"
+    ],
+    "growth": "shrank from 246 to 52 lines",
+    "expect": {
+      "verdict": "pass"
+    }
+  }
+]

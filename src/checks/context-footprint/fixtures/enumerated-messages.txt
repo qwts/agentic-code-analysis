@@ -1,0 +1,245 @@
+// Extension message contract. Every request and response type in one
+// place so handlers and content scripts have a single import.
+import type {
+  BlobGetRequest,
+  BlobGetResponse,
+  BlobPutRequest,
+  BlobPutResponse,
+  BlobDeleteRequest,
+  BlobDeleteResponse,
+  BlobListRequest,
+  BlobListResponse,
+} from '../blob/messages.ts';
+import type {
+  BookmarkAddRequest,
+  BookmarkAddResponse,
+  BookmarkRemoveRequest,
+  BookmarkRemoveResponse,
+  BookmarkListRequest,
+  BookmarkListResponse,
+  BookmarkSyncRequest,
+  BookmarkSyncResponse,
+} from '../bookmark/messages.ts';
+import type {
+  PanelOpenRequest,
+  PanelOpenResponse,
+  PanelCloseRequest,
+  PanelCloseResponse,
+  PanelResizeRequest,
+  PanelResizeResponse,
+  PanelStateRequest,
+  PanelStateResponse,
+} from '../panel/messages.ts';
+import type {
+  PcloudUploadRequest,
+  PcloudUploadResponse,
+  PcloudDownloadRequest,
+  PcloudDownloadResponse,
+  PcloudAuthRequest,
+  PcloudAuthResponse,
+  PcloudQuotaRequest,
+  PcloudQuotaResponse,
+} from '../pcloud/messages.ts';
+import type {
+  ImageFetchFetchRequest,
+  ImageFetchFetchResponse,
+  ImageFetchRetryRequest,
+  ImageFetchRetryResponse,
+  ImageFetchCancelRequest,
+  ImageFetchCancelResponse,
+  ImageFetchStatusRequest,
+  ImageFetchStatusResponse,
+} from '../image-fetch/messages.ts';
+import type {
+  RecallQueryRequest,
+  RecallQueryResponse,
+  RecallIndexRequest,
+  RecallIndexResponse,
+  RecallPurgeRequest,
+  RecallPurgeResponse,
+  RecallStatsRequest,
+  RecallStatsResponse,
+} from '../recall/messages.ts';
+import type {
+  UrlTemplateExpandRequest,
+  UrlTemplateExpandResponse,
+  UrlTemplateValidateRequest,
+  UrlTemplateValidateResponse,
+  UrlTemplateListRequest,
+  UrlTemplateListResponse,
+  UrlTemplateSaveRequest,
+  UrlTemplateSaveResponse,
+} from '../url-template/messages.ts';
+import type {
+  CommonPingRequest,
+  CommonPingResponse,
+  CommonVersionRequest,
+  CommonVersionResponse,
+  CommonLogRequest,
+  CommonLogResponse,
+  CommonErrorRequest,
+  CommonErrorResponse,
+} from '../common/messages.ts';
+import type {
+  AlbumCreateRequest,
+  AlbumCreateResponse,
+  AlbumRenameRequest,
+  AlbumRenameResponse,
+  AlbumDeleteRequest,
+  AlbumDeleteResponse,
+  AlbumListRequest,
+  AlbumListResponse,
+} from '../album/messages.ts';
+import type {
+  BlobKeyDeriveRequest,
+  BlobKeyDeriveResponse,
+  BlobKeyRotateRequest,
+  BlobKeyRotateResponse,
+  BlobKeyVerifyRequest,
+  BlobKeyVerifyResponse,
+  BlobKeyExportRequest,
+  BlobKeyExportResponse,
+} from '../blob-key/messages.ts';
+import type {
+  DestinationSetRequest,
+  DestinationSetResponse,
+  DestinationGetRequest,
+  DestinationGetResponse,
+  DestinationListRequest,
+  DestinationListResponse,
+  DestinationClearRequest,
+  DestinationClearResponse,
+} from '../destination/messages.ts';
+import type {
+  OriginalBlobFetchRequest,
+  OriginalBlobFetchResponse,
+  OriginalBlobStoreRequest,
+  OriginalBlobStoreResponse,
+  OriginalBlobEvictRequest,
+  OriginalBlobEvictResponse,
+  OriginalBlobHeadRequest,
+  OriginalBlobHeadResponse,
+} from '../original-blob/messages.ts';
+import type {
+  RecentHistoryPushRequest,
+  RecentHistoryPushResponse,
+  RecentHistoryTrimRequest,
+  RecentHistoryTrimResponse,
+  RecentHistoryListRequest,
+  RecentHistoryListResponse,
+  RecentHistoryClearRequest,
+  RecentHistoryClearResponse,
+} from '../recent-history/messages.ts';
+
+export type ExtensionRequest =
+  | BlobGetRequest
+  | BlobPutRequest
+  | BlobDeleteRequest
+  | BlobListRequest
+  | BookmarkAddRequest
+  | BookmarkRemoveRequest
+  | BookmarkListRequest
+  | BookmarkSyncRequest
+  | PanelOpenRequest
+  | PanelCloseRequest
+  | PanelResizeRequest
+  | PanelStateRequest
+  | PcloudUploadRequest
+  | PcloudDownloadRequest
+  | PcloudAuthRequest
+  | PcloudQuotaRequest
+  | ImageFetchFetchRequest
+  | ImageFetchRetryRequest
+  | ImageFetchCancelRequest
+  | ImageFetchStatusRequest
+  | RecallQueryRequest
+  | RecallIndexRequest
+  | RecallPurgeRequest
+  | RecallStatsRequest
+  | UrlTemplateExpandRequest
+  | UrlTemplateValidateRequest
+  | UrlTemplateListRequest
+  | UrlTemplateSaveRequest
+  | CommonPingRequest
+  | CommonVersionRequest
+  | CommonLogRequest
+  | CommonErrorRequest
+  | AlbumCreateRequest
+  | AlbumRenameRequest
+  | AlbumDeleteRequest
+  | AlbumListRequest
+  | BlobKeyDeriveRequest
+  | BlobKeyRotateRequest
+  | BlobKeyVerifyRequest
+  | BlobKeyExportRequest
+  | DestinationSetRequest
+  | DestinationGetRequest
+  | DestinationListRequest
+  | DestinationClearRequest
+  | OriginalBlobFetchRequest
+  | OriginalBlobStoreRequest
+  | OriginalBlobEvictRequest
+  | OriginalBlobHeadRequest
+  | RecentHistoryPushRequest
+  | RecentHistoryTrimRequest
+  | RecentHistoryListRequest
+  | RecentHistoryClearRequest;
+
+export type ExtensionResponse =
+  | BlobGetResponse
+  | BlobPutResponse
+  | BlobDeleteResponse
+  | BlobListResponse
+  | BookmarkAddResponse
+  | BookmarkRemoveResponse
+  | BookmarkListResponse
+  | BookmarkSyncResponse
+  | PanelOpenResponse
+  | PanelCloseResponse
+  | PanelResizeResponse
+  | PanelStateResponse
+  | PcloudUploadResponse
+  | PcloudDownloadResponse
+  | PcloudAuthResponse
+  | PcloudQuotaResponse
+  | ImageFetchFetchResponse
+  | ImageFetchRetryResponse
+  | ImageFetchCancelResponse
+  | ImageFetchStatusResponse
+  | RecallQueryResponse
+  | RecallIndexResponse
+  | RecallPurgeResponse
+  | RecallStatsResponse
+  | UrlTemplateExpandResponse
+  | UrlTemplateValidateResponse
+  | UrlTemplateListResponse
+  | UrlTemplateSaveResponse
+  | CommonPingResponse
+  | CommonVersionResponse
+  | CommonLogResponse
+  | CommonErrorResponse
+  | AlbumCreateResponse
+  | AlbumRenameResponse
+  | AlbumDeleteResponse
+  | AlbumListResponse
+  | BlobKeyDeriveResponse
+  | BlobKeyRotateResponse
+  | BlobKeyVerifyResponse
+  | BlobKeyExportResponse
+  | DestinationSetResponse
+  | DestinationGetResponse
+  | DestinationListResponse
+  | DestinationClearResponse
+  | OriginalBlobFetchResponse
+  | OriginalBlobStoreResponse
+  | OriginalBlobEvictResponse
+  | OriginalBlobHeadResponse
+  | RecentHistoryPushResponse
+  | RecentHistoryTrimResponse
+  | RecentHistoryListResponse
+  | RecentHistoryClearResponse;
+
+export interface Envelope<T extends ExtensionRequest> {
+  id: string;
+  payload: T;
+}

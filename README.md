@@ -7,11 +7,10 @@ minimal context footprint? Runs as a CI gate (`--enforce`) and as advisory
 feedback inside an agent's dev loop, with interchangeable judge models
 (Anthropic / OpenAI / local).
 
-Status: core CLI, JudgeClient port, and Anthropic adapter are in (TypeScript 7
-on Node ≥ 24, no build step — `node src/cli.ts --help`). No checks are
-registered yet; `context-footprint` lands with
-[#4](https://github.com/qwts/agentic-code-analysis/issues/4). Remaining work:
-[issues #4–#6](https://github.com/qwts/agentic-code-analysis/issues).
+Status: core CLI, JudgeClient port, Anthropic adapter, and the first check —
+`aca context-footprint`, with its calibration self-test — are in (TypeScript 7
+on Node ≥ 24, no build step — `node src/cli.ts context-footprint`). Remaining
+work: [issues #5–#6](https://github.com/qwts/agentic-code-analysis/issues).
 
 ## Docs
 

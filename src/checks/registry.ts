@@ -23,18 +23,27 @@ export interface FileVerdict {
 
 export interface CheckContext {
   repoRoot: string;
+  baseRef: string;
   files: string[];
   client: JudgeClient;
   cache: VerdictCache;
+}
+
+export interface SelfTestResult {
+  passed: boolean;
+  lines: string[];
 }
 
 export interface Check {
   name: string;
   tier: Tier;
   run(context: CheckContext): Promise<FileVerdict[]>;
+  /** Calibration against golden fixtures (ACA-0004 D8); always live, never cached. */
+  selfTest?(client: JudgeClient): Promise<SelfTestResult>;
 }
 
 export type CheckLoader = () => Promise<Check>;
 
-// context-footprint lands here with issue #4.
-export const checks: ReadonlyMap<string, CheckLoader> = new Map();
+export const checks: ReadonlyMap<string, CheckLoader> = new Map([
+  ['context-footprint', async () => (await import('./context-footprint/index.ts')).check],
+]);
