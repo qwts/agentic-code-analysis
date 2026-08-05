@@ -1,0 +1,135 @@
+[
+  {
+    "name": "asserts-own-mock",
+    "file": "tests/invoice-service.test.ts",
+    "content": "asserts-own-mock.txt",
+    "units": [
+      {
+        "path": "src/invoice-service.ts",
+        "exports": [
+          "export interface InvoiceGateway {",
+          "export async function fetchInvoiceTotal(gateway: InvoiceGateway, id: string): Promise<number> {"
+        ]
+      }
+    ],
+    "snapshots": [],
+    "unavailable": [],
+    "expect": {
+      "assessment": "dishonest",
+      "verdict": "fail",
+      "criteriaAnyOf": ["asserts-own-mock"],
+      "testNameIncludes": "fetchInvoiceTotal returns the gateway total"
+    }
+  },
+  {
+    "name": "discriminating",
+    "file": "tests/format-money.test.ts",
+    "content": "discriminating.txt",
+    "units": [
+      {
+        "path": "src/format-money.ts",
+        "exports": ["export function formatMoney(cents: number): string {"]
+      }
+    ],
+    "snapshots": [],
+    "unavailable": [],
+    "expect": { "assessment": "honest", "verdict": "pass" }
+  },
+  {
+    "name": "tautology",
+    "file": "tests/config-io.test.ts",
+    "content": "tautology.txt",
+    "units": [
+      {
+        "path": "src/config-io.ts",
+        "exports": ["export function serializeConfig(config: Config): string {"]
+      }
+    ],
+    "snapshots": [],
+    "unavailable": [],
+    "expect": {
+      "assessment": "dishonest",
+      "verdict": "fail",
+      "criteriaAnyOf": ["tautology"],
+      "testNameIncludes": "serializeConfig produces the expected wire form"
+    }
+  },
+  {
+    "name": "no-meaningful-assertion",
+    "file": "tests/manifest.test.ts",
+    "content": "no-meaningful-assertion.txt",
+    "units": [
+      {
+        "path": "src/manifest.ts",
+        "exports": ["export function parseManifest(raw: string): Manifest | undefined {"]
+      }
+    ],
+    "snapshots": [],
+    "unavailable": [],
+    "expect": {
+      "assessment": "dishonest",
+      "verdict": "fail",
+      "criteriaAnyOf": ["no-meaningful-assertion"],
+      "testNameIncludes": "parseManifest extracts the dependency list"
+    }
+  },
+  {
+    "name": "unreviewable-snapshot",
+    "file": "tests/dashboard.test.ts",
+    "content": "unreviewable-snapshot.txt",
+    "units": [
+      {
+        "path": "src/dashboard.ts",
+        "exports": ["export function renderDashboard(state: DashboardState): RenderTree {"]
+      }
+    ],
+    "snapshots": [],
+    "unavailable": [],
+    "expect": {
+      "assessment": "dishonest",
+      "verdict": "fail",
+      "criteriaAnyOf": ["unreviewable-snapshot"],
+      "testNameIncludes": "renderDashboard matches snapshot"
+    }
+  },
+  {
+    "name": "interaction-mock",
+    "file": "tests/retry.test.ts",
+    "content": "interaction-mock.txt",
+    "units": [
+      {
+        "path": "src/retry.ts",
+        "exports": [
+          "export interface Transport {",
+          "export async function sendWithRetry(transport: Transport, message: { id: string }): Promise<void> {"
+        ]
+      }
+    ],
+    "snapshots": [],
+    "unavailable": [],
+    "expect": { "assessment": "honest", "verdict": "pass" }
+  },
+  {
+    "name": "focused-snapshot",
+    "file": "tests/error-banner.test.ts",
+    "content": "focused-snapshot.txt",
+    "units": [
+      {
+        "path": "src/error-banner.ts",
+        "exports": ["export function renderErrorBanner(reason: string): string {"]
+      }
+    ],
+    "snapshots": [],
+    "unavailable": [],
+    "expect": { "assessment": "honest", "verdict": "pass" }
+  },
+  {
+    "name": "no-unit-context",
+    "file": "tests/slugify.test.ts",
+    "content": "no-unit-context.txt",
+    "units": [],
+    "snapshots": [],
+    "unavailable": ["unit exports unavailable"],
+    "expect": { "assessment": "honest", "verdict": "pass" }
+  }
+]

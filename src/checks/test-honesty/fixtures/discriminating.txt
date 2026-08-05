@@ -1,0 +1,11 @@
+import { test } from 'node:test';
+import assert from 'node:assert/strict';
+import { formatMoney } from '../src/format-money.ts';
+
+test('formatMoney renders cents as a grouped dollar string', () => {
+  assert.equal(formatMoney(123456), '$1,234.56');
+});
+
+test('formatMoney rejects negative amounts', () => {
+  assert.throws(() => formatMoney(-1), /negative/);
+});
