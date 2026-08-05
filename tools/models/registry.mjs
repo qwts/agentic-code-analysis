@@ -77,8 +77,8 @@ export function validateRegistry(registry) {
         if (slot.status === 'unverified' && (slot.model !== null || slot.reasoning !== null)) {
           fail(`${tier}.${vendor}.${phase} is unverified and must leave model and reasoning null`);
         }
-        if (slot.status !== 'unverified' && !slot.model) {
-          fail(`${tier}.${vendor}.${phase} claims status ${slot.status} but names no model`);
+        if (slot.status !== 'unverified' && (!slot.model || !slot.reasoning)) {
+          fail(`${tier}.${vendor}.${phase} claims status ${slot.status} but must name both model and reasoning`);
         }
         // A named model with nowhere to run it renders as an actionable
         // recommendation followed by "via unknown". The refresh task treats

@@ -44,7 +44,7 @@ const GUIDANCE =
 // --test` is the light, normal path. What is wrong with it is that it skips
 // the wrapper, so the fix is the repo's own guarded entrypoint, not CI.
 const USE_ENTRYPOINT =
-  "Use the repository's npm test entrypoints instead (`npm test`, `npm run test:*`); they wrap " +
+  "Use a repository-documented guarded npm test entrypoint instead (normally `npm test`); it must wrap " +
   'tools/agent-guard/run-guarded.mjs, which derives a ceiling from this machine and checks the machine-wide ' +
   'memory budget first. See docs/reference/agent-memory-guard.md.';
 
@@ -79,7 +79,7 @@ const BLOCKED = [
     what: 'direct Vitest invocation',
   },
   {
-    pattern: /(^|[\s;(&|])(npx\s+)?c8\s/u,
+    pattern: /^(?:\w+=\S*\s+)*(?:\S*\/)?(?:npx(?:\s+-\S+)*\s+)?(?:\S*\/)?c8(?:\s|$)/u,
     what: 'direct c8 coverage invocation',
   },
   {
@@ -190,7 +190,7 @@ export function resolveExecutionDir(cwd, command) {
 }
 
 const QUOTED = /'[^']*'|"(?:[^"\\]|\\.)*"/u;
-const SHELL_C_TAIL = /(?:^|[\s;&|(`{])(?:env\s+(?:\w+=\S*\s+)*)?(?:ba|da|z)?sh\s+(?:-\S+\s+)*-\S*c\s+$/u;
+const SHELL_C_TAIL = /(?:^|[\s;&|(`{])(?:env\s+(?:\w+=\S*\s+)*)?(?:\S*\/)?(?:ba|da|z)?sh\s+(?:-\S+\s+)*-\S*c\s+$/u;
 
 function quotedWord(quoted) {
   const inner = quoted.startsWith("'") ? quoted.slice(1, -1) : quoted.slice(1, -1).replace(/\\(["\\$`])/gu, '$1');
@@ -265,6 +265,7 @@ export function normalizeCommand(command) {
 // blocks one and waves the other through.
 const NPM_RUN_ALIASES = new Set(['run', 'run-script', 'rum', 'urn']);
 const NPM_OPTIONS_WITH_OPERANDS = new Set(['-w', '--workspace', '--prefix', '--userconfig', '--cache', '--registry', '--scope', '--tag', '--otp']);
+const NPM_IMPLICIT_SCRIPTS = new Set(['test', 'start', 'stop', 'restart']);
 
 function firstNpmScriptToken(tokens) {
   for (let i = 0; i < tokens.length; i += 1) {
@@ -301,6 +302,7 @@ export function npmScriptNames(command) {
     const aliasAt = rest.findIndex((token) => NPM_RUN_ALIASES.has(token));
     const candidates = aliasAt >= 0 ? rest.slice(aliasAt + 1) : rest;
     const script = firstNpmScriptToken(candidates);
+    if (aliasAt < 0 && !NPM_IMPLICIT_SCRIPTS.has(script)) continue;
     if (script !== undefined) names.push(script);
   }
   return names;
