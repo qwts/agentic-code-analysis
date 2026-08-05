@@ -1,0 +1,35 @@
+{
+  "schemaVersion": 1,
+  "requiredLevel": "discriminates",
+  "levels": [{ "id": "discriminates" }],
+  "sizeInvariant": { "larger": "coherent-larger-change", "smaller": "mixed-rename-and-retry" },
+  "fixtures": [
+    {
+      "name": "mixed-rename-and-retry",
+      "level": "discriminates",
+      "dir": "mixed-rename-and-retry",
+      "expect": {
+        "verdict": "fail",
+        "criteria": [{ "criterion": "mixed-refactor-and-behavior", "file": "src/http.ts" }]
+      },
+      "split": {
+        "groups": [
+          { "anchors": ["src/report.ts", "src/user.ts", "src/index.ts"] },
+          { "anchors": ["src/http.ts"] }
+        ]
+      },
+      "source": {
+        "note": "Synthetic pair (issue #22 requirement 4): a mechanical formatReport->renderReport rename sweep entangled with an independent retry/backoff behavior change in the HTTP helper. Deliberately smaller than the passing fixture."
+      }
+    },
+    {
+      "name": "coherent-larger-change",
+      "level": "discriminates",
+      "dir": "coherent-larger-change",
+      "expect": { "verdict": "pass", "criteria": [] },
+      "source": {
+        "note": "One intent — introduce a configurable retry policy and adopt it everywhere — across production code, tests, and docs. Mechanically larger than the failing fixture: the negative control against size-proxy judging."
+      }
+    }
+  ]
+}
