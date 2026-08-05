@@ -1,0 +1,68 @@
+{
+  "schemaVersion": 1,
+  "requiredLevel": "foundation",
+  "levels": [{ "id": "foundation" }],
+  "fixtures": [
+    {
+      "name": "within-file-contradiction",
+      "level": "foundation",
+      "tree": "within-file",
+      "files": {
+        "repo/AGENTS.md": "a0172458c11ce12b51dff04fc98d3ca9c8cc95290cdc374ab1cfdbe738b56320"
+      },
+      "expect": {
+        "assessment": "conflicts-found",
+        "verdict": "fail",
+        "criteriaAnyOf": ["direct-contradiction"],
+        "sharedSessions": "some"
+      },
+      "source": { "kind": "synthetic", "note": "always-vs-never test-suite rule inside one AGENTS.md" }
+    },
+    {
+      "name": "cross-file-contradiction",
+      "level": "foundation",
+      "tree": "cross-file",
+      "files": {
+        "repo/.github/copilot-instructions.md": "db0c252476fc332cd6915a3c82f3af893f1861551741ac9fc268dfa57b92daee",
+        "repo/AGENTS.md": "a0d9826728735c494a3721e9259ae2390daef3984e69ada33ef8af566ed06066"
+      },
+      "expect": {
+        "assessment": "conflicts-found",
+        "verdict": "fail",
+        "criteriaAnyOf": ["direct-contradiction"],
+        "sharedSessions": "some"
+      },
+      "source": { "kind": "synthetic", "note": "npm-vs-pnpm across files co-loaded by verified copilot sessions" }
+    },
+    {
+      "name": "explicit-scoped-override",
+      "level": "foundation",
+      "tree": "scoped-override",
+      "files": {
+        "repo/AGENTS.md": "5ecb485715a5fec782cb231f83ff8d78236acba5b6ee1fffb5ecd0c0f3a1c9e7",
+        "repo/prototypes/AGENTS.md": "81d979de6374308592ac789f33c72dfcdd01d34ceaaff9f7d9a3a02198f3a525"
+      },
+      "expect": {
+        "assessment": "no-conflict",
+        "verdict": "pass"
+      },
+      "source": { "kind": "synthetic", "note": "negative control — nested file explicitly supersedes the root rule for its subtree; hierarchy is not conflict" }
+    },
+    {
+      "name": "cross-tool-divergence",
+      "level": "foundation",
+      "tree": "cross-tool",
+      "files": {
+        "repo/.cursor/rules/formatting.mdc": "b74a907ef19975caf573507f5c382b972dc9a186b9ccfbe78b30187e4633b5c5",
+        "repo/.github/copilot-instructions.md": "0d5f1c49f0decf84068f00eec8e6eba70d15d433668a961e1be1b167b2b2036b"
+      },
+      "expect": {
+        "assessment": "conflicts-found",
+        "verdict": "warn",
+        "criteriaAnyOf": ["cross-tool-divergence"],
+        "sharedSessions": "none"
+      },
+      "source": { "kind": "synthetic", "note": "tabs-vs-spaces between a Cursor always rule and copilot-instructions; no session loads both" }
+    }
+  ]
+}
