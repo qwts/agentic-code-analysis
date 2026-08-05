@@ -8,13 +8,14 @@
 // caused half of.
 //
 // It denies four things:
-//   1. Heavy local suites, for agents, without an owner grant — the lanes that
+//   1. Heavy local suites, for agents — the lanes that
 //      actually bricked the machine (`npm run ci`, e2e, storybook, perf, cov).
 //   2. Direct test-binary invocations that skip the wrapper entirely.
 //   3. Tampering with the guard's own controls: the human escape hatch, the
 //      assume-human override, and redirecting the state directory (which would
 //      hand the session a private lease namespace and undo machine scoping).
-//   4. Self-granting: `arbiter.mjs grant` is the owner's opt-in.
+//   4. Legacy grant commands, which cannot authenticate a human when the
+//      agent shares the same OS user.
 //
 // Scoping: only commands that execute inside a guarded checkout are policed;
 // cross-repo work from the same session is left alone. Blocked text inside
@@ -32,7 +33,7 @@ import { dirname, isAbsolute, resolve, sep } from 'node:path';
 import process from 'node:process';
 import { fileURLToPath } from 'node:url';
 
-import { HEAVY_LANES, readGrant } from './lib/policy.mjs';
+import { HEAVY_LANES } from './lib/policy.mjs';
 
 const GUARD_GUIDE = 'https://github.com/qwts/playbook-engineering/blob/main/docs/reference/agent-memory-guard.md';
 
@@ -129,8 +130,8 @@ const TAMPERING = [
   {
     pattern: /\barbiter\.mjs\s+grant\b/u,
     reason:
-      'Blocked `arbiter.mjs grant`: the heavy-lane opt-in belongs to the owner. Ask them to run it; an agent granting ' +
-      'itself permission is not permission.',
+      'Blocked `arbiter.mjs grant`: same-user local grants cannot authenticate human approval and are disabled. ' +
+      'The owner can run the lane directly from their own terminal, or the agent can use GitHub CI.',
   },
   {
     // The wrapper sets this for its own children so nested guarded scripts do
@@ -803,7 +804,7 @@ function commandAfterPrefixes(segment) {
   return tokens.slice(index).join(' ');
 }
 
-export function evaluateCommand(command, { env = process.env, now = Date.now() } = {}) {
+export function evaluateCommand(command) {
   if (typeof command !== 'string' || command.length === 0) return { allow: true };
   const effective = stripInertText(command);
 
@@ -812,13 +813,13 @@ export function evaluateCommand(command, { env = process.env, now = Date.now() }
   }
 
   const lane = heavyLaneFor(effective);
-  if (lane && !readGrant(lane.id, env, now)) {
+  if (lane) {
     return {
       allow: false,
       reason:
         `Blocked the "${lane.id}" lane: ${lane.why}, and on a small machine several of these in parallel across repos and ` +
         `agents is what exhausts memory. Agents do not run it locally by default. ${GUIDANCE} ` +
-        `If a local run is genuinely required, ask the owner to run: node tools/agent-guard/arbiter.mjs grant ${lane.id} --minutes 30`,
+        'If a local run is genuinely required, the owner can run it directly from their own terminal; agent sessions cannot receive forgeable local grants.',
     };
   }
 

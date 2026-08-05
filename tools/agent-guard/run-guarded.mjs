@@ -30,7 +30,7 @@ import path from 'node:path';
 import process from 'node:process';
 
 import { clampCeiling, decideAdmission, deriveBudget } from './lib/budget.mjs';
-import { acquireLease, heartbeatLease, leaseExists, readLeases, releaseLease, withAdmissionLock } from './lib/leases.mjs';
+import { acquireLease, heartbeatLease, leaseExists, readLeases, releaseLease, retargetLease, withAdmissionLock } from './lib/leases.mjs';
 import { evaluateLanePolicy, harnessName, isAgentSession, isCi } from './lib/policy.mjs';
 import { readMemoryStatus, topConsumers } from './lib/system-memory.mjs';
 
@@ -224,7 +224,6 @@ async function main() {
   const commandLine = command.join(' ');
   const policy = evaluateLanePolicy({ label: options.label, command: commandLine, env: process.env });
   if (!policy.allowed) fail(policy.message);
-  if (policy.grant) note(`running "${policy.lane.id}" under an owner grant that expires ${policy.grant.expiresAt}.`);
 
   const totalMb = Math.round(os.totalmem() / (1024 * 1024));
   const budget = deriveBudget(totalMb);
@@ -260,6 +259,19 @@ async function main() {
     // nested inside a real guarded run rather than merely asserting it.
     env: { ...process.env, AGENT_GUARDED: lease.id, NODE_OPTIONS: nodeOptions },
   });
+
+  // The admitted reservation must follow the detached group, not this
+  // wrapper. A hard-killed wrapper can leave its descendants alive; binding
+  // the lease to their group keeps that memory charged until the group exits.
+  if (!retargetLease(lease, { pid: child.pid, processGroupId: child.pid })) {
+    try {
+      if (Number.isInteger(child.pid)) process.kill(-child.pid, 'SIGKILL');
+    } catch {
+      // Spawn may have failed before the group existed.
+    }
+    releaseLease(lease);
+    fail('failed to bind the admission lease to the guarded process group');
+  }
 
   const state = { peakRssMb: 0, peakProcessCount: 0, reason: null, termAt: null, done: false, polling: false, lastBeat: 0 };
 

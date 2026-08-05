@@ -11,11 +11,12 @@
 // One file per lease, not one shared file: writers never contend, and a
 // half-written lease can only ever corrupt itself. Readers tolerate junk.
 //
-// VALIDITY IS LIVENESS, AND ONLY LIVENESS. A lease is good while its pid is
-// alive. It is not keyed on hostname — qwts/overlook#842 is the org's paid
-// lesson there: `.local` ↔ `.lan` drift made crashed same-machine locks
-// permanently unreclaimable, so the crash-recovery path became the outage. A
-// force-quit agent here costs the machine nothing beyond the next reap.
+// VALIDITY IS LIVENESS, AND ONLY LIVENESS. Before spawn, a lease follows its
+// wrapper pid; after spawn, it follows the detached process group doing the
+// work, so killing the wrapper cannot release budget while descendants remain.
+// It is not keyed on hostname — qwts/overlook#842 is the org's paid lesson
+// there: `.local` ↔ `.lan` drift made crashed same-machine locks permanently
+// unreclaimable, so the crash-recovery path became the outage.
 
 import { randomUUID } from 'node:crypto';
 import { mkdirSync, readFileSync, readdirSync, renameSync, rmSync, statSync, writeFileSync } from 'node:fs';
@@ -29,6 +30,17 @@ export function isProcessAlive(pid) {
     return true;
   } catch (error) {
     // EPERM means the process exists but belongs to another user — alive.
+    return error.code === 'EPERM';
+  }
+}
+
+export function isProcessGroupAlive(processGroupId) {
+  if (!Number.isInteger(processGroupId) || processGroupId <= 0) return false;
+  try {
+    process.kill(-processGroupId, 0);
+    return true;
+  } catch (error) {
+    // EPERM means the group exists but belongs to another user — alive.
     return error.code === 'EPERM';
   }
 }
@@ -78,7 +90,11 @@ export function readLeases(env = process.env, { reap = true } = {}) {
     }
     // Unparseable, foreign (a restored or copied state directory — see
     // machineToken), or dead: none of these may hold budget.
-    const stale = lease === null || (lease.machineToken !== undefined && lease.machineToken !== token) || !isProcessAlive(lease.pid);
+    const alive =
+      lease !== null && Number.isInteger(lease.processGroupId) && lease.processGroupId > 0
+        ? isProcessGroupAlive(lease.processGroupId)
+        : lease !== null && isProcessAlive(lease.pid);
+    const stale = lease === null || (lease.machineToken !== undefined && lease.machineToken !== token) || !alive;
     if (stale) {
       if (reap) {
         try {
@@ -136,6 +152,24 @@ export function acquireLease({ env = process.env, label, estimatedMb, repo, work
 export function heartbeatLease(lease, observedMb) {
   try {
     writeLeaseFile(lease.file, { ...lease, file: undefined, observedMb, heartbeatAt: new Date().toISOString() });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Bind an admitted lease to the detached process group that consumes it.
+ *
+ * Admission starts before spawn, so acquireLease initially records the
+ * wrapper. Once spawn succeeds, group liveness becomes authoritative: if the
+ * wrapper is SIGKILLed, descendants still holding memory retain the lease.
+ */
+export function retargetLease(lease, { pid, processGroupId = pid }) {
+  if (!Number.isInteger(pid) || pid <= 0 || !Number.isInteger(processGroupId) || processGroupId <= 0) return false;
+  try {
+    Object.assign(lease, { pid, processGroupId });
+    writeLeaseFile(lease.file, { ...lease, file: undefined });
     return true;
   } catch {
     return false;

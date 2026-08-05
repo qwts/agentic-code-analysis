@@ -8,8 +8,8 @@
 //   2. Is this an agent? → agents do not get the heavy local suites. They push
 //                         and let GitHub CI verify, which is the authoritative
 //                         lane regardless.
-//   3. Is there a grant? → the owner can hand an agent one heavy lane, briefly,
-//                         out of band.
+// Heavy lanes are never delegated back to an agent process. A same-user file
+// or local token is forgeable by that process and cannot prove human approval.
 
 import { readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
@@ -87,15 +87,12 @@ export function classifyLane(text) {
   return HEAVY_LANES.find((lane) => lane.pattern.test(text)) ?? null;
 }
 
-// --- Out-of-band grants ------------------------------------------------------
+// --- Legacy grant artifacts -------------------------------------------------
 //
-// The opt-in deliberately cannot be expressed in the command an agent runs.
-// An env var would be self-serve: the agent that wants the heavy lane is the
-// same agent writing the command line, so `AGENT_GUARD_ALLOW_HEAVY=1 npm run
-// test:e2e` would be an opt-in it grants itself — the same hole
-// `IMAGE_TRAIL_GUARD_DISABLE=` had until image-trail's hook started blocking
-// the string. A grant is a file the owner creates, time-boxed, and the hook
-// blocks agents from running the command that creates it.
+// These helpers remain only so old artifacts can expire, be listed, and be
+// revoked during rollout. They are never consulted for admission: an agent
+// running as the same OS user can write the file directly, so it cannot
+// authenticate human intent.
 
 export function grantPath(laneId, env = process.env) {
   return path.join(grantsDir(env), `${laneId}.json`);
@@ -155,16 +152,14 @@ export function revokeGrant(laneId, env = process.env) {
  * The agent-vs-human gate, resolved.
  *
  * Humans are never refused *by policy* — only clamped, and headroom-checked
- * like everything else. Agents are refused the heavy lanes unless the owner
- * has granted that specific lane, and told exactly how to proceed instead:
- * push and let CI verify.
+ * like everything else. Agents are always refused the heavy lanes and told
+ * exactly how to proceed instead: push and let CI verify, or have the owner
+ * run the lane directly from a non-agent terminal.
  */
-export function evaluateLanePolicy({ label, command, env = process.env, now = Date.now() }) {
+export function evaluateLanePolicy({ label, command, env = process.env }) {
   const lane = classifyLane(label) ?? classifyLane(command);
   if (!lane) return { allowed: true, lane: null };
   if (!isAgentSession(env)) return { allowed: true, lane, actor: 'human' };
-  const grant = readGrant(lane.id, env, now);
-  if (grant) return { allowed: true, lane, actor: 'agent', grant };
   return {
     allowed: false,
     lane,
@@ -172,6 +167,6 @@ export function evaluateLanePolicy({ label, command, env = process.env, now = Da
     message:
       `The "${lane.id}" lane is a heavy local suite (${lane.why}) and agents do not run it on this machine by default. ` +
       'Push the branch and let GitHub CI verify — CI is the authoritative lane, and it is exempt from this guard. ' +
-      `If a local run is genuinely required, ask the owner to run: node tools/agent-guard/arbiter.mjs grant ${lane.id} --minutes 30`,
+      'If a local run is genuinely required, the owner can run it directly from their own terminal; agent sessions cannot receive forgeable local grants.',
   };
 }

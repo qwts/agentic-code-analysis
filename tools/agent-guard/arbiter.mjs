@@ -1,13 +1,8 @@
 #!/usr/bin/env node
 
-// Operator surface for the machine-scoped guard: see what holds the machine,
-// dry-run an admission decision, and hand an agent a time-boxed grant for one
-// heavy lane.
-//
-// `grant` is the owner's opt-in and is deliberately a separate command rather
-// than an environment variable, because an agent composes its own command
-// lines: any env-var opt-in is one the agent can grant itself. The command
-// hook blocks agents from running this subcommand.
+// Operator surface for the machine-scoped guard: see what holds the machine
+// and dry-run an admission decision. The legacy grant command remains only to
+// fail closed with an explanation; same-user files cannot prove human intent.
 //
 // Usage:
 //   node tools/agent-guard/arbiter.mjs status
@@ -22,7 +17,7 @@ import process from 'node:process';
 
 import { clampCeiling, decideAdmission, deriveBudget } from './lib/budget.mjs';
 import { readLeases } from './lib/leases.mjs';
-import { HEAVY_LANES, isAgentSession, isCi, listGrants, revokeGrant, writeGrant } from './lib/policy.mjs';
+import { HEAVY_LANES, isAgentSession, isCi, listGrants, revokeGrant } from './lib/policy.mjs';
 import { machineToken, stateDir } from './lib/protocol.mjs';
 import { readMemoryStatus, topConsumers } from './lib/system-memory.mjs';
 
@@ -61,7 +56,7 @@ function status() {
       out(`  ${lease.label ?? 'run'}  repo=${lease.repo ?? '?'}  harness=${lease.harness ?? '?'}  pid=${lease.pid}  reserved=${lease.estimatedMb} MB  resident=${lease.observedMb ?? 0} MB  since=${lease.grantedAt}`);
     }
   }
-  out(grants.length === 0 ? 'grants         none' : `grants         ${grants.map((grant) => `${grant.laneId} until ${grant.expiresAt}`).join(', ')}`);
+  out(grants.length === 0 ? 'legacy grants  none' : `legacy grants  ${grants.map((grant) => `${grant.laneId} until ${grant.expiresAt} (revoke)`).join(', ')}`);
   const consumers = topConsumers(5);
   if (consumers.length > 0) {
     out();
@@ -111,23 +106,11 @@ function grant(argv) {
     process.stderr.write(`unknown lane ${JSON.stringify(laneId ?? '')}; expected one of ${HEAVY_LANES.map((entry) => entry.id).join(', ')}\n`);
     return 1;
   }
-  if (isAgentSession(process.env)) {
-    process.stderr.write('refusing to grant from an agent session: the grant is the owner\'s opt-in, and an agent granting itself one is not an opt-in.\n');
-    return 1;
-  }
-  const rawMinutes = flag(argv, '--minutes');
-  if (argv.includes('--minutes') && rawMinutes === null) {
-    process.stderr.write('--minutes requires a positive numeric value\n');
-    return 1;
-  }
-  const minutes = rawMinutes === null ? 30 : Number(rawMinutes);
-  if (!Number.isFinite(minutes) || minutes <= 0) {
-    process.stderr.write(`invalid --minutes ${JSON.stringify(rawMinutes)}; expected a positive number\n`);
-    return 1;
-  }
-  const written = writeGrant({ laneId: lane.id, minutes });
-  out(`granted "${lane.id}" until ${written.expiresAt} (${minutes} min). Agents may run this lane locally until it expires.`);
-  return 0;
+  process.stderr.write(
+    `agent grants are disabled for ${lane.id}: same-user files cannot authenticate human approval. ` +
+      'Run the lane directly from the owner\'s terminal or use GitHub CI.\n',
+  );
+  return 1;
 }
 
 function revoke(argv) {
