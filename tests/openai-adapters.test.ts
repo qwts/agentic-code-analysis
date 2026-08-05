@@ -72,13 +72,19 @@ test('degrade paths: refusal, truncation, empty, unparseable, api error', async 
   }
 });
 
-test('openai adapter throws MissingCredentialsError without credentials', () => {
-  const saved = process.env['OPENAI_API_KEY'];
+test('openai adapter throws MissingCredentialsError without credentials, including admin-only', () => {
+  const saved = { api: process.env['OPENAI_API_KEY'], admin: process.env['OPENAI_ADMIN_KEY'] };
   delete process.env['OPENAI_API_KEY'];
+  delete process.env['OPENAI_ADMIN_KEY'];
   try {
     assert.throws(() => createOpenAiJudge('model-x'), MissingCredentialsError);
+    // Admin keys satisfy the constructor but cannot call chat.completions.
+    process.env['OPENAI_ADMIN_KEY'] = 'sk-admin-test';
+    assert.throws(() => createOpenAiJudge('model-x'), MissingCredentialsError);
   } finally {
-    if (saved !== undefined) process.env['OPENAI_API_KEY'] = saved;
+    delete process.env['OPENAI_ADMIN_KEY'];
+    if (saved.api !== undefined) process.env['OPENAI_API_KEY'] = saved.api;
+    if (saved.admin !== undefined) process.env['OPENAI_ADMIN_KEY'] = saved.admin;
   }
 });
 

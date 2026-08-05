@@ -15,6 +15,12 @@ export function createOpenAiJudge(model: string, client?: OpenAI): JudgeClient {
     } catch {
       throw new MissingCredentialsError('openai');
     }
+    // The constructor also accepts admin-only credentials (OPENAI_ADMIN_KEY),
+    // which cannot call chat.completions — that miss must be 78 at setup,
+    // not degraded warns at judge time (review, PR #9).
+    if (openai.apiKey === null) {
+      throw new MissingCredentialsError('openai');
+    }
   }
   return openAiWireJudge('openai', model, openai, 'max_completion_tokens');
 }
