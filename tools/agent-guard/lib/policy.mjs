@@ -144,7 +144,7 @@ export function listGrants(env = process.env, now = Date.now()) {
 
 export function revokeGrant(laneId, env = process.env) {
   try {
-    rmSync(grantPath(laneId, env), { force: true });
+    rmSync(grantPath(laneId, env));
     return true;
   } catch {
     return false;

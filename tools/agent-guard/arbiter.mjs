@@ -115,9 +115,33 @@ function grant(argv) {
     process.stderr.write('refusing to grant from an agent session: the grant is the owner\'s opt-in, and an agent granting itself one is not an opt-in.\n');
     return 1;
   }
-  const minutes = Number(flag(argv, '--minutes')) || 30;
+  const rawMinutes = flag(argv, '--minutes');
+  if (argv.includes('--minutes') && rawMinutes === null) {
+    process.stderr.write('--minutes requires a positive numeric value\n');
+    return 1;
+  }
+  const minutes = rawMinutes === null ? 30 : Number(rawMinutes);
+  if (!Number.isFinite(minutes) || minutes <= 0) {
+    process.stderr.write(`invalid --minutes ${JSON.stringify(rawMinutes)}; expected a positive number\n`);
+    return 1;
+  }
   const written = writeGrant({ laneId: lane.id, minutes });
   out(`granted "${lane.id}" until ${written.expiresAt} (${minutes} min). Agents may run this lane locally until it expires.`);
+  return 0;
+}
+
+function revoke(argv) {
+  const laneId = argv[1];
+  const lane = HEAVY_LANES.find((entry) => entry.id === laneId);
+  if (!lane) {
+    process.stderr.write(`unknown lane ${JSON.stringify(laneId ?? '')}; expected one of ${HEAVY_LANES.map((entry) => entry.id).join(', ')}\n`);
+    return 1;
+  }
+  if (!revokeGrant(lane.id)) {
+    process.stderr.write(`no active grant for ${lane.id}\n`);
+    return 1;
+  }
+  out(`revoked ${lane.id}`);
   return 0;
 }
 
@@ -135,9 +159,7 @@ function main() {
     case 'grant':
       return grant(argv);
     case 'revoke':
-      revokeGrant(argv[1]);
-      out(`revoked ${argv[1]}`);
-      return 0;
+      return revoke(argv);
     default:
       process.stderr.write(`unknown command ${JSON.stringify(argv[0])}\n`);
       return 1;

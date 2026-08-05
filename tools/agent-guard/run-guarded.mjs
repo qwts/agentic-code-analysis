@@ -199,7 +199,13 @@ async function admit({ env, request, budget, leaseFields }) {
 }
 
 async function main() {
-  const { options, command } = parseArgs(process.argv.slice(2));
+  let parsed;
+  try {
+    parsed = parseArgs(process.argv.slice(2));
+  } catch (error) {
+    fail(error instanceof Error ? error.message : String(error));
+  }
+  const { options, command } = parsed;
   if (command.length === 0) fail('no command given');
 
   // CI is exempt, entirely and deliberately (see lib/policy.mjs).

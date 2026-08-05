@@ -237,21 +237,38 @@ function commandSubstitutionBodies(text) {
       i += 1;
       continue;
     }
-    if (text[i] !== '$' || text[i + 1] !== '(') continue;
-    let depth = 1;
-    let j = i + 2;
-    for (; j < text.length && depth > 0; j += 1) {
-      if (text[j] === '\\') {
-        j += 1;
-      } else if (text[j] === '(') {
-        depth += 1;
-      } else if (text[j] === ')') {
-        depth -= 1;
+    if (text[i] === '$' && text[i + 1] === '(') {
+      let depth = 1;
+      let j = i + 2;
+      for (; j < text.length && depth > 0; j += 1) {
+        if (text[j] === '\\') {
+          j += 1;
+        } else if (text[j] === '(') {
+          depth += 1;
+        } else if (text[j] === ')') {
+          depth -= 1;
+        }
       }
+      if (depth === 0) {
+        bodies.push(text.slice(i + 2, j - 1));
+        i = j - 1;
+      }
+      continue;
     }
-    if (depth === 0) {
-      bodies.push(text.slice(i + 2, j - 1));
-      i = j - 1;
+    if (text[i] === '`') {
+      let j = i + 1;
+      while (j < text.length) {
+        if (text[j] === '\\') {
+          j += 2;
+          continue;
+        }
+        if (text[j] === '`') break;
+        j += 1;
+      }
+      if (j < text.length) {
+        bodies.push(text.slice(i + 1, j));
+        i = j;
+      }
     }
   }
   return bodies;
@@ -262,12 +279,28 @@ function quotedWord(quoted) {
   return /\s|[;&|]/u.test(inner) ? null : inner;
 }
 
+function isWordCharacter(character) {
+  return character !== undefined && !/[\s;&|]/u.test(character);
+}
+
+function followsEnvCommand(scanned) {
+  const tokens = scanned
+    .split(/\|\||&&|[;\n|&]/u)
+    .at(-1)
+    .trim()
+    .split(/\s+/u)
+    .filter(Boolean);
+  const envAt = tokens.findLastIndex((token) => /(?:^|\/)env$/u.test(token));
+  if (envAt < 0) return false;
+  return tokens.slice(envAt + 1).every((token) => token.startsWith('-') || /^\w+=\S*$/u.test(token));
+}
+
 // Quoting an argv word does not make it inert: `npm run "ci"` and
 // `npx "vitest"` execute exactly the same programs as their unquoted forms.
 // Preserve only words occupying a command or script slot; quoted prose passed
 // to `git commit -m` or `gh pr create --body` remains blanked below.
 function isExecutableQuotedWord(scanned, word) {
-  if (!word) return false;
+  if (word === null) return false;
   const segment = scanned.split(/\|\||&&|[;\n|&]/u).at(-1).trim();
   const tokens = segment.split(/\s+/u).filter(Boolean);
   if (tokens.length === 0) {
@@ -289,6 +322,7 @@ function isExecutableQuotedWord(scanned, word) {
   }
 
   const last = tokens.at(-1);
+  if (/^\w+=\S*$/u.test(word) && followsEnvCommand(scanned)) return true;
   if (last === 'npx' && /^(vitest|playwright|test-storybook)$/u.test(word)) return true;
   if (last === '--run' && tokens.some((token) => /(?:^|\/)node$/u.test(token))) return true;
   return /(?:^|\/)(?:node|electron)$/u.test(last ?? '') && word === '--test';
@@ -318,6 +352,12 @@ export function stripInertText(command) {
       if (substitutions.length > 0) {
         rest = `${substitutions.join('\n')}${rest}`;
         scanned += '""\n';
+      } else if (isWordCharacter(scanned.at(-1)) || isWordCharacter(rest[0])) {
+        // Shell quote removal concatenates adjacent fragments into one argv
+        // word: c""i and "c"i both become ci. Preserve such fragments rather
+        // than leaving quote bytes that hide executable or script names.
+        const word = quotedWord(quoted);
+        scanned += word ?? (quoted.startsWith("'") ? "''" : '""');
       } else if (isExecutableQuotedWord(scanned, quotedWord(quoted))) {
         scanned += quotedWord(quoted);
       } else {
@@ -325,7 +365,9 @@ export function stripInertText(command) {
       }
     }
   }
-  return scanned + rest;
+  const effective = scanned + rest;
+  const substitutions = commandSubstitutionBodies(effective);
+  return substitutions.length > 0 ? `${effective}\n${substitutions.join('\n')}` : effective;
 }
 
 // Codex's shell tool submits argv arrays; the patterns match command text.
@@ -386,6 +428,52 @@ export function npmScriptNames(command) {
   return names;
 }
 
+const OTHER_PACKAGE_MANAGERS = new Set(['pnpm', 'yarn', 'bun']);
+const OTHER_PACKAGE_OPTIONS_WITH_OPERANDS = new Set([
+  '-C',
+  '--cwd',
+  '--dir',
+  '--filter',
+  '--workspace',
+  '-w',
+]);
+
+function firstOtherPackageScriptToken(tokens) {
+  for (let i = 0; i < tokens.length; i += 1) {
+    const token = tokens[i];
+    if (token === '--') continue;
+    if (OTHER_PACKAGE_OPTIONS_WITH_OPERANDS.has(token)) {
+      i += 1;
+      continue;
+    }
+    if (token.startsWith('-')) continue;
+    return token;
+  }
+  return undefined;
+}
+
+// pnpm, Yarn and Bun all expose package scripts as `run <script>` and also
+// accept a direct script spelling. They share the same heavy-lane policy as
+// npm; otherwise changing package manager would silently remove admission.
+export function otherPackageScriptNames(command) {
+  const names = [];
+  for (const segment of splitSegments(command)) {
+    const tokens = segment.split(/\s+/u).filter(Boolean);
+    const start = tokens.findIndex((token) => OTHER_PACKAGE_MANAGERS.has(token.split('/').at(-1)));
+    if (start < 0) continue;
+    const rest = tokens.slice(start + 1);
+    const runAt = rest.findIndex((token) => token === 'run' || token === 'run-script');
+    const candidates = runAt >= 0 ? rest.slice(runAt + 1) : rest;
+    const script = firstOtherPackageScriptToken(candidates);
+    if (script !== undefined) names.push(script);
+  }
+  return names;
+}
+
+function packageScriptNames(command) {
+  return [...npmScriptNames(command), ...nodeRunScriptNames(command), ...otherPackageScriptNames(command)];
+}
+
 // Node >=22 exposes package.json scripts through `node --run <script>` and
 // `node --run=<script>`. Those spellings have the same admission policy as npm.
 export function nodeRunScriptNames(command) {
@@ -412,7 +500,7 @@ export function nodeRunScriptNames(command) {
 }
 
 function isUnguardedInnerScript(command) {
-  return [...npmScriptNames(command), ...nodeRunScriptNames(command)].some((script) => /:(?:run|inner)$/u.test(script));
+  return packageScriptNames(command).some((script) => /:(?:run|inner)$/u.test(script));
 }
 
 /**
@@ -424,7 +512,7 @@ function isUnguardedInnerScript(command) {
  * themselves count here.
  */
 export function heavyLaneFor(command) {
-  for (const script of [...npmScriptNames(command), ...nodeRunScriptNames(command)]) {
+  for (const script of packageScriptNames(command)) {
     const lane = HEAVY_LANES.find((entry) => entry.pattern.test(script));
     if (lane) return lane;
   }
@@ -435,6 +523,39 @@ export function heavyLaneFor(command) {
     return HEAVY_LANES.find((entry) => entry.id === 'stories');
   }
   return null;
+}
+
+function commandAfterPrefixes(segment) {
+  const tokens = segment.split(/\s+/u).filter(Boolean);
+  let index = 0;
+  while (index < tokens.length) {
+    while (/^\w+=\S*$/u.test(tokens[index] ?? '')) index += 1;
+    const command = tokens[index]?.split('/').at(-1);
+    if (command === 'time' || command === 'command') {
+      index += 1;
+      while (tokens[index]?.startsWith('-')) index += 1;
+      continue;
+    }
+    if (command === 'env') {
+      index += 1;
+      while (index < tokens.length) {
+        const token = tokens[index];
+        if (/^\w+=\S*$/u.test(token)) {
+          index += 1;
+          continue;
+        }
+        if (token.startsWith('-')) {
+          index += 1;
+          if (/^(?:-u|--unset|--chdir|-C)$/u.test(token) && index < tokens.length) index += 1;
+          continue;
+        }
+        break;
+      }
+      continue;
+    }
+    break;
+  }
+  return tokens.slice(index).join(' ');
 }
 
 export function evaluateCommand(command, { env = process.env, now = Date.now() } = {}) {
@@ -462,13 +583,14 @@ export function evaluateCommand(command, { env = process.env, now = Date.now() }
   // `node run-guarded.mjs -- npm run lint && node --test …`: the sanctioned
   // call is real, and the blocked binary rides along beside it.
   for (const segment of splitSegments(effective)) {
-    if (ANY_WRAPPER_SEGMENT.test(segment) && !WRAPPER_SEGMENT.test(segment)) {
+    const executableSegment = commandAfterPrefixes(segment);
+    if (ANY_WRAPPER_SEGMENT.test(executableSegment) && !WRAPPER_SEGMENT.test(executableSegment)) {
       return {
         allow: false,
         reason: `Blocked a non-canonical run-guarded.mjs path: only the repository guard may claim the wrapper exemption. ${USE_ENTRYPOINT}`,
       };
     }
-    if (WRAPPER_SEGMENT.test(segment)) continue;
+    if (WRAPPER_SEGMENT.test(executableSegment)) continue;
     if (isUnguardedInnerScript(segment)) {
       return {
         allow: false,
@@ -476,7 +598,7 @@ export function evaluateCommand(command, { env = process.env, now = Date.now() }
       };
     }
     for (const { pattern, what, reason } of BLOCKED) {
-      if (pattern.test(segment)) {
+      if (pattern.test(executableSegment)) {
         return {
           allow: false,
           reason: reason ?? `Blocked ${what}: it bypasses the machine-scoped memory guard. ${USE_ENTRYPOINT}`,
