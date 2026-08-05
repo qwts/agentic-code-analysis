@@ -7,7 +7,7 @@
     "node": ">=24"
   },
   "scripts": {
-    "test": "node --test 'tests/*.test.ts'",
+    "test": "node --test 'tests/*.test.ts' tools/agent-guard/tests/conformance.test.mjs",
     "typecheck": "tsc --noEmit"
   },
   "peerDependencies": {

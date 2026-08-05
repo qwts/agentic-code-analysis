@@ -1,0 +1,28 @@
+{
+  "$schema": "https://json.schemastore.org/claude-code-settings.json",
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"$CLAUDE_PROJECT_DIR\"/tools/agent-guard/guard-agent-command.mjs --protocol=claude"
+          }
+        ]
+      }
+    ],
+    "WorktreeCreate": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "B=\"${AGENT_BOT_BIN:-agent-bot}\"; command -v \"$B\" >/dev/null 2>&1 || { echo \"agent-bot is not installed — install agent-bot-identity\" >&2; exit 127; }; exec \"$B\" claude-worktree-create",
+            "timeout": 180,
+            "statusMessage": "Creating worktree with its bot identity…"
+          }
+        ]
+      }
+    ]
+  }
+}

@@ -3,6 +3,19 @@
 A suite of small, loosely coupled CLI checks (`aca <check>`) that use an LLM
 judge for structure/maintainability judgments mechanical linters cannot make.
 Checks: `context-footprint`, `failure-posture`, `test-honesty`, `doc-drift`.
+
+## Shared agent conventions and skills
+
+PR-first workflow, validation-before-push, commit and PR hygiene, and the
+untrusted-input threat model are defined once in the
+[org-wide agent conventions](https://github.com/qwts/playbook-engineering/blob/main/docs/reference/agent-conventions.md).
+Before creating or copying a repo-local skill, consult the
+[shared agent skills](https://github.com/qwts/playbook-engineering/blob/main/skills/README.md)
+index and reuse an existing skill when it fits. This repository inherits the
+playbook's [shared SOPs](https://github.com/qwts/playbook-engineering/blob/main/docs/sop/README.md)
+and [engineering decisions](https://github.com/qwts/playbook-engineering/blob/main/docs/decisions/README.md)
+by default; record any variance explicitly.
+
 Designs are accepted — read them before changing anything:
 
 - [docs/design/suite.md](docs/design/suite.md) — architecture, CLI shape, exit codes (0/1/2/78), JudgeClient contract
