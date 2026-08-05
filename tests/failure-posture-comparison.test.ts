@@ -3,7 +3,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { execFileSync } from 'node:child_process';
-import { mkdtempSync, unlinkSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, rmSync, unlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { buildComparisons, growthLine, type Comparison, type Prepared } from '../src/checks/failure-posture/comparison.ts';
@@ -104,6 +104,19 @@ test('changed non-code files never enter the base import graph', () => {
   const c = comparison(buildComparisons(root, 'base', ['target.ts']).get('target.ts')!);
   assert.ok(c.kind === 'legacy');
   assert.deepEqual(c.base.importedBy, ['user.ts'], 'notes.md must not be a phantom base importer');
+});
+
+test('a base blob unreadable at the merge-base fails the run, never thins the base graph', () => {
+  const { root, git } = tempRepo();
+  git('rm', '--quiet', 'user.ts');
+  git('commit', '-m', 'drop importer', '--quiet');
+  // Delete the loose object of the deleted importer's base blob: the diff
+  // still lists user.ts as deleted (tree entries carry the OID), but
+  // `git show` cannot read it — the transient/integrity fault the
+  // swallowed-failure guard surfaces instead of thinning the base graph.
+  const blob = git('rev-parse', 'base:user.ts').trim();
+  rmSync(join(root, '.git', 'objects', blob.slice(0, 2), blob.slice(2)));
+  assert.throws(() => buildComparisons(root, 'base', ['target.ts']), ConfigError);
 });
 
 test('unreadable head degrades per file; unresolvable merge-base throws ConfigError', () => {
