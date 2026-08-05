@@ -1,10 +1,11 @@
 // Anthropic adapter for the JudgeClient port. Contract (ACA-0003 D2): strict
 // JSON-schema structured output, refusal/truncation/parse failure degrade to
 // {ok: false} — never a crash, never a silent pass — prompt-prefix caching on
-// the system block, no sampling knobs. Deliberately no server-side fallbacks:
+// the system block, no sampling knobs. Account rejection at judge time throws
+// instead of degrading (ACA-0011). Deliberately no server-side fallbacks:
 // a substituted judge model would break the cache key's model attribution.
 import Anthropic from '@anthropic-ai/sdk';
-import { MissingCredentialsError, type JudgeClient, type JudgeRequest, type JudgeResult } from '../judge-client.ts';
+import { GATE_DOWN_STATUSES, JudgeUnavailableError, MissingCredentialsError, type JudgeClient, type JudgeRequest, type JudgeResult } from '../judge-client.ts';
 
 export function createAnthropicJudge(model: string, client?: Anthropic): JudgeClient {
   let anthropic: Anthropic;
@@ -37,7 +38,15 @@ async function judge(anthropic: Anthropic, model: string, request: JudgeRequest)
     });
   } catch (err) {
     // Non-Error throws must still yield an informative note (review, PR #9).
-    return { ok: false, note: `api error: ${err instanceof Error ? err.message : String(err)}` };
+    const message = err instanceof Error ? err.message : String(err);
+    // Duck-typed: SDK APIErrors and proxy throws both carry a numeric status.
+    // Anthropic reports a depleted account as 400 invalid_request_error, not
+    // 402; other 400s are per-request and stay transient.
+    const status = (err as { status?: unknown } | null)?.status;
+    if (typeof status === 'number' && (GATE_DOWN_STATUSES.has(status) || (status === 400 && /credit balance is too low/i.test(message)))) {
+      throw new JudgeUnavailableError('anthropic', message);
+    }
+    return { ok: false, note: `api error: ${message}` };
   }
   if (response.stop_reason === 'refusal') {
     const category = response.stop_details?.category;

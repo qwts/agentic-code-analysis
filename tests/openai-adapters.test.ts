@@ -3,7 +3,7 @@ import { test } from 'node:test';
 import type OpenAI from 'openai';
 import { createOpenAiJudge } from '../src/core/adapters/openai.ts';
 import { createLocalJudge } from '../src/core/adapters/local.ts';
-import { MissingCredentialsError } from '../src/core/judge-client.ts';
+import { JudgeUnavailableError, MissingCredentialsError } from '../src/core/judge-client.ts';
 
 const REQUEST = { system: 'rule text', user: 'file payload', schema: { type: 'object' }, maxTokens: 64 };
 
@@ -70,6 +70,23 @@ test('degrade paths: refusal, truncation, empty, unparseable, api error', async 
     assert.equal(result.ok, false);
     assert.match((result as { note: string }).note, expected);
   }
+});
+
+test('account rejection throws JudgeUnavailableError: 401/402/403, and the 429 insufficient_quota shape', async () => {
+  for (const status of [401, 402, 403]) {
+    await assert.rejects(createOpenAiJudge('m', stub(Object.assign(new Error('rejected'), { status }))).judge(REQUEST), JudgeUnavailableError);
+  }
+  // OpenAI reports a depleted account as 429 insufficient_quota, not 402
+  // (issue #11); the local adapter shares the transport, so a 402 from an
+  // OpenAI-compatible router (e.g. HF) takes the same path.
+  const depleted = Object.assign(new Error('quota exhausted'), { status: 429, code: 'insufficient_quota' });
+  await assert.rejects(createOpenAiJudge('m', stub(depleted)).judge(REQUEST), /openai judge unavailable — quota exhausted/);
+  await assert.rejects(createLocalJudge('m', stub(Object.assign(new Error('402'), { status: 402 }))).judge(REQUEST), /local judge unavailable/);
+});
+
+test('a plain 429 is rate limiting, not a dead gate — degrades to not-ok', async () => {
+  const result = await createOpenAiJudge('m', stub(Object.assign(new Error('slow down'), { status: 429 }))).judge(REQUEST);
+  assert.deepEqual(result, { ok: false, note: 'api error: slow down' });
 });
 
 test('openai adapter throws MissingCredentialsError without credentials, including admin-only', () => {

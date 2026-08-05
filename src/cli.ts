@@ -1,17 +1,18 @@
 #!/usr/bin/env node
 // Dispatcher: argument parsing, check routing, output rendering, and the
 // exit-code contract (ACA-0003 D3) — 0 advisory/pass, 1 enforce-fail, 2 usage,
-// 78 enforce-without-credentials. Output is findings only (ACA-0003 D4).
+// 78 gate down: no credentials, or the judge rejected the account at judge
+// time (ACA-0011). Output is findings only (ACA-0003 D4).
 import { parseArgs } from 'node:util';
 import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { checks, type CheckLoader, type FileVerdict, type Violation } from './checks/registry.ts';
 import { changedFiles, filterScope, repoRoot } from './core/change-scope.ts';
 import { ConfigError, loadConfig, resolveTier } from './core/config.ts';
-import { createJudgeClient, MissingCredentialsError, type JudgeClient } from './core/judge-client.ts';
+import { createJudgeClient, JudgeUnavailableError, MissingCredentialsError, type JudgeClient } from './core/judge-client.ts';
 import { VerdictCache } from './core/verdict-cache.ts';
 
-export const EXIT = { ok: 0, fail: 1, usage: 2, noCredentials: 78 } as const;
+export const EXIT = { ok: 0, fail: 1, usage: 2, gateDown: 78 } as const;
 
 export interface RunDeps {
   registry: ReadonlyMap<string, CheckLoader>;
@@ -27,7 +28,7 @@ checks: ${[...registry.keys()].join(', ') || '(none registered yet)'}
   --enforce    exit 1 on any fail verdict (default: advisory, always exit 0)
   --json       machine-readable output
   --base       diff base ref (default: origin/main)
-  --self-test  run the check's calibration fixtures (exit 1 on miss, 78 without credentials; honors --json)`;
+  --self-test  run the check's calibration fixtures (exit 1 on miss, 78 when the judge is unavailable; honors --json)`;
 
 export async function run(argv: string[], deps?: Partial<RunDeps>): Promise<number> {
   const d: RunDeps = {
@@ -84,7 +85,7 @@ export async function run(argv: string[], deps?: Partial<RunDeps>): Promise<numb
         d.stderr(`${check.name}: skipped — ${err.message}`);
         // A self-test without credentials cannot assert anything; exiting 0
         // would report a calibration that never ran.
-        return enforce || selfTest ? EXIT.noCredentials : EXIT.ok;
+        return enforce || selfTest ? EXIT.gateDown : EXIT.ok;
       }
       throw err;
     }
@@ -122,6 +123,13 @@ export async function run(argv: string[], deps?: Partial<RunDeps>): Promise<numb
     if (err instanceof ConfigError) {
       d.stderr(err.message);
       return EXIT.usage;
+    }
+    if (err instanceof JudgeUnavailableError) {
+      // Auth/quota rejection at judge time is the credentials miss arriving
+      // late (ACA-0011): stop the run with the same posture — per-file warns
+      // would read as judgments no judge made.
+      d.stderr(`${checkName}: gate down — ${err.message}`);
+      return enforce || selfTest ? EXIT.gateDown : EXIT.ok;
     }
     throw err;
   }

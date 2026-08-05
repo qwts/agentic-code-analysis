@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { EXIT, run } from '../src/cli.ts';
 import type { Check, CheckLoader, FileVerdict } from '../src/checks/registry.ts';
-import { MissingCredentialsError, type JudgeClient } from '../src/core/judge-client.ts';
+import { JudgeUnavailableError, MissingCredentialsError, type JudgeClient } from '../src/core/judge-client.ts';
 
 // Route the tier through the env override so no aca.config.json is needed;
 // the stub clientFactory ignores the route anyway.
@@ -61,7 +61,23 @@ test('missing credentials: one line, exit 0 advisory / 78 enforce', async () => 
   assert.equal(await run(['fake', 'a.ts'], noCreds), EXIT.ok);
   assert.equal(out.length, 1);
   assert.match(out[0]!, /no anthropic credentials resolve/);
-  assert.equal(await run(['fake', 'a.ts', '--enforce'], noCreds), EXIT.noCredentials);
+  assert.equal(await run(['fake', 'a.ts', '--enforce'], noCreds), EXIT.gateDown);
+});
+
+test('gate down at judge time: one line, no per-file warns, exit 0 advisory / 78 enforce and self-test', async () => {
+  // Quota/auth exhaustion mid-run (issue #11) must never surface as
+  // judgments: the run stops with the outage named, not per-file warns.
+  const out: string[] = [];
+  const unavailable = async (): Promise<never> => {
+    throw new JudgeUnavailableError('anthropic', '402 credit depleted');
+  };
+  const check: Check = { name: 'fake', tier: 'T1', run: unavailable, selfTest: unavailable };
+  const gateDown = { ...deps([], out), registry: new Map([['fake', async () => check]]) };
+  assert.equal(await run(['fake', 'a.ts'], gateDown), EXIT.ok);
+  assert.equal(out.length, 1, 'exactly the gate-down notice, no verdict lines');
+  assert.match(out[0]!, /fake: gate down — anthropic judge unavailable — 402 credit depleted/);
+  assert.equal(await run(['fake', 'a.ts', '--enforce'], gateDown), EXIT.gateDown);
+  assert.equal(await run(['fake', '--self-test'], gateDown), EXIT.gateDown);
 });
 
 test('--self-test: exit 0 on pass, 1 on miss, 2 when the check has none', async () => {
@@ -117,7 +133,7 @@ test('--self-test without credentials exits 78 even without --enforce', async ()
       throw new MissingCredentialsError('anthropic');
     },
   };
-  assert.equal(await run(['fake', '--self-test'], noCreds), EXIT.noCredentials);
+  assert.equal(await run(['fake', '--self-test'], noCreds), EXIT.gateDown);
 });
 
 test('a residual pass renders as a finding and counts separately; clean passes stay silent', async () => {
