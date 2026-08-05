@@ -69,7 +69,13 @@ export function clampCeiling(requestedMb, budget) {
  * precisely so this number shrinks as a run warms up.
  */
 export function unmaterializedMb(leases) {
-  return leases.reduce((total, lease) => total + Math.max(0, lease.estimatedMb - (lease.observedMb ?? 0)), 0);
+  return leases.reduce((total, lease) => {
+    // Optional heartbeat data is untrusted filesystem input. Anything other
+    // than a finite, non-negative number is treated as not materialized yet —
+    // the conservative value that cannot manufacture headroom.
+    const observedMb = Number.isFinite(lease.observedMb) && lease.observedMb >= 0 ? lease.observedMb : 0;
+    return total + Math.max(0, lease.estimatedMb - observedMb);
+  }, 0);
 }
 
 export function outstandingMb(leases) {

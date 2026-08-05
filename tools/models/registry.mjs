@@ -98,6 +98,8 @@ export function validateRegistry(registry) {
 // rather than being omitted — a gap the author can see is a gap they will
 // mention; a silently dropped row reads as "no recommendation exists".
 export function routingFor(registry, tier) {
+  const errors = validateRegistry(registry);
+  if (errors.length > 0) throw new Error(`invalid model registry: ${errors.join('; ')}`);
   const entry = registry.tiers?.[tier];
   if (!entry) throw new Error(`unknown tier ${tier}`);
   return VENDOR_GROUPS.map((vendor) => {
