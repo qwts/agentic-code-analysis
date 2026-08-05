@@ -22,6 +22,7 @@ import { fileURLToPath } from 'node:url';
 import { evaluateCommand, evaluateHookInput } from '../guard-agent-command.mjs';
 import { clampCeiling, deriveBudget } from '../lib/budget.mjs';
 import { isCi } from '../lib/policy.mjs';
+import { readMemoryStatus } from '../lib/system-memory.mjs';
 
 // <repo>/tools/agent-guard/tests/this-file → <repo>
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..', '..');
@@ -116,6 +117,26 @@ describe('agent-guard conformance (ENG-0138)', () => {
     assert.equal(evaluateHookInput({ cwd: '/outside', command: 'env -C /project npx vitest' }, '/project', { env }).allow, false);
     assert.equal(evaluateHookInput({ cwd: '/outside', command: 'env --chdir=/project npm run ci' }, '/project', { env }).allow, false);
     assert.equal(evaluateHookInput({ cwd: '/outside', command: '(cd /tmp); cd project && npm run ci' }, '/outside/project', { env }).allow, false);
+    assert.equal(evaluateHookInput({ cwd: '/outside', command: "bash -c 'cd /project && npx vitest'" }, '/project', { env }).allow, false);
+    assert.equal(evaluateHookInput({ cwd: '/outside', command: 'command env -C /project npx vitest' }, '/project', { env }).allow, false);
+    assert.equal(evaluateHookInput({ cwd: '/outside', command: 'npm --prefix /project run ci' }, '/project', { env }).allow, false);
+    assert.equal(evaluateHookInput({ cwd: '/outside', command: 'pnpm --dir /project run ci' }, '/project', { env }).allow, false);
+  });
+
+  test('executable indirection cannot bypass admission', () => {
+    for (const command of [
+      'corepack yarn run test:e2e',
+      'yarn workspaces foreach -A npm run ci',
+      'cat <(npx vitest)',
+      "watch -n 1 'npx vitest'",
+      'printf x | xargs npx vitest',
+      '"/usr/bin/npm" run ci',
+      'node node_modules/vitest/vitest.mjs run',
+      'pnpm run "ci"',
+      'env -i PATH=/usr/bin:/bin node tools/agent-guard/run-guarded.mjs --label test:e2e -- npm run test:e2e',
+    ]) {
+      assert.equal(evaluateCommand(command, { env }).allow, false, `expected the guard to deny: ${command}`);
+    }
   });
 
   test('the guard denies tampering with its own controls', () => {
@@ -139,6 +160,25 @@ describe('agent-guard conformance (ENG-0138)', () => {
       assert.ok(budget.maxRunMb < totalMb, `a ${totalMb} MB machine must cap a run below its own RAM`);
       assert.equal(clampCeiling(totalMb * 4, budget).ceilingMb, budget.maxRunMb, 'an oversized request must clamp to the cap');
     }
+  });
+
+  test('Linux admission uses the container limit rather than host memory', () => {
+    const files = new Map([
+      ['/proc/meminfo', 'MemAvailable:  5784576 kB\nSwapTotal: 0 kB\nSwapFree: 0 kB\n'],
+      ['/proc/self/cgroup', '0::/\n'],
+      ['/sys/fs/cgroup/memory.max', String(4096 * 1024 * 1024)],
+      ['/sys/fs/cgroup/memory.current', String(871 * 1024 * 1024)],
+    ]);
+    const status = readMemoryStatus({
+      platform: 'linux',
+      totalMb: 6073,
+      readFile: (file) => {
+        if (!files.has(file)) throw new Error(`missing fixture: ${file}`);
+        return files.get(file);
+      },
+    });
+    assert.equal(status.totalMb, 4096);
+    assert.equal(status.availableMb, 3225);
   });
 
   test('CI is exempt, so this never slows a hosted runner down', () => {

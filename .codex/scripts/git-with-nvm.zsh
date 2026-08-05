@@ -16,19 +16,20 @@ if [[ "$git_subcommand" == "push" ]]; then
     case "$argument" in
       --delete | --delete=* | --force | --force=* | \
       --force-with-lease | --force-with-lease=* | --force-if-includes | \
-      --mirror | --mirror=* | --prune | --prune=* | +* | :* | *:)
+      --mirror | --mirror=* | --prune | --prune=* | \
+      --exec | --exec=* | --receive-pack | --receive-pack=* | +* | :* | *:)
         print -u2 -- "Destructive git push requires normal Codex approval: $argument"
         exit 64
         ;;
       --all | --no-all | --atomic | --no-atomic | --branches | --no-branches | \
-      --dry-run | --no-dry-run | --exec | --exec=* | --follow-tags | \
+      --dry-run | --no-dry-run | --follow-tags | \
       --no-follow-tags | --ipv4 | --ipv6 | --no-delete | --no-force | \
       --no-force-if-includes | --no-force-with-lease | --no-mirror | \
       --no-porcelain | --no-progress | --no-prune | --no-push-option | \
       --no-quiet | --no-receive-pack | --no-recurse-submodules | --no-repo | \
       --no-set-upstream | --no-signed | --no-tags | --no-thin | \
       --no-verbose | --no-verify | --porcelain | --progress | --push-option | \
-      --push-option=* | --quiet | --receive-pack | --receive-pack=* | \
+      --push-option=* | --quiet | \
       --recurse-submodules | --recurse-submodules=* | --repo | --repo=* | \
       --set-upstream | --signed | --signed=* | --tags | --thin | --verbose | \
       --verify | -o=*) ;;

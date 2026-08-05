@@ -70,6 +70,10 @@ const BLOCKED = [
     what: 'direct execution of compiled tests in .test-dist(-dom)',
   },
   {
+    pattern: /^(?:\S*\/)?node\s+(?:-\S+\s+)*\S*\/vitest(?:\/vitest)?\.mjs(?:\s|$)/u,
+    what: 'direct execution of the Vitest Node entry module',
+  },
+  {
     pattern: /\bplaywright\s+test\b/u,
     what: 'direct Playwright invocation',
   },
@@ -144,6 +148,13 @@ const TAMPERING = [
       'Blocked AGENT_GUARDED: that marker is set by the guard for its own children, and supplying it by hand claims to ' +
       `be inside a guarded run that does not exist — skipping admission entirely. ${GUIDANCE}`,
   },
+  {
+    pattern:
+      /(?:\benv\b[^\n;&|]*(?:\s(?:-i|--ignore-environment)(?=\s|$)|(?:-u|--unset)(?:=|\s+)(?:CLAUDECODE|CLAUDE_CODE_ENTRYPOINT|AI_AGENT|CODEX_\w+|CURSOR_\w+))|\b(?:unset|export\s+-n)\s+(?:CLAUDECODE|CLAUDE_CODE_ENTRYPOINT|AI_AGENT|CODEX_\w+|CURSOR_\w+))[\s\S]*run-guarded\.mjs/u,
+    reason:
+      'Blocked removal of agent identity before run-guarded.mjs: the wrapper must inherit its harness markers so it ' +
+      `cannot misclassify an agent as the human owner. ${GUIDANCE}`,
+  },
 ];
 
 // Shell segments, so a sanctioned command in one segment cannot vouch for a
@@ -196,6 +207,70 @@ function isWithin(child, parent) {
   const c = tryRealpath(child);
   const p = tryRealpath(parent);
   return c === p || c.startsWith(p + sep);
+}
+
+function scopeWords(text) {
+  return [...text.matchAll(/\$'(?:[^'\\]|\\.)*'|'([^']*)'|"((?:[^"\\]|\\.)*)"|([^\s]+)/gu)].map((match) => ({
+    index: match.index,
+    value: match[1] ?? match[2]?.replace(/\\(["\\$`])/gu, '$1') ?? match[3] ?? decodeAnsiCWord(match[0]),
+  }));
+}
+
+function prefixReaches(words, index) {
+  const marker = '__agent_guard_scope_command__';
+  return commandAfterPrefixes([...words.slice(0, index).map((word) => word.value), marker].join(' ')) === marker;
+}
+
+function directoryOptionTargets(segment) {
+  const words = scopeWords(segment);
+  const targets = [];
+  for (let index = 0; index < words.length; index += 1) {
+    const executable = words[index].value.split('/').at(-1);
+    const corepackProxy = index > 0 && words[index - 1].value.split('/').at(-1) === 'corepack' && prefixReaches(words, index - 1);
+    if (executable === 'env' && prefixReaches(words, index)) {
+      let envTarget;
+      for (let optionAt = index + 1; optionAt < words.length; optionAt += 1) {
+        const option = words[optionAt].value;
+        if (option === '-C' || option === '--chdir') {
+          if (words[optionAt + 1]) envTarget = words[++optionAt].value;
+        } else if (option.startsWith('--chdir=')) {
+          envTarget = option.slice('--chdir='.length);
+        } else if (/^-C.+/u.test(option)) {
+          envTarget = option.slice(2);
+        } else if (/^(?:-u|--unset|-P|--path|-S|--split-string)$/u.test(option)) {
+          optionAt += 1;
+        } else if (option === '--') {
+          break;
+        } else if (!option.startsWith('-') && !/^\w+=/u.test(option)) {
+          break;
+        }
+      }
+      if (envTarget) targets.push({ index: words[index].index, target: envTarget });
+    }
+    if (!['npm', 'pnpm', 'yarn', 'bun'].includes(executable) || (!prefixReaches(words, index) && !corepackProxy)) continue;
+    const options =
+      executable === 'npm'
+        ? { equals: ['--prefix='], operands: new Set(['--prefix', '-C']) }
+        : executable === 'pnpm'
+          ? { equals: ['--dir='], operands: new Set(['--dir', '-C']) }
+          : { equals: ['--cwd='], operands: new Set(['--cwd']) };
+    let packageTarget;
+    for (let optionAt = index + 1; optionAt < words.length; optionAt += 1) {
+      const option = words[optionAt].value;
+      if (option === '--') break;
+      if (options.operands.has(option)) {
+        if (words[optionAt + 1]) packageTarget = words[++optionAt].value;
+        continue;
+      }
+      const equals = options.equals.find((prefix) => option.startsWith(prefix));
+      if (equals) packageTarget = option.slice(equals.length);
+      if ((executable === 'npm' || executable === 'pnpm') && /^-C.+/u.test(option)) {
+        packageTarget = option.slice(2);
+      }
+    }
+    if (packageTarget) targets.push({ index: words[index].index, target: packageTarget });
+  }
+  return targets;
 }
 
 // Every directory a command may execute in. Retaining the reported cwd is
@@ -305,6 +380,18 @@ export function resolveExecutionDirs(cwd, command) {
     if (chdirTarget) events.push({ index: envIndex, target: chdirTarget, type: 'env-chdir' });
   }
 
+  // Normalize supported execution prefixes before looking for directory
+  // options, while retaining quoted path operands and their source offsets.
+  const segments = /(?:^|[;\n|&(){}])([^;\n|&(){}]+)/gu;
+  for (const match of command.matchAll(segments)) {
+    const segmentOffset = match.index + match[0].indexOf(match[1]);
+    const firstWord = scopeWords(match[1])[0];
+    if (!firstWord || !shellSyntax[segmentOffset + firstWord.index]) continue;
+    for (const option of directoryOptionTargets(match[1])) {
+      events.push({ index: segmentOffset + option.index, target: option.target, type: 'env-chdir' });
+    }
+  }
+
   const resolveTarget = (target, base) => {
     if (target.startsWith('~')) {
       const home = process.env.HOME;
@@ -315,8 +402,9 @@ export function resolveExecutionDirs(cwd, command) {
   };
 
   const order = { 'subshell-open': 0, cd: 1, 'env-chdir': 1, 'subshell-close': 2 };
-  events.sort((left, right) => left.index - right.index || order[left.type] - order[right.type]);
-  for (const event of events) {
+  const uniqueEvents = [...new Map(events.map((event) => [`${event.index}:${event.type}:${event.target ?? ''}`, event])).values()];
+  uniqueEvents.sort((left, right) => left.index - right.index || order[left.type] - order[right.type]);
+  for (const event of uniqueEvents) {
     if (event.type === 'subshell-open') {
       parentScopes.push(current);
       continue;
@@ -329,6 +417,13 @@ export function resolveExecutionDirs(cwd, command) {
     if (!target) continue;
     directories.push(target);
     if (event.type === 'cd') current = target;
+  }
+  const effective = stripInertText(command);
+  const hasShellCommandString = /(?:^|[;\n|&(){}])[^;\n|&(){}]*\b(?:ba|da|z)?sh\b[^;\n|&(){}]*\s-[A-Za-z]*c[A-Za-z]*\s+["']/u.test(command);
+  if (hasShellCommandString && effective !== command) {
+    for (const nested of resolveExecutionDirs(cwd, effective).slice(1)) {
+      if (!directories.includes(nested)) directories.push(nested);
+    }
   }
   return directories;
 }
@@ -372,14 +467,16 @@ function shellHeredocBody(command, offset, body) {
   return /(?:^|\/)(?:ba|da|z)?sh$/u.test(tokens[i] ?? '') ? `\n${body}\n` : ' ';
 }
 
-function commandSubstitutionBodies(text) {
+function commandSubstitutionBodies(text, { processSubstitutions = false } = {}) {
   const bodies = [];
   for (let i = 0; i < text.length - 1; i += 1) {
     if (text[i] === '\\') {
       i += 1;
       continue;
     }
-    if (text[i] === '$' && text[i + 1] === '(') {
+    const commandSubstitution = text[i] === '$' && text[i + 1] === '(';
+    const processSubstitution = processSubstitutions && (text[i] === '<' || text[i] === '>') && text[i + 1] === '(';
+    if (commandSubstitution || processSubstitution) {
       let depth = 1;
       let j = i + 2;
       let quote = null;
@@ -515,6 +612,7 @@ function normalizeUnquotedEscapes(text) {
 
 function endsWithExecutableString(scanned) {
   if (endsWithShellC(scanned)) return true;
+  if (endsWithWatchCommandString(scanned)) return true;
   const segment = scanned.split(/\|\||&&|[;\n|&]/u).at(-1).trim();
   const rawTokens = segment.split(/\s+/u).filter(Boolean);
   const envAt = rawTokens.findLastIndex((token) => token.split('/').at(-1) === 'env');
@@ -525,6 +623,12 @@ function endsWithExecutableString(scanned) {
   if (npmAt < 0) return false;
   const execAt = tokens.findIndex((token, index) => index > npmAt && (token === 'exec' || token === 'x'));
   return execAt >= 0 && /^(?:-c|--call)=?$/u.test(tokens.at(-1) ?? '');
+}
+
+function endsWithWatchCommandString(scanned) {
+  const segment = scanned.split(/\|\||&&|[;\n|&]/u).at(-1).trim();
+  const tokens = segment.split(/\s+/u).filter(Boolean);
+  return tokens.some((token) => token.split('/').at(-1) === 'watch') && commandAfterPrefixes(segment).length === 0;
 }
 
 function commandStringPayloads(command) {
@@ -573,6 +677,10 @@ function commandStringPayloads(command) {
         }
       }
     }
+    if (tokens[0]?.split('/').at(-1) === 'yarn') {
+      const command = otherPackageCommandStart('yarn', tokens.slice(1));
+      if (command.foreach && command.index < tokens.length - 1) payloads.push(tokens.slice(command.index + 1).join(' '));
+    }
   }
   return payloads.filter(Boolean);
 }
@@ -600,10 +708,13 @@ function followsEnvCommand(scanned) {
 function isExecutableQuotedWord(scanned, word) {
   if (word === null) return false;
   const segment = scanned.split(/\|\||&&|[;\n|&]/u).at(-1).trim();
-  const tokens = segment.split(/\s+/u).filter(Boolean);
+  const tokens = commandAfterPrefixes(segment).split(/\s+/u).filter(Boolean);
   if (tokens.length === 0) {
-    return /^(npm|npx|node|electron|vitest|playwright|test-storybook)$/u.test(word);
+    if (/^\w+=\S*$/u.test(word) && followsEnvCommand(scanned)) return true;
+    const executable = word.split('/').at(-1);
+    return /^(?:ba|da|z)?sh$|^(?:npm|npx|node|electron|vitest|playwright|test-storybook|pnpm|yarn|bun|bunx|corepack|watch|xargs|env|command|time|nice|nohup|timeout|setsid|stdbuf|exec)$/u.test(executable);
   }
+  if (tokens[0]?.split('/').at(-1) === 'corepack' && /^(?:pnpm|yarn)(?:@.+)?$/u.test(word)) return true;
 
   let npmAt = -1;
   for (let i = tokens.length - 1; i >= 0; i -= 1) {
@@ -619,10 +730,19 @@ function isExecutableQuotedWord(scanned, word) {
     if (firstNpmScriptToken(candidates) === undefined) return true;
   }
 
+  const manager = tokens[0]?.split('/').at(-1);
+  if (OTHER_PACKAGE_MANAGERS.has(manager)) {
+    const rest = tokens.slice(1);
+    const command = otherPackageCommandStart(manager, rest);
+    if (command.foreach) return isExecutableQuotedWord(rest.slice(command.index).join(' '), word);
+    if (otherPackageScriptToken(manager, rest) === undefined) return true;
+  }
+
   const last = tokens.at(-1);
   if (/^\w+=\S*$/u.test(word) && followsEnvCommand(scanned)) return true;
   if (last === 'npx' && /^(vitest|playwright|test-storybook)$/u.test(word)) return true;
   if (last === '--run' && tokens.some((token) => /(?:^|\/)node$/u.test(token))) return true;
+  if (tokens.some((token) => /(?:^|\/)node$/u.test(token)) && /(?:^|\/)vitest(?:\/vitest)?\.mjs$/u.test(word)) return true;
   return /(?:^|\/)(?:node|electron)$/u.test(last ?? '') && word === '--test';
 }
 
@@ -669,7 +789,7 @@ export function stripInertText(command) {
     }
   }
   const effective = normalizeUnquotedEscapes(scanned + rest);
-  const substitutions = commandSubstitutionBodies(effective);
+  const substitutions = commandSubstitutionBodies(effective, { processSubstitutions: true });
   const payloads = commandStringPayloads(effective);
   const promoted = [...substitutions, ...payloads];
   return promoted.length > 0 ? `${effective}\n${promoted.join('\n')}` : effective;
@@ -689,7 +809,7 @@ export function normalizeCommand(command) {
 // is the same run as `npm run test:e2e`, and a matcher that only knows `run`
 // blocks one and waves the other through.
 const NPM_RUN_ALIASES = new Set(['run', 'run-script', 'rum', 'urn']);
-const NPM_OPTIONS_WITH_OPERANDS = new Set(['-w', '--workspace', '--prefix', '--userconfig', '--cache', '--registry', '--scope', '--tag', '--otp']);
+const NPM_OPTIONS_WITH_OPERANDS = new Set(['-w', '--workspace', '-C', '--prefix', '--userconfig', '--cache', '--registry', '--scope', '--tag', '--otp']);
 const NPM_IMPLICIT_SCRIPTS = new Set(['test', 'start', 'stop', 'restart']);
 
 function firstNpmScriptToken(tokens) {
@@ -757,7 +877,7 @@ function firstOtherPackageScriptToken(tokens) {
   return undefined;
 }
 
-function otherPackageScriptToken(manager, tokens) {
+function otherPackageCommandStart(manager, tokens) {
   let index = 0;
   while (index < tokens.length) {
     const token = tokens[index];
@@ -786,7 +906,13 @@ function otherPackageScriptToken(manager, tokens) {
       const option = tokens[index++];
       if (optionsWithOperands.has(option) && index < tokens.length) index += 1;
     }
+    return { foreach: true, index };
   }
+  return { foreach: false, index };
+}
+
+function otherPackageScriptToken(manager, tokens) {
+  let { index } = otherPackageCommandStart(manager, tokens);
   if (tokens[index] === 'run' || tokens[index] === 'run-script') index += 1;
   return firstOtherPackageScriptToken(tokens.slice(index));
 }
@@ -920,6 +1046,13 @@ function commandAfterPrefixes(segment) {
       while (tokens[index]?.startsWith('-')) index += 1;
       continue;
     }
+    if (command === 'corepack') {
+      const proxy = /^(?:pnpm|yarn)(?:@.+)?$/u.exec(tokens[index + 1]?.split('/').at(-1) ?? '')?.[0];
+      if (!proxy) break;
+      tokens[index + 1] = proxy.split('@')[0];
+      index += 1;
+      continue;
+    }
     if (command === 'nice') {
       index += 1;
       while (tokens[index]?.startsWith('-')) {
@@ -942,6 +1075,37 @@ function commandAfterPrefixes(segment) {
       while (tokens[index]?.startsWith('-')) {
         const option = tokens[index++];
         if (/^(?:-n|--interval|--equexit)$/u.test(option) && index < tokens.length) index += 1;
+      }
+      continue;
+    }
+    if (command === 'xargs') {
+      index += 1;
+      const optionsWithOperands = new Set([
+        '-a',
+        '--arg-file',
+        '-d',
+        '--delimiter',
+        '-E',
+        '--eof',
+        '-I',
+        '--replace',
+        '-J',
+        '-L',
+        '--max-lines',
+        '-n',
+        '--max-args',
+        '-P',
+        '--max-procs',
+        '--process-slot-var',
+        '-R',
+        '-S',
+        '-s',
+        '--max-chars',
+      ]);
+      while (tokens[index]?.startsWith('-')) {
+        const option = tokens[index++];
+        if (option === '--') break;
+        if (optionsWithOperands.has(option) && index < tokens.length) index += 1;
       }
       continue;
     }
