@@ -85,9 +85,29 @@ function summarize(cls: LoadSetClass): LoadSetSummary {
   };
 }
 
-/** Union of instruction sources selected by the target paths: each target
- * resolves to the load-set classes at or beneath it (a file target uses its
- * directory's class); a target that is itself a source is judged directly. */
+/** Classes whose CWD is `dir` or below; when none exist, the nearest
+ * ancestor class per profile — never every class (PR #51 review). */
+function classesFor(classes: LoadSetClass[], dir: string): LoadSetClass[] {
+  const under = classes.filter((cls) => dir === '' || cls.cwd === dir || cls.cwd.startsWith(`${dir}/`));
+  if (under.length > 0) return under;
+  const ancestors = classes.filter((cls) => cls.cwd === '' || dir === cls.cwd || dir.startsWith(`${cls.cwd}/`));
+  const nearest = new Map<SessionProfileId, LoadSetClass>();
+  for (const cls of ancestors) {
+    const best = nearest.get(cls.profile);
+    if (best === undefined || cls.cwd.length > best.cwd.length) nearest.set(cls.profile, cls);
+  }
+  return [...nearest.values()];
+}
+
+/** Union of instruction sources selected by the target paths (PR #51
+ * review): a directory target selects the members — confirmed and
+ * conditional — of every load-set class at or beneath it (nearest ancestor
+ * classes when none); a file target resolves per-profile scenarios with
+ * itself as the touched path, selecting confirmed members (path-scoped
+ * globs/applyTo that fire for the target are confirmed, not conditional)
+ * plus conditionals that are not path-gated — a path-gated rule the target
+ * does not match is out of scope, never judged spend. A target that is
+ * itself a source is judged directly. */
 function selectSources(corpus: InstructionCorpus, classes: LoadSetClass[], repoRoot: string, targets: string[]): InstructionFile[] {
   const selected = new Set<string>();
   const byPath = new Map(corpus.files.filter((file) => file.origin === 'repo').map((file) => [file.path, file]));
@@ -95,12 +115,18 @@ function selectSources(corpus: InstructionCorpus, classes: LoadSetClass[], repoR
     const path = target === '.' ? '' : target;
     const direct = byPath.get(path);
     if (direct) selected.add(direct.locator);
-    const dir = path === '' || isDirectory(join(repoRoot, path)) ? path : dirOf(path);
-    const under = classes.filter((cls) => dir === '' || cls.cwd === dir || cls.cwd.startsWith(`${dir}/`));
-    // A directory with no instruction files beneath it still belongs to the
-    // classes of its ancestors; fall back to the nearest ancestor class.
-    const applicable = under.length > 0 ? under : classes.filter((cls) => dir === cls.cwd || dir.startsWith(cls.cwd === '' ? '' : `${cls.cwd}/`));
-    for (const cls of applicable) for (const locator of members(cls)) selected.add(locator);
+    const isDir = path === '' || isDirectory(join(repoRoot, path));
+    if (isDir) {
+      for (const cls of classesFor(classes, path)) for (const locator of members(cls)) selected.add(locator);
+      continue;
+    }
+    for (const profile of corpus.profiles) {
+      const set = resolveInstructionSession(corpus, { profile, cwd: dirOf(path), touchedPaths: [path] });
+      for (const entry of set.contributions) selected.add(entry.locator);
+      for (const entry of set.possibleAdditional) {
+        if (entry.activation !== 'on-path-access') selected.add(entry.locator);
+      }
+    }
   }
   return corpus.files.filter((file) => selected.has(file.locator));
 }

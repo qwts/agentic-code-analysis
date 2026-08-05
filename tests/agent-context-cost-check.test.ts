@@ -96,6 +96,40 @@ test('a file target selects the load sets that apply to it; targets deduplicate'
   }
 });
 
+test('a target in a bare subtree selects the nearest ancestor class, never every class', async () => {
+  const root = repo({
+    'AGENTS.md': 'root rules\n',
+    'pkg/AGENTS.md': 'pkg rules\n',
+    'docs/guide.md': 'plain docs\n',
+  });
+  try {
+    const judge = client();
+    // docs/ has no instruction files beneath it; its nearest ancestor class
+    // is the root class, whose codex chain excludes pkg/AGENTS.md.
+    const verdicts = await check.run(context(root, ['docs/guide.md'], judge));
+    const files = verdicts.map((v) => v.file).sort();
+    assert.deepEqual(files, ['AGENTS.md'], 'pkg-scoped source is out of scope for a docs/ target');
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('a file target passes itself as a touched path, so applyTo-scoped instructions are selected', async () => {
+  const root = repo({
+    '.github/copilot-instructions.md': 'repo-wide\n',
+    '.github/instructions/api.instructions.md': '---\napplyTo: "src/**"\n---\nAPI rules.\n',
+  });
+  try {
+    const judge = client();
+    const verdicts = await check.run(context(root, ['src/server.ts'], judge));
+    const files = verdicts.map((v) => v.file).sort();
+    assert.ok(files.includes('.github/instructions/api.instructions.md'),
+      'the glob-scoped instruction fires for the touched target');
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
 test('no targets → no verdicts and zero judge calls; empty corpus likewise', async () => {
   const root = repo({ 'AGENTS.md': 'rules\n' });
   const bare = repo({ 'src/x.ts': 'export {};\n' });

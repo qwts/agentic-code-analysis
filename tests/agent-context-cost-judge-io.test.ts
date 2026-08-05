@@ -70,6 +70,7 @@ test('action contracts: delete carries no replacement, move-to-hook names a dest
   const cases = [
     finding({ action: 'delete', replacement: 'left over' }),
     finding({ action: 'move-to-hook', destination: '' }),
+    finding({ action: 'move-to-hook', destination: 'eslint', replacement: 'left over' }),
     finding({ replacement: '' }),
     finding({ replacement: 'Generally speaking, please try to keep functions small.' }),
   ];

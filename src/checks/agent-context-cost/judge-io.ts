@@ -236,6 +236,7 @@ export function judgeOutcome(
     if (offset === undefined) return degraded(`finding excerpt not found verbatim-and-unambiguously in ${file}`);
     if (f.action === 'delete' && f.replacement.trim() !== '') return degraded('delete finding carries a replacement');
     if (f.action === 'move-to-hook' && f.destination.trim() === '') return degraded('move-to-hook finding names no destination');
+    if (f.action === 'move-to-hook' && f.replacement.trim() !== '') return degraded('move-to-hook finding carries a replacement');
     if ((f.action === 'rewrite' || f.action === 'table') && (f.replacement.trim() === '' || f.replacement === f.excerpt)) {
       return degraded(`${f.action} finding proposes no change`);
     }
