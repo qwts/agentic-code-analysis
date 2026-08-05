@@ -34,11 +34,13 @@ import { fileURLToPath } from 'node:url';
 
 import { HEAVY_LANES, readGrant } from './lib/policy.mjs';
 
+const GUARD_GUIDE = 'https://github.com/qwts/playbook-engineering/blob/main/docs/reference/agent-memory-guard.md';
+
 // Two different blocks need two different next steps, and a refusal whose
 // advice does not fit is one an agent argues with instead of following.
 const GUIDANCE =
   'Push the branch and let GitHub CI verify — CI is the authoritative lane and is exempt from this guard. ' +
-  'See docs/reference/agent-memory-guard.md.';
+  `See ${GUARD_GUIDE}.`;
 
 // A direct binary is not necessarily a heavy run — in a tooling repo `node
 // --test` is the light, normal path. What is wrong with it is that it skips
@@ -46,7 +48,7 @@ const GUIDANCE =
 const USE_ENTRYPOINT =
   "Use a repository-documented guarded npm test entrypoint instead (normally `npm test`); it must wrap " +
   'tools/agent-guard/run-guarded.mjs, which derives a ceiling from this machine and checks the machine-wide ' +
-  'memory budget first. See docs/reference/agent-memory-guard.md.';
+  `memory budget first. See ${GUARD_GUIDE}.`;
 
 // Markers that identify a checkout governed by this policy. The second is the
 // pre-rollout location, so a repo mid-migration is still policed.
@@ -194,7 +196,7 @@ function isWithin(child, parent) {
 // checkout from the same session).
 export function resolveExecutionDir(cwd, command) {
   if (typeof cwd !== 'string' || cwd.length === 0) return null;
-  const match = typeof command === 'string' ? /^\s*cd\s+(?:--\s+)?(?:"([^"]+)"|'([^']+)'|([^\s;&|]+))\s*(?:&&|;)/u.exec(command) : null;
+  const match = typeof command === 'string' ? /^\s*cd\s+(?:--\s+)?(?:"([^"]+)"|'([^']+)'|([^\s;&|]+))\s*(?:&&|;|\n)/u.exec(command) : null;
   if (!match) return cwd;
   let target = match[1] ?? match[2] ?? match[3];
   if (target.startsWith('~')) {
@@ -253,8 +255,16 @@ function commandSubstitutionBodies(text) {
     if (text[i] === '$' && text[i + 1] === '(') {
       let depth = 1;
       let j = i + 2;
+      let quote = null;
       for (; j < text.length && depth > 0; j += 1) {
         if (text[j] === '\\') {
+          j += 1;
+        } else if (quote !== null) {
+          if (text[j] === quote) quote = null;
+        } else if (text[j] === "'" || text[j] === '"' || text[j] === '`') {
+          quote = text[j];
+        } else if (text[j] === '$' && text[j + 1] === '(') {
+          depth += 1;
           j += 1;
         } else if (text[j] === '(') {
           depth += 1;
@@ -349,6 +359,7 @@ function quotedWord(quoted) {
 }
 
 function normalizeUnquotedEscapes(text) {
+  const ESCAPED_SPACE = '\u0004';
   let normalized = '';
   for (let i = 0; i < text.length; i += 1) {
     if (text[i] !== '\\' || i + 1 >= text.length) {
@@ -358,7 +369,12 @@ function normalizeUnquotedEscapes(text) {
     const next = text[i + 1];
     if (next === '\n') {
       i += 1;
-    } else if (/\s|[;&|$`]/u.test(next)) {
+    } else if (next === ' ' || next === '\t') {
+      // An escaped blank stays inside one shell word. A command-string
+      // consumer (-c/eval/--call) restores it before scanning the payload.
+      normalized += ESCAPED_SPACE;
+      i += 1;
+    } else if (/[;&|$`]/u.test(next)) {
       // Keep escaped shell structure visibly escaped; splitSegments masks it.
       normalized += `\\${next}`;
       i += 1;
@@ -368,6 +384,53 @@ function normalizeUnquotedEscapes(text) {
     }
   }
   return normalized;
+}
+
+function endsWithExecutableString(scanned) {
+  if (endsWithShellC(scanned)) return true;
+  const segment = scanned.split(/\|\||&&|[;\n|&]/u).at(-1).trim();
+  const tokens = commandAfterPrefixes(segment).split(/\s+/u).filter(Boolean);
+  if (tokens[0]?.split('/').at(-1) === 'eval' && tokens.length === 1) return true;
+  const npmAt = tokens.findIndex((token) => token.split('/').at(-1) === 'npm');
+  if (npmAt < 0) return false;
+  const execAt = tokens.findIndex((token, index) => index > npmAt && (token === 'exec' || token === 'x'));
+  return execAt >= 0 && /^-(?:c|-call)$/u.test(tokens.at(-1) ?? '');
+}
+
+function commandStringPayloads(command) {
+  const ESCAPED_SPACE = '\u0004';
+  const restore = (value) => value?.replaceAll(ESCAPED_SPACE, ' ');
+  const payloads = [];
+  for (const segment of splitSegments(command)) {
+    const executable = commandAfterPrefixes(segment);
+    const tokens = executable.split(/\s+/u).filter(Boolean);
+    const commandName = tokens[0]?.split('/').at(-1);
+    if (commandName === 'eval' && tokens.length > 1) payloads.push(restore(tokens.slice(1).join(' ')));
+    if (/(?:^|\/)(?:ba|da|z)?sh$/u.test(tokens[0] ?? '')) {
+      for (let i = 1; i < tokens.length - 1; i += 1) {
+        if (tokens[i] === '-c' || /^-[A-Za-z]*c$/u.test(tokens[i])) {
+          payloads.push(restore(tokens[i + 1]));
+          break;
+        }
+        if (/^(?:-[A-Za-z]*[oO]|--(?:option|shopt))$/u.test(tokens[i])) i += 1;
+      }
+    }
+    const npmAt = tokens.findIndex((token) => token.split('/').at(-1) === 'npm');
+    const execAt = tokens.findIndex((token, index) => index > npmAt && (token === 'exec' || token === 'x'));
+    if (npmAt >= 0 && execAt >= 0) {
+      for (let i = execAt + 1; i < tokens.length; i += 1) {
+        if (tokens[i] === '-c' || tokens[i] === '--call') {
+          if (tokens[i + 1] !== undefined) payloads.push(restore(tokens[i + 1]));
+          break;
+        }
+        if (tokens[i].startsWith('--call=')) {
+          payloads.push(restore(tokens[i].slice('--call='.length)));
+          break;
+        }
+      }
+    }
+  }
+  return payloads.filter(Boolean);
 }
 
 function isWordCharacter(character) {
@@ -435,7 +498,7 @@ export function stripInertText(command) {
     const quoted = match[0];
     scanned += rest.slice(0, match.index);
     rest = rest.slice(match.index + quoted.length);
-    if (endsWithShellC(scanned)) {
+    if (endsWithExecutableString(scanned)) {
       const inner = quoted.startsWith("$'")
         ? decodeAnsiCWord(quoted)
         : quoted.startsWith("'")
@@ -463,7 +526,9 @@ export function stripInertText(command) {
   }
   const effective = normalizeUnquotedEscapes(scanned + rest);
   const substitutions = commandSubstitutionBodies(effective);
-  return substitutions.length > 0 ? `${effective}\n${substitutions.join('\n')}` : effective;
+  const payloads = commandStringPayloads(effective);
+  const promoted = [...substitutions, ...payloads];
+  return promoted.length > 0 ? `${effective}\n${promoted.join('\n')}` : effective;
 }
 
 // Codex's shell tool submits argv arrays; the patterns match command text.
@@ -689,9 +754,31 @@ function commandAfterPrefixes(segment) {
   while (index < tokens.length) {
     while (/^\w+=\S*$/u.test(tokens[index] ?? '')) index += 1;
     const command = tokens[index]?.split('/').at(-1);
-    if (command === 'time' || command === 'command') {
+    if (command === 'command') {
+      if (tokens.slice(index + 1).some((token) => token === '-v' || token === '-V')) break;
       index += 1;
       while (tokens[index]?.startsWith('-')) index += 1;
+      continue;
+    }
+    if (command === 'time' || command === 'nohup') {
+      index += 1;
+      while (tokens[index]?.startsWith('-')) index += 1;
+      continue;
+    }
+    if (command === 'nice') {
+      index += 1;
+      while (tokens[index]?.startsWith('-')) {
+        const option = tokens[index++];
+        if ((option === '-n' || option === '--adjustment') && index < tokens.length) index += 1;
+      }
+      continue;
+    }
+    if (command === 'exec') {
+      index += 1;
+      while (tokens[index]?.startsWith('-')) {
+        const option = tokens[index++];
+        if (option === '-a' && index < tokens.length) index += 1;
+      }
       continue;
     }
     if (command === 'env') {
