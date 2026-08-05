@@ -170,6 +170,7 @@ test('the built-in registry lists seam-audit alongside context-footprint in usag
   await run(['--help'], { stdout: (line: string) => out.push(line), stderr: (line: string) => out.push(line) });
   assert.match(out[0]!, /checks: .*context-footprint/);
   assert.match(out[0]!, /checks: .*seam-audit/);
+  assert.match(out[0]!, /checks: .*agent-context-cost/);
 });
 
 test('--json preserves check-specific verdict subtype fields (seam-audit source/footprint)', async () => {
