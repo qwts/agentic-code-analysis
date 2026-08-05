@@ -1,0 +1,15 @@
+import { test } from 'node:test';
+import assert from 'node:assert/strict';
+import { sendWithRetry } from '../src/retry.ts';
+
+test('sendWithRetry retries the transport twice after a timeout', async () => {
+  const attempts: string[] = [];
+  const transport = {
+    send: async (message: { id: string }) => {
+      attempts.push(message.id);
+      throw new Error('timeout');
+    },
+  };
+  await assert.rejects(sendWithRetry(transport, { id: 'm1' }), /timeout/);
+  assert.deepEqual(attempts, ['m1', 'm1', 'm1'], 'initial attempt plus exactly two retries');
+});
