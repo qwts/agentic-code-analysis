@@ -7,6 +7,13 @@ const README_URL = new URL('../README.md', import.meta.url);
 const START = '<!-- aca-check-catalog:start -->';
 const END = '<!-- aca-check-catalog:end -->';
 
+function localDocumentUrl(link: string): URL {
+  const url = new URL(`../${link}`, import.meta.url);
+  url.search = '';
+  url.hash = '';
+  return url;
+}
+
 test('README analysis catalog matches registered names, tiers, and design links', async () => {
   const readme = readFileSync(README_URL, 'utf8');
   const start = readme.indexOf(START);
@@ -25,7 +32,11 @@ test('README analysis catalog matches registered names, tiers, and design links'
     assert.equal(checks.has(advertised[1]!), true, `README must not advertise unknown check ${advertised[1]}`);
   }
   for (const row of rows) {
-    assert.equal(existsSync(new URL(`../${row.design}`, import.meta.url)), true, `${row.name} design link must resolve`);
+    assert.equal(existsSync(localDocumentUrl(row.design)), true, `${row.name} design link must resolve`);
     assert.equal(row.tier, (await checks.get(row.name)!()).tier, `${row.name} tier must match its registered check`);
   }
+});
+
+test('README design-link checks ignore valid query strings and fragments', () => {
+  assert.equal(existsSync(localDocumentUrl('docs/design/check-context-footprint.md?plain=1#what-it-judges')), true);
 });
