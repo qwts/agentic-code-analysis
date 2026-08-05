@@ -1,0 +1,4 @@
+// Randomized delay so synchronized clients spread their retries.
+export function computeJitter(baseDelayMs: number): number {
+  return Math.floor(Math.random() * baseDelayMs);
+}
