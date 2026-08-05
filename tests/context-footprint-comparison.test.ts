@@ -111,6 +111,23 @@ test('a base blob unreadable at the merge-base fails the run, never thins the ba
   assert.throws(() => buildComparisons(root, 'base', ['target.ts']), ConfigError);
 });
 
+test('a base blob past the default exec buffer is read, not misreported as corruption', () => {
+  const { root, git } = tempRepo();
+  // Over execFileSync's default 1 MiB maxBuffer: without an explicit bound,
+  // `git show` fails with ENOBUFS on a healthy repository and the run would
+  // abort as an integrity fault.
+  const big = `export const pad = '${'x'.repeat(2_000_000)}';\n`;
+  writeFileSync(join(root, 'big.ts'), big);
+  git('add', 'big.ts');
+  git('commit', '-m', 'big', '--quiet');
+  git('branch', '-f', 'base');
+  writeFileSync(join(root, 'big.ts'), `${big}export const more = 1;\n`);
+  const c = comparison(buildComparisons(root, 'base', ['big.ts']).get('big.ts')!);
+  assert.ok(c.kind === 'legacy');
+  assert.equal(c.base.content, big);
+  assert.equal(c.growth, 'grew from 1 to 2 lines');
+});
+
 test('unreadable head degrades per file; unresolvable merge-base throws ConfigError', () => {
   const { root } = tempRepo();
   unlinkSync(join(root, 'user.ts'));

@@ -37,10 +37,14 @@ interface ChangeStatus {
 // forever — this check's own missing-timeout criterion, applied to itself.
 const GIT_TIMEOUT_MS = 60_000;
 
+// execFileSync's default 1 MiB maxBuffer would turn `git show` of a large
+// base blob into a spurious integrity fault (Codex review, PR #39).
+const GIT_MAX_BUFFER_BYTES = 256 * 1024 * 1024;
+
 function git(repoRoot: string, args: string[]): string {
   // stderr piped, not inherited: findings-only output (D4) must not carry
   // git's noise.
-  return execFileSync('git', args, { cwd: repoRoot, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'], timeout: GIT_TIMEOUT_MS });
+  return execFileSync('git', args, { cwd: repoRoot, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'], timeout: GIT_TIMEOUT_MS, maxBuffer: GIT_MAX_BUFFER_BYTES });
 }
 
 export function repoFiles(repoRoot: string): string[] {
