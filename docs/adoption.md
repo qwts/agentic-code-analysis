@@ -74,6 +74,11 @@ Behavior you can rely on (exit-code contract, ACA-0003 D3):
 - Secret unset → one line (`context-footprint: skipped — no anthropic
   credentials resolve`), still exit 0. CI can distinguish "code is fine"
   from "judge never ran" the day it promotes to `--enforce` (exit 78).
+- Key revoked or account depleted mid-run → the run stops with one line
+  (`context-footprint: gate down — ...`): exit 0 advisory, 78 under
+  `--enforce` — never per-file warns that read as judgments
+  ([ACA-0011](decisions/ACA-0011-gate-down-classification.md)). Transient
+  faults (timeouts, 5xx, rate limits) still degrade to `warn` per file.
 - Unchanged semantic pairs across pushes cost zero API calls (verdict
   cache, D7 as extended by ACA-0013 — a moving merge-base does not re-bill);
   add `.cache/aca/` to the runner's cache action to carry it between runs

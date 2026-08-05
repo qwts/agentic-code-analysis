@@ -86,7 +86,12 @@ Contract every adapter must meet:
   false`, all fields required). All three target providers support this
   natively; a provider that cannot is not an eligible adapter.
 - **Refusal or schema-parse failure degrades to a `warn` verdict with a
-  note — never a crash, never a silent pass.**
+  note — never a crash, never a silent pass.** One exception
+  ([ACA-0011](../decisions/ACA-0011-gate-down-classification.md)): a
+  transport error that rejects the *account* (auth/quota — 401/402/403 on
+  any wire, plus each provider's named depleted-account shape) throws
+  `JudgeUnavailableError` and stops the run — a `warn` must always mean a
+  judge looked.
 - **Prompt-prefix caching is used where the provider offers it** and silently
   skipped where it does not. Cost, not behavior, varies by provider.
 - No sampling knobs in the interface. Determinism comes from the strict
@@ -128,14 +133,17 @@ construction; that re-billing spike is accepted.
 | 0 | Advisory run (always), or enforce run with no `fail` verdicts |
 | 1 | `--enforce` and at least one `fail` |
 | 2 | Usage / config error |
-| 78 | `--enforce` and no credentials resolve (`EX_CONFIG`) — CI must treat missing-secret as its own signal, never as "code is fine" |
+| 78 | `--enforce` and the gate is down (`EX_CONFIG`): no credentials resolve, or the judge rejected the account at judge time (auth/quota, ACA-0011) — CI must treat a missing or dead judge as its own signal, never as "code is fine" |
 
-Advisory mode with no credentials prints one line and exits 0.
+Advisory mode with the gate down — no credentials, or auth/quota rejection
+mid-run — prints one line naming the outage and exits 0; it never emits
+per-file warns that read as judgments (ACA-0011).
 
 `--self-test` shares the same table: 0 only when the check's calibration
 reaches its required qualification level, 1 on any fixture/level miss (even
 without `--enforce`), 2 for a missing self-test or an invalid calibration
-package, 78 when no credentials resolve. `--json` applies to `--self-test`
+package, 78 when the judge is unavailable (no credentials, or gate down
+mid-calibration — an outage is not a fixture miss). `--json` applies to `--self-test`
 and emits one qualification object from the check's structural report
 (ACA-0012); the shared `SelfTestResult` contract stays `{passed, lines}`.
 
@@ -154,6 +162,10 @@ not in the ENG series):
 - **[ACA-0004](../decisions/ACA-0004-context-footprint-judgment.md)** —
   judgment semantics: D5 file-as-it-stands with load-set accounting,
   D8 fixture-gated prompts.
+- **[ACA-0011](../decisions/ACA-0011-gate-down-classification.md)** —
+  gate-down classification (2026-08-05): judge auth/quota rejection throws
+  and stops the run (exit 78 enforce/self-test, one-line notice advisory);
+  extends D2's degrade contract and D3's exit table.
 - **[ACA-0013](../decisions/ACA-0013-comparative-judgment.md)** —
   comparative judgment (2026-08-05): direction of change for legacy files,
   residual debt as structured nonblocking findings, pair-addressed cache
