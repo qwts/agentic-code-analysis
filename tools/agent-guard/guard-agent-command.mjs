@@ -161,14 +161,20 @@ export function splitSegments(command) {
     .replace(/(\d*>)&(?=\d|-)/gu, `$1${REDIRECTION_AMPERSAND}`)
     .replace(/&(?=>>?)/gu, REDIRECTION_AMPERSAND)
     .split(/\|\||&&|[;\n|&]/u)
-    .map((segment) =>
-      segment
+    .map((segment) => {
+      let normalized = segment
         .replaceAll(REDIRECTION_AMPERSAND, '&')
         .replaceAll(ESCAPED_SEMICOLON, '\\;')
         .replaceAll(ESCAPED_AMPERSAND, '\\&')
         .replaceAll(ESCAPED_PIPE, '\\|')
-        .trim(),
-    )
+        .trim();
+      // Parentheses that wrap a subshell are control operators, not part of
+      // its executable or final argument. Remove balanced outer wrappers so
+      // `(npm run ci)` classifies exactly like `npm run ci`.
+      while (/^[({]\s*/u.test(normalized)) normalized = normalized.replace(/^[({]\s*/u, '');
+      normalized = normalized.replace(/[)}]+(?=\s*(?:$|\d*[<>]))/gu, '').trim();
+      return normalized;
+    })
     .filter(Boolean);
 }
 
@@ -197,15 +203,21 @@ function isWithin(child, parent) {
 // checkout from the same session).
 export function resolveExecutionDir(cwd, command) {
   if (typeof cwd !== 'string' || cwd.length === 0) return null;
-  const match = typeof command === 'string' ? /^\s*cd\s+(?:--\s+)?(?:"([^"]+)"|'([^']+)'|([^\s;&|]+))\s*(?:&&|;|\n)/u.exec(command) : null;
-  if (!match) return cwd;
-  let target = match[1] ?? match[2] ?? match[3];
-  if (target.startsWith('~')) {
-    const home = process.env.HOME;
-    if (!home) return cwd;
-    target = home + target.slice(1);
+  if (typeof command !== 'string') return cwd;
+  let current = cwd;
+  let rest = command;
+  for (;;) {
+    const match = /^\s*[({]*\s*cd\s+(?:--\s+)?(?:"([^"]+)"|'([^']+)'|([^\s;&|]+))\s*(?:&&|;|\n)/u.exec(rest);
+    if (!match) return current;
+    let target = match[1] ?? match[2] ?? match[3];
+    if (target.startsWith('~')) {
+      const home = process.env.HOME;
+      if (!home) return current;
+      target = home + target.slice(1);
+    }
+    current = isAbsolute(target) ? target : resolve(current, target);
+    rest = rest.slice(match[0].length);
   }
-  return isAbsolute(target) ? target : resolve(cwd, target);
 }
 
 const QUOTED = /\$'(?:[^'\\]|\\.)*'|'[^']*'|"(?:[^"\\]|\\.)*"/u;
@@ -390,12 +402,15 @@ function normalizeUnquotedEscapes(text) {
 function endsWithExecutableString(scanned) {
   if (endsWithShellC(scanned)) return true;
   const segment = scanned.split(/\|\||&&|[;\n|&]/u).at(-1).trim();
+  const rawTokens = segment.split(/\s+/u).filter(Boolean);
+  const envAt = rawTokens.findLastIndex((token) => token.split('/').at(-1) === 'env');
+  if (envAt >= 0 && /^(?:-S|--split-string)=?$/u.test(rawTokens.at(-1) ?? '')) return true;
   const tokens = commandAfterPrefixes(segment).split(/\s+/u).filter(Boolean);
   if (tokens[0]?.split('/').at(-1) === 'eval' && tokens.length === 1) return true;
   const npmAt = tokens.findIndex((token) => token.split('/').at(-1) === 'npm');
   if (npmAt < 0) return false;
   const execAt = tokens.findIndex((token, index) => index > npmAt && (token === 'exec' || token === 'x'));
-  return execAt >= 0 && /^-(?:c|-call)$/u.test(tokens.at(-1) ?? '');
+  return execAt >= 0 && /^(?:-c|--call)=?$/u.test(tokens.at(-1) ?? '');
 }
 
 function commandStringPayloads(command) {
@@ -405,6 +420,7 @@ function commandStringPayloads(command) {
   for (const segment of splitSegments(command)) {
     const executable = commandAfterPrefixes(segment);
     const tokens = executable.split(/\s+/u).filter(Boolean);
+    const rawTokens = segment.split(/\s+/u).filter(Boolean);
     const commandName = tokens[0]?.split('/').at(-1);
     if (commandName === 'eval' && tokens.length > 1) payloads.push(restore(tokens.slice(1).join(' ')));
     if (/(?:^|\/)(?:ba|da|z)?sh$/u.test(tokens[0] ?? '')) {
@@ -424,8 +440,21 @@ function commandStringPayloads(command) {
           if (tokens[i + 1] !== undefined) payloads.push(restore(tokens[i + 1]));
           break;
         }
-        if (tokens[i].startsWith('--call=')) {
-          payloads.push(restore(tokens[i].slice('--call='.length)));
+        if (/^(?:-c|--call)=/u.test(tokens[i])) {
+          payloads.push(restore(tokens[i].slice(tokens[i].indexOf('=') + 1)));
+          break;
+        }
+      }
+    }
+    const envAt = rawTokens.findIndex((token) => token.split('/').at(-1) === 'env');
+    if (envAt >= 0) {
+      for (let i = envAt + 1; i < rawTokens.length; i += 1) {
+        if (rawTokens[i] === '-S' || rawTokens[i] === '--split-string') {
+          if (rawTokens[i + 1] !== undefined) payloads.push(restore(rawTokens[i + 1]));
+          break;
+        }
+        if (/^(?:-S|--split-string)=/u.test(rawTokens[i])) {
+          payloads.push(restore(rawTokens[i].slice(rawTokens[i].indexOf('=') + 1)));
           break;
         }
       }
@@ -792,7 +821,7 @@ function commandAfterPrefixes(segment) {
         }
         if (token.startsWith('-')) {
           index += 1;
-          if (/^(?:-u|--unset|--chdir|-C)$/u.test(token) && index < tokens.length) index += 1;
+          if (/^(?:-u|--unset|--chdir|-C|-S|--split-string)$/u.test(token) && index < tokens.length) index += 1;
           continue;
         }
         break;

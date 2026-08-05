@@ -211,10 +211,10 @@ async function main() {
   // CI is exempt, entirely and deliberately (see lib/policy.mjs).
   if (isCi(process.env)) return passthrough(command);
   // Nested guarded scripts pass through — but only when the marker names a
-  // lease this machine is actually holding. `AGENT_GUARDED=1` typed by hand is
-  // a claim to be inside a guarded run that does not exist, and honouring it
-  // would skip the lease, the ceiling and the headroom check outright. An
-  // unrecognised marker falls through to full admission rather than failing.
+  // live lease bound to this caller's process group. Lease ids are visible to
+  // same-user processes, so id knowledge alone cannot prove nesting. A copied
+  // or unrecognised marker falls through to full admission rather than
+  // skipping the lease, ceiling, and headroom check.
   if (leaseExists(process.env.AGENT_GUARDED, process.env)) return passthrough(command);
   if (process.platform === 'win32') {
     note('WARNING: guard unsupported on win32; running unguarded.');

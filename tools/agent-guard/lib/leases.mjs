@@ -19,6 +19,7 @@
 // unreclaimable, so the crash-recovery path became the outage.
 
 import { randomUUID } from 'node:crypto';
+import { execFileSync } from 'node:child_process';
 import { mkdirSync, readFileSync, readdirSync, renameSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 
@@ -42,6 +43,20 @@ export function isProcessGroupAlive(processGroupId) {
   } catch (error) {
     // EPERM means the group exists but belongs to another user — alive.
     return error.code === 'EPERM';
+  }
+}
+
+export function processGroupIdFor(pid = process.pid) {
+  if (!Number.isInteger(pid) || pid <= 0 || process.platform === 'win32') return null;
+  try {
+    const raw = execFileSync('/bin/ps', ['-o', 'pgid=', '-p', String(pid)], {
+      encoding: 'utf8',
+      timeout: 2000,
+    }).trim();
+    const processGroupId = Number(raw);
+    return Number.isInteger(processGroupId) && processGroupId > 0 ? processGroupId : null;
+  } catch {
+    return null;
   }
 }
 
@@ -189,13 +204,13 @@ export function releaseLease(lease) {
  * Does this id name a lease that is currently held?
  *
  * The wrapper marks its children with the id of the lease it holds, and only
- * honours a marker that still resolves here. A hand-supplied value therefore
- * buys nothing: an unguarded run claiming to be nested falls through to full
- * admission instead of passing through.
+ * honours a live lease owned by the caller's own process group. Lease ids are
+ * visible to same-user processes, so id knowledge alone is not an ancestry
+ * proof; an unrelated process falls through to full admission.
  */
-export function leaseExists(id, env = process.env) {
-  if (typeof id !== 'string' || id === '') return false;
-  return readLeases(env, { reap: false }).some((lease) => lease.id === id);
+export function leaseExists(id, env = process.env, { processGroupId = processGroupIdFor() } = {}) {
+  if (typeof id !== 'string' || id === '' || !Number.isInteger(processGroupId) || processGroupId <= 0) return false;
+  return readLeases(env, { reap: false }).some((lease) => lease.id === id && lease.processGroupId === processGroupId);
 }
 
 // --- Admission mutex ---------------------------------------------------------
