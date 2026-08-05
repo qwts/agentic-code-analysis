@@ -1,0 +1,71 @@
+#!/bin/sh
+# Resolve a complete ACA checkout, then preserve the caller's cwd and arguments
+# while replacing this process with ACA's public CLI.
+set -eu
+
+fail() {
+  printf '%s\n' "run-aca: $*" >&2
+  exit 2
+}
+
+canonical_dir() {
+  CDPATH= cd -P "$1" 2>/dev/null && pwd -P
+}
+
+checkout_shape_is_valid() {
+  [ -f "$1/package.json" ] && [ -f "$1/src/cli.ts" ] || return 1
+  node -e "const p = require(process.argv[1]); process.exit(p.name === 'agentic-code-analysis' ? 0 : 1)" \
+    "$1/package.json" 2>/dev/null
+}
+
+check_runtime() {
+  command -v node >/dev/null 2>&1 || fail 'Node >= 24 is required but node is not on PATH'
+  major=$(node -p "process.versions.node.split('.')[0]" 2>/dev/null) ||
+    fail 'could not determine the Node version'
+  case "$major" in
+    ''|*[!0-9]*) fail "could not parse the Node major version: $major" ;;
+  esac
+  [ "$major" -ge 24 ] || fail "Node >= 24 is required; found Node $major"
+}
+
+run_checkout() {
+  root=$1
+  shift
+  for dependency in yaml js-tiktoken @anthropic-ai/sdk openai; do
+    [ -f "$root/node_modules/$dependency/package.json" ] ||
+      fail "ACA dependency $dependency is missing in $root; run npm clean-install there"
+  done
+  exec node "$root/src/cli.ts" "$@"
+}
+
+resolve_script_dir() {
+  script=$0
+  while [ -L "$script" ]; do
+    parent=$(canonical_dir "$(dirname "$script")") || fail 'could not resolve the launcher symlink directory'
+    target=$(readlink "$script") || fail 'could not read the launcher symlink'
+    case "$target" in
+      /*) script=$target ;;
+      *) script=$parent/$target ;;
+    esac
+  done
+  canonical_dir "$(dirname "$script")"
+}
+
+check_runtime
+
+if [ "${ACA_REPO_ROOT+x}" = x ]; then
+  [ -n "$ACA_REPO_ROOT" ] || fail 'ACA_REPO_ROOT is set but empty'
+  root=$(canonical_dir "$ACA_REPO_ROOT") || fail "ACA_REPO_ROOT is not an accessible directory: $ACA_REPO_ROOT"
+  checkout_shape_is_valid "$root" || fail "ACA_REPO_ROOT is not an ACA checkout: $root"
+  run_checkout "$root" "$@"
+fi
+
+script_dir=$(resolve_script_dir) || fail 'could not resolve the launcher directory'
+candidate=$(canonical_dir "$script_dir/../../../.." 2>/dev/null || true)
+if [ -n "$candidate" ] && checkout_shape_is_valid "$candidate"; then
+  run_checkout "$candidate" "$@"
+fi
+
+aca_command=$(command -v aca 2>/dev/null || true)
+[ -n "$aca_command" ] || fail 'ACA checkout not found; set ACA_REPO_ROOT to a full checkout'
+exec "$aca_command" "$@"

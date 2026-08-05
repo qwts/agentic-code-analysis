@@ -1,0 +1,63 @@
+{
+  "schemaVersion": 1,
+  "packages": {
+    "repo:.agents/skills/run-aca": {
+      "scenarios": [
+        {
+          "id": "single-file-analysis",
+          "description": "Choose and run one semantic ACA check against an explicitly named changed file, then summarize structured findings.",
+          "profile": "codex-local",
+          "frequency": 0.35,
+          "value": 8,
+          "requiredConcepts": ["live check discovery", "explicit-path scope", "advisory JSON interpretation"]
+        },
+        {
+          "id": "diff-or-doc-analysis",
+          "description": "Choose a diff- or documentation-scoped check from natural-language intent and supply the correct base or referent evidence.",
+          "profile": "codex-local",
+          "frequency": 0.25,
+          "value": 8,
+          "requiredConcepts": ["evidence-shape selection", "base selection", "live catalog"]
+        },
+        {
+          "id": "skill-package-analysis",
+          "description": "Run ACA over a whole Agent Skill package with its workload sidecar and preserve topology evidence.",
+          "profile": "codex-local",
+          "frequency": 0.1,
+          "value": 7,
+          "requiredConcepts": ["package scope", "workload evidence", "check-specific fields"]
+        },
+        {
+          "id": "qualify-route",
+          "description": "Qualify the selected check and exact configured judge route before presenting it as trustworthy.",
+          "profile": "codex-local",
+          "frequency": 0.1,
+          "value": 10,
+          "critical": true,
+          "requiredConcepts": ["billable self-test disclosure", "qualification tuple"],
+          "expectedResources": ["references/verdict-contract.md"]
+        },
+        {
+          "id": "gate-down-interpretation",
+          "description": "Recognize missing credentials or judge account unavailability even when advisory mode exits zero.",
+          "profile": "codex-local",
+          "frequency": 0.1,
+          "value": 10,
+          "critical": true,
+          "requiredConcepts": ["stderr outage notice", "no semantic clean claim"],
+          "expectedResources": ["references/verdict-contract.md"]
+        },
+        {
+          "id": "explicit-enforcement",
+          "description": "Rerun the same qualified check with enforcement only after user or repository policy authorizes it.",
+          "profile": "codex-local",
+          "frequency": 0.1,
+          "value": 10,
+          "critical": true,
+          "requiredConcepts": ["enforcement authority", "exit 1/2/78 distinction"],
+          "expectedResources": ["references/verdict-contract.md"]
+        }
+      ]
+    }
+  }
+}
