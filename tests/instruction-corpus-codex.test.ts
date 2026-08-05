@@ -4,7 +4,7 @@ import {
   discoverInstructionCorpus,
   resolveInstructionSession,
 } from '../src/corpora/instructions/index.ts';
-import { fakeEstimator, fixtureRoot, locators } from './instruction-corpus-helpers.ts';
+import { fakeEstimator, fixtureRoot, locators, memoryFileSystem } from './instruction-corpus-helpers.ts';
 
 const request = {
   repoRoot: fixtureRoot('codex/repo'),
@@ -54,6 +54,29 @@ test('codex project_doc_max_bytes: files charged whole in order until the next w
   // Global (25 B) + root (31 B) fit; pkg override (27 B) would cross 60.
   assert.deepEqual(locators(deep), ['user:.codex/AGENTS.md', 'repo:AGENTS.md']);
   assert.ok(deep.diagnostics.some((line) => /project_doc_max_bytes/.test(line)));
+});
+
+test('codex cap stops the chain: a closer file that would individually fit never sneaks back in', async () => {
+  const fs = memoryFileSystem({
+    '/repo': {
+      'AGENTS.md': 'a'.repeat(40),
+      'pkg/AGENTS.md': 'b'.repeat(50),
+      'pkg/deep/AGENTS.md': 'c'.repeat(5),
+    },
+  });
+  const corpus = await discoverInstructionCorpus(
+    { repoRoot: '/repo', config: { codexProjectDocMaxBytes: 60 } },
+    { estimator: fakeEstimator, fileSystem: fs },
+  );
+  const deep = resolveInstructionSession(corpus, { profile: 'codex-local', cwd: 'pkg/deep' });
+  // pkg/AGENTS.md crosses the cap (40+50 > 60); codex stops adding files
+  // there, so the tiny deep file (40+5 <= 60) must still be excluded.
+  assert.deepEqual(locators(deep), ['repo:AGENTS.md']);
+  assert.equal(
+    deep.diagnostics.filter((line) => /project_doc_max_bytes/.test(line)).length,
+    2,
+    'both the crossing file and the rest of the chain are reported',
+  );
 });
 
 test('codex fallback filenames only bind when configured, and lose to AGENTS.md in the same directory', async () => {

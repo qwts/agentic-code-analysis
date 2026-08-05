@@ -225,32 +225,37 @@ export function resolveInstructionSession(
 
   let contributions = confirmed.map((entry) => entry.contribution);
 
-  // Codex combined-size cap: charged whole, in chain order, until the next
-  // file would cross the cap; the rest of the chain is deterministically
-  // excluded.
+  // Codex combined-size cap: charged whole, in chain order. Codex *stops
+  // adding files* once the limit is reached, so the first file that would
+  // cross the cap excludes itself and every later chain file — a closer,
+  // smaller file must not sneak back in (PR #48 review).
   if (scenario.profile === 'codex-local') {
     const cap = corpus.config.codexProjectDocMaxBytes ?? CODEX_DEFAULT_MAX_BYTES;
     const encoder = new TextEncoder();
     const kept: SessionContribution[] = [];
     let bytes = 0;
+    let capReached = false;
     for (const contribution of contributions) {
       if (contribution.convention !== 'codex/agents-chain') {
         kept.push(contribution);
         continue;
       }
-      const file = corpus.files.find((entry) => entry.locator === contribution.locator);
-      const binding = file?.bindings.find(
-        (entry) => entry.profile === 'codex-local' && entry.convention === 'codex/agents-chain',
-      );
-      const size = encoder.encode(binding?.charged.text ?? '').length;
-      if (bytes + size > cap) {
-        diagnostics.push(
-          `${contribution.locator}: excluded — combined instructions reach project_doc_max_bytes (${cap})`,
+      if (!capReached) {
+        const file = corpus.files.find((entry) => entry.locator === contribution.locator);
+        const binding = file?.bindings.find(
+          (entry) => entry.profile === 'codex-local' && entry.convention === 'codex/agents-chain',
         );
-        continue;
+        const size = encoder.encode(binding?.charged.text ?? '').length;
+        if (bytes + size <= cap) {
+          bytes += size;
+          kept.push(contribution);
+          continue;
+        }
+        capReached = true;
       }
-      bytes += size;
-      kept.push(contribution);
+      diagnostics.push(
+        `${contribution.locator}: excluded — combined instructions reach project_doc_max_bytes (${cap})`,
+      );
     }
     contributions = kept;
   }

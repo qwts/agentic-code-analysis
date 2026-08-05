@@ -70,6 +70,9 @@ test('windsurf legacy .windsurfrules and skills follow the metadata/body split',
   );
   assert.ok(skillMetadata, 'skill name+description charge every session');
   assert.ok(idle.possibleAdditional.some(
+    (entry) => entry.locator === 'repo:.windsurf/skills/fmt/scripts/run.sh' && entry.convention === 'windsurf/skill-resource',
+  ), 'supporting files appear as on-demand resources');
+  assert.ok(idle.possibleAdditional.some(
     (entry) => entry.locator === 'repo:.windsurf/skills/fmt/SKILL.md' && entry.convention === 'windsurf/skill-body',
   ));
 

@@ -48,6 +48,12 @@ test('cursor: plain .md in rules is ignored with a diagnostic; legacy .cursorrul
   assert.ok(corpus.diagnostics.some(
     (d) => d.locator === 'repo:.cursor/rules/ignored.md' && /ignored unless/.test(d.message),
   ));
+  // A .md rule that does carry frontmatter binds like an .mdc (PR #48 review).
+  const withFrontmatter = corpus.files.find((file) => file.path === '.cursor/rules/withfm.md');
+  assert.ok(withFrontmatter, '.md with frontmatter metadata is a real rule');
+  const loadSetWithMd = resolveInstructionSession(corpus, { profile: 'cursor-editor-agent', cwd: '.' });
+  assert.ok(locators(loadSetWithMd).includes('repo:.cursor/rules/withfm.md'),
+    'alwaysApply .md rule loads every session');
 
   const legacy = corpus.files.find((file) => file.path === '.cursorrules');
   assert.ok(legacy, 'legacy file stays in the corpus');

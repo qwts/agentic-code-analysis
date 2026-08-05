@@ -108,8 +108,11 @@ export async function discoverInstructionCorpus(
         });
         return null;
       }
-      const real = await fileSystem.realPath(root.path, path);
-      const rootReal = await fileSystem.realPath(root.path, '');
+      // Compare with separators normalized: Windows realpath() returns
+      // backslash paths, which a literal-'/' prefix check would misread as
+      // every candidate escaping its root (PR #48 review).
+      const real = normalizeSeparators(await fileSystem.realPath(root.path, path));
+      const rootReal = normalizeSeparators(await fileSystem.realPath(root.path, ''));
       if (real === null || rootReal === null || !(real === rootReal || real.startsWith(`${rootReal}/`))) {
         readDiagnostics.set(locator, {
           severity: 'warn',
@@ -144,7 +147,6 @@ export async function discoverInstructionCorpus(
     bindings.push(...result.bindings);
     diagnostics.push(...result.diagnostics);
   }
-  diagnostics.push(...readDiagnostics.values());
 
   // Merge by (origin, path): one physical file, every binding preserved.
   const byLocator = new Map<string, { file: Omit<InstructionFile, 'bindings'>; bindings: AdapterBinding[] }>();
@@ -168,6 +170,9 @@ export async function discoverInstructionCorpus(
       bindings: [adapterBinding],
     });
   }
+  // Flush after the merge loop: its read() calls (e.g. skill resources no
+  // adapter read) also record diagnostics (PR #48 review).
+  diagnostics.push(...readDiagnostics.values());
 
   const files: InstructionFile[] = [...byLocator.values()]
     .map(({ file, bindings: fileBindings }) => ({
@@ -195,6 +200,10 @@ export async function discoverInstructionCorpus(
     estimator: estimator.id,
     config: request.config ?? {},
   };
+}
+
+function normalizeSeparators(path: string | null): string | null {
+  return path === null ? null : path.replaceAll('\\', '/');
 }
 
 async function validateRoots(
