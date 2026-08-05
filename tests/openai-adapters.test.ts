@@ -61,6 +61,10 @@ test('degrade paths: refusal, truncation, empty, unparseable, api error', async 
     [new Error('connection refused'), /api error: connection refused/],
     [{ choices: [] }, /no completion choice/],
   ];
+  const nonError = await createOpenAiJudge('m', {
+    chat: { completions: { create: async () => Promise.reject('socket hang up') } },
+  } as never).judge(REQUEST);
+  assert.deepEqual(nonError, { ok: false, note: 'api error: socket hang up' });
   for (const [response, expected] of cases) {
     const result = await createOpenAiJudge('m', stub(response)).judge(REQUEST);
     assert.equal(result.ok, false);

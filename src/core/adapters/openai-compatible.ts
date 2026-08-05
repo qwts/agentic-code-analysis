@@ -34,7 +34,9 @@ async function judge(client: OpenAI, model: string, tokenParam: TokenParam, requ
       ],
     });
   } catch (err) {
-    return { ok: false, note: `api error: ${(err as Error).message}` };
+    // Non-Error throws (strings, objects from proxies/local servers) must
+    // still yield an informative note.
+    return { ok: false, note: `api error: ${err instanceof Error ? err.message : String(err)}` };
   }
   const choice = completion.choices[0];
   if (!choice) return { ok: false, note: 'no completion choice' };

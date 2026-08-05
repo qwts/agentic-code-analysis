@@ -36,7 +36,8 @@ async function judge(anthropic: Anthropic, model: string, request: JudgeRequest)
       messages: [{ role: 'user', content: request.user }],
     });
   } catch (err) {
-    return { ok: false, note: `api error: ${(err as Error).message}` };
+    // Non-Error throws must still yield an informative note (review, PR #9).
+    return { ok: false, note: `api error: ${err instanceof Error ? err.message : String(err)}` };
   }
   if (response.stop_reason === 'refusal') {
     const category = response.stop_details?.category;
