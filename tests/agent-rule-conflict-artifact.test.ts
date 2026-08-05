@@ -52,6 +52,21 @@ test('projection: config exclude globs drop repo sources visibly', () => {
   }
 });
 
+test('projection: exclusion honors brace groups and dot directories like filterScope', () => {
+  const dotfile = file('tests/fixtures/x/repo/.github/copilot-instructions.md', 'Planted.', [
+    binding({ profile: 'copilot-cli', tool: 'copilot', convention: 'copilot/repository-instructions', text: 'Planted.', scope: { kind: 'always' }, conflict: 'combined-no-precedence' }),
+  ]);
+  const srcFixture = file('src/checks/x/fixtures/y/repo/AGENTS.md', 'Planted.', [
+    binding({ profile: 'codex-local', text: 'Planted.', scope: { kind: 'directory-subtree', directory: 'src/checks/x/fixtures/y/repo', via: 'cwd' } }),
+  ]);
+  const artifact = buildArtifact(corpus([ROOT, dotfile, srcFixture]), ['{src,tests}/fixtures/**', 'src/checks/*/fixtures/**']);
+  assert.deepEqual(artifact.sources.map((s) => s.path), ['AGENTS.md']);
+  assert.deepEqual(artifact.excluded, [
+    'src/checks/x/fixtures/y/repo/AGENTS.md',
+    'tests/fixtures/x/repo/.github/copilot-instructions.md',
+  ]);
+});
+
 test('projection: conditional members carry reasons and stay out of confirmed', () => {
   const gated = file('.github/instructions/api.instructions.md', 'API rule.', [
     binding({

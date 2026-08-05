@@ -3,6 +3,7 @@
 // sources, coalesced session load-set classes, and the canonical
 // serialization that is at once judge payload, size measure, and cache-key
 // body. Pure data work — no judging, no discovery, no convention semantics.
+import { matchesGlob } from 'node:path';
 import {
   resolveInstructionSession,
   type ConflictPolicy,
@@ -70,11 +71,20 @@ const TOOL_OF_PROFILE: Record<SessionProfileId, string> = {
 
 const dirOf = (path: string): string => (path.includes('/') ? path.slice(0, path.lastIndexOf('/')) : '');
 
-/** Dot-inclusive glob match (`**`, `*`, `?`): instruction files live in dot
- * directories (.github, .cursor), which `node:path.matchesGlob` skips under
- * `**` — an exclusion that leaks planted dotfiles would defeat the fixture
- * guard entirely. */
-function matchesExclude(path: string, glob: string): boolean {
+/** `{a,b}` alternation, expanded up to a budget (mirrors the corpus
+ * library's documented behavior); an over-budget glob is used unexpanded. */
+function expandBraces(glob: string, cap: number): readonly string[] {
+  const match = /\{([^{}]*)\}/.exec(glob);
+  if (match === null || match[1] === undefined) return [glob];
+  const results: string[] = [];
+  for (const option of match[1].split(',')) {
+    results.push(...expandBraces(glob.slice(0, match.index) + option + glob.slice(match.index + match[0].length), cap));
+    if (results.length > cap) return [glob];
+  }
+  return results;
+}
+
+function globToRegExp(glob: string): RegExp {
   let pattern = '';
   for (let index = 0; index < glob.length; index += 1) {
     const char = glob[index]!;
@@ -98,7 +108,17 @@ function matchesExclude(path: string, glob: string): boolean {
       pattern += char;
     }
   }
-  return new RegExp(`^${pattern}$`).test(path);
+  return new RegExp(`^${pattern}$`);
+}
+
+/** Dot-inclusive glob match (`**`, `*`, `?`, `{a,b}`): instruction files
+ * live in dot directories (.github, .cursor), which `node:path.matchesGlob`
+ * skips under `**` — an exclusion that leaks planted dotfiles would defeat
+ * the fixture guard entirely. The platform matcher is kept as a fallback so
+ * any further syntax `filterScope` accepts (extglob) still excludes the
+ * paths it can express (PR #53 review). */
+function matchesExclude(path: string, glob: string): boolean {
+  return expandBraces(glob, 100).some((expanded) => globToRegExp(expanded).test(path)) || matchesGlob(path, glob);
 }
 
 /** Every semantic input the judge sees, as one canonical JSON text. The
