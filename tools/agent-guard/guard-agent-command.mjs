@@ -259,8 +259,11 @@ export function heavyLaneFor(command) {
     const lane = HEAVY_LANES.find((entry) => entry.pattern.test(script));
     if (lane) return lane;
   }
-  if (/\bplaywright\s+test\b|\btest-storybook\b/u.test(command)) {
+  if (/\bplaywright\s+test\b/u.test(command)) {
     return HEAVY_LANES.find((entry) => entry.id === 'e2e');
+  }
+  if (/\btest-storybook\b/u.test(command)) {
+    return HEAVY_LANES.find((entry) => entry.id === 'stories');
   }
   return null;
 }

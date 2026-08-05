@@ -13,8 +13,7 @@
 // needed memory to run would be self-defeating.
 
 import assert from 'node:assert/strict';
-import { existsSync, readFileSync } from 'node:fs';
-import { mkdtempSync, rmSync } from 'node:fs';
+import { existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { after, describe, test } from 'node:test';
