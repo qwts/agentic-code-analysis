@@ -7,10 +7,11 @@ minimal context footprint? Runs as a CI gate (`--enforce`) and as advisory
 feedback inside an agent's dev loop, with interchangeable judge models
 (Anthropic / OpenAI / local).
 
-Status: core CLI, JudgeClient port, Anthropic/OpenAI/local adapters, and six
+Status: core CLI, JudgeClient port, Anthropic/OpenAI/local adapters, and seven
 checks — `aca context-footprint`, `aca failure-posture`, `aca naming-truth`,
-`aca seam-audit`, `aca single-responsibility`, and `aca test-honesty`, each
-with a calibration self-test — are in (TypeScript 7 on Node ≥ 24, no build step —
+`aca review-readiness`, `aca seam-audit`, `aca single-responsibility`, and
+`aca test-honesty`, each with a calibration self-test — are in
+(TypeScript 7 on Node ≥ 24, no build step —
 `node src/cli.ts <check>`). Remaining work:
 [open issues](https://github.com/qwts/agentic-code-analysis/issues).
 

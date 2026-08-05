@@ -1,117 +1,160 @@
-[
-  {
-    "name": "new-dual-actor",
-    "kind": "new",
-    "file": "billing/line-item-price.ts",
-    "head": {
-      "content": "line-item-price-inline.txt",
-      "importedBy": [
-        "billing/checkout-total.ts",
-        "billing/invoice-renderer.ts"
-      ]
+{
+  "schemaVersion": 2,
+  "requiredLevel": "foundation",
+  "levels": [
+    { "id": "foundation" }
+  ],
+  "gaps": [
+    "field: no production-derived fixture yet. Per ACA-0012 policy the first production miss with agreed ground truth becomes an immutable field fixture (with provenance and permission recorded here); until then requiredLevel stays foundation and passing it is screening evidence, not field authority. Tracked in issue #43."
+  ],
+  "fixtures": [
+    {
+      "name": "new-dual-actor",
+      "level": "foundation",
+      "kind": "new",
+      "file": "billing/line-item-price.ts",
+      "head": {
+        "content": "line-item-price-inline.txt",
+        "sha256": "9068dbb53e9522fff281b9b6c93a10ef91b339fff9c897f3bbe5a5c60cf02cf3",
+        "importedBy": [
+          "billing/checkout-total.ts",
+          "billing/invoice-renderer.ts"
+        ]
+      },
+      "growth": "new file, 14 lines",
+      "expect": {
+        "assessment": "new-violating",
+        "verdict": "fail",
+        "criteriaAnyOf": [
+          "multiple-actors"
+        ]
+      },
+      "source": {
+        "kind": "synthetic",
+        "note": "authored for this repository (Apache-2.0): footprint-clean pricing computation whose only defect is ownership — marketing promo, compliance VAT, and audit-checked rounding hardcoded in one file"
+      }
     },
-    "growth": "new file, 14 lines",
-    "expect": {
-      "assessment": "new-violating",
-      "verdict": "fail",
-      "criteriaAnyOf": [
-        "multiple-actors"
-      ]
+    {
+      "name": "new-focused",
+      "level": "foundation",
+      "kind": "new",
+      "file": "billing/line-item-price.ts",
+      "head": {
+        "content": "line-item-price-policy-injected.txt",
+        "sha256": "b5ddef6b2ed5e04242815d571e33e7476b06d229cd1228ce0e82414e2277e713",
+        "importedBy": [
+          "billing/checkout-total.ts",
+          "billing/invoice-renderer.ts"
+        ]
+      },
+      "growth": "new file, 17 lines",
+      "expect": {
+        "assessment": "new-compliant",
+        "verdict": "pass"
+      },
+      "source": {
+        "kind": "synthetic",
+        "note": "authored for this repository (Apache-2.0): the same sequencing with every policy value taken as input — only a change to the computation itself touches the file"
+      }
+    },
+    {
+      "name": "legacy-focused",
+      "level": "foundation",
+      "kind": "legacy",
+      "file": "billing/line-item-price.ts",
+      "base": {
+        "content": "line-item-price-inline.txt",
+        "sha256": "9068dbb53e9522fff281b9b6c93a10ef91b339fff9c897f3bbe5a5c60cf02cf3",
+        "importedBy": [
+          "billing/checkout-total.ts",
+          "billing/invoice-renderer.ts"
+        ]
+      },
+      "head": {
+        "content": "line-item-price-policy-injected.txt",
+        "sha256": "b5ddef6b2ed5e04242815d571e33e7476b06d229cd1228ce0e82414e2277e713",
+        "importedBy": [
+          "billing/checkout-total.ts",
+          "billing/invoice-renderer.ts"
+        ]
+      },
+      "growth": "grew from 14 to 17 lines",
+      "expect": {
+        "assessment": "improved",
+        "verdict": "pass"
+      },
+      "source": {
+        "kind": "synthetic",
+        "note": "authored for this repository (Apache-2.0): the policy owners move out while the file grows — line counts are orientation, not the decision"
+      }
+    },
+    {
+      "name": "legacy-dual-back",
+      "level": "foundation",
+      "kind": "legacy",
+      "file": "billing/line-item-price.ts",
+      "base": {
+        "content": "line-item-price-policy-injected.txt",
+        "sha256": "b5ddef6b2ed5e04242815d571e33e7476b06d229cd1228ce0e82414e2277e713",
+        "importedBy": [
+          "billing/checkout-total.ts",
+          "billing/invoice-renderer.ts"
+        ]
+      },
+      "head": {
+        "content": "line-item-price-inline.txt",
+        "sha256": "9068dbb53e9522fff281b9b6c93a10ef91b339fff9c897f3bbe5a5c60cf02cf3",
+        "importedBy": [
+          "billing/checkout-total.ts",
+          "billing/invoice-renderer.ts"
+        ]
+      },
+      "growth": "shrank from 17 to 14 lines",
+      "expect": {
+        "assessment": "regressed",
+        "verdict": "fail",
+        "criteriaAnyOf": [
+          "multiple-actors"
+        ]
+      },
+      "source": {
+        "kind": "synthetic",
+        "note": "authored for this repository (Apache-2.0): the negative control — a shrinking diff that inlines the policy owners back in"
+      }
+    },
+    {
+      "name": "legacy-held-dual",
+      "level": "foundation",
+      "kind": "legacy",
+      "file": "billing/line-item-price.ts",
+      "base": {
+        "content": "line-item-price-inline.txt",
+        "sha256": "9068dbb53e9522fff281b9b6c93a10ef91b339fff9c897f3bbe5a5c60cf02cf3",
+        "importedBy": [
+          "billing/checkout-total.ts",
+          "billing/invoice-renderer.ts"
+        ]
+      },
+      "head": {
+        "content": "line-item-price-inline.txt",
+        "sha256": "9068dbb53e9522fff281b9b6c93a10ef91b339fff9c897f3bbe5a5c60cf02cf3",
+        "importedBy": [
+          "billing/checkout-total.ts",
+          "billing/invoice-renderer.ts"
+        ]
+      },
+      "growth": "unchanged at 14 lines",
+      "expect": {
+        "assessment": "held",
+        "verdict": "pass",
+        "residualCriteriaAnyOf": [
+          "multiple-actors"
+        ]
+      },
+      "source": {
+        "kind": "synthetic",
+        "note": "authored for this repository (Apache-2.0): grandfathered debt swept into a change must be named as residual findings, never block"
+      }
     }
-  },
-  {
-    "name": "new-focused",
-    "kind": "new",
-    "file": "billing/line-item-price.ts",
-    "head": {
-      "content": "line-item-price-policy-injected.txt",
-      "importedBy": [
-        "billing/checkout-total.ts",
-        "billing/invoice-renderer.ts"
-      ]
-    },
-    "growth": "new file, 17 lines",
-    "expect": {
-      "assessment": "new-compliant",
-      "verdict": "pass"
-    }
-  },
-  {
-    "name": "legacy-focused",
-    "kind": "legacy",
-    "file": "billing/line-item-price.ts",
-    "base": {
-      "content": "line-item-price-inline.txt",
-      "importedBy": [
-        "billing/checkout-total.ts",
-        "billing/invoice-renderer.ts"
-      ]
-    },
-    "head": {
-      "content": "line-item-price-policy-injected.txt",
-      "importedBy": [
-        "billing/checkout-total.ts",
-        "billing/invoice-renderer.ts"
-      ]
-    },
-    "growth": "grew from 14 to 17 lines",
-    "expect": {
-      "assessment": "improved",
-      "verdict": "pass"
-    }
-  },
-  {
-    "name": "legacy-dual-back",
-    "kind": "legacy",
-    "file": "billing/line-item-price.ts",
-    "base": {
-      "content": "line-item-price-policy-injected.txt",
-      "importedBy": [
-        "billing/checkout-total.ts",
-        "billing/invoice-renderer.ts"
-      ]
-    },
-    "head": {
-      "content": "line-item-price-inline.txt",
-      "importedBy": [
-        "billing/checkout-total.ts",
-        "billing/invoice-renderer.ts"
-      ]
-    },
-    "growth": "shrank from 17 to 14 lines",
-    "expect": {
-      "assessment": "regressed",
-      "verdict": "fail",
-      "criteriaAnyOf": [
-        "multiple-actors"
-      ]
-    }
-  },
-  {
-    "name": "legacy-held-dual",
-    "kind": "legacy",
-    "file": "billing/line-item-price.ts",
-    "base": {
-      "content": "line-item-price-inline.txt",
-      "importedBy": [
-        "billing/checkout-total.ts",
-        "billing/invoice-renderer.ts"
-      ]
-    },
-    "head": {
-      "content": "line-item-price-inline.txt",
-      "importedBy": [
-        "billing/checkout-total.ts",
-        "billing/invoice-renderer.ts"
-      ]
-    },
-    "growth": "unchanged at 14 lines",
-    "expect": {
-      "assessment": "held",
-      "verdict": "pass",
-      "residualCriteriaAnyOf": [
-        "multiple-actors"
-      ]
-    }
-  }
-]
+  ]
+}

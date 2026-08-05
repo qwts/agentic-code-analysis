@@ -54,14 +54,18 @@ An intentional local fork of the context-footprint module shape — checks
 never import each other (ACA-0003 D1) and no fourth shared core library is
 extracted:
 
-- `index.ts` — normalize/dedupe paths, pair-addressed cache, worker pool.
+- `index.ts` — normalize/dedupe paths, pair-addressed cache.
+- `pool.ts` — the concurrency-3 worker pool production judging and
+  calibration share.
 - `comparison.ts` — new/legacy snapshots, merge-base, rename/copy semantics;
   the only module that runs git.
 - `import-graph.ts` — imports and reverse importers per snapshot; no git, no
   judge policy.
 - `judge-io.ts` — runtime rule loader, strict schema, prompts, deterministic
   verdict mapping.
-- `self-test.ts` — live calibration against the fixture manifest.
+- `calibration.ts` — manifest validation, expectation oracles, cumulative
+  grading, suite identity (ACA-0012 fork bound to this check's criteria).
+- `self-test.ts` — live graded calibration against the fixture manifest.
 
 `JudgeClient`, change scope, verdict cache, adapters, `src/cli.ts`, and
 `src/checks/context-footprint/**` are untouched.
@@ -129,10 +133,21 @@ provider, model). Base ref/SHA, growth, and line counts stay out: a moving
 merge-base cannot re-bill an unchanged semantic pair; the same head against a
 different base rejudges.
 
-## Calibration — the self-test
+## Calibration — the graded self-test (ACA-0004 D8, ACA-0012)
 
-`aca single-responsibility --self-test` judges purpose-built fixtures
-(`checks/single-responsibility/fixtures/`), a line-item pricing pair:
+`aca single-responsibility --self-test` runs the ACA-0012 graded exam: a
+`schemaVersion: 2` manifest declaring ordered qualification levels with
+per-fixture checksums and provenance, validated in full before any judge
+call (a malformed or tampered package is a configuration/integrity error,
+exit 2, never a judge miss). Levels grade cumulatively through the
+production pool — one comparative call per fixture, stop after a failed
+level — and `--json` emits the machine-readable qualification record
+(prompt version, deterministic fixture-suite identity, achieved/required
+level, per-level and per-fixture results; no fixture contents, no prompts).
+
+The **`foundation`** level (also the required level) judges purpose-built
+fixtures (`checks/single-responsibility/fixtures/`), a line-item pricing
+pair:
 
 - **inline-policy pricing as new** — one small pure function where a
   marketing-owned promo percentage, a compliance-owned VAT rate, and an
@@ -158,6 +173,13 @@ calibration evidence: formatting + filesystem archival failed *both* checks
 (hidden I/O drags real reading context), and a footer formatter embedding a
 retention policy was CF-borderline — pass/fail flipped across repeated
 runs. The pricing fixture passed context-footprint on every repeated run.
+
+A **`field`** level needs a production-derived case — per ACA-0012 policy
+the first production miss with agreed ground truth becomes an immutable
+field fixture, with provenance and permission recorded in the manifest.
+None exists yet; the gap is recorded in the manifest and `requiredLevel`
+stays `foundation` until one lands, so passing today's exam is screening
+evidence, not field authority.
 
 An always-pass stub misses the negative controls, and the dual-actor file
 doubles as the **cross-check discriminator**: run through
