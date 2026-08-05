@@ -83,17 +83,6 @@ const BLOCKED = [
     what: 'direct c8 coverage invocation',
   },
   {
-    // Inner/unguarded npm scripts (test:dom:run, *:inner).
-    pattern: /\bnpm\s+run\s+[\w:.-]*:(run|inner)(?![\w:-])/u,
-    what: 'unguarded inner npm script',
-  },
-  {
-    // Node >=22 can execute package scripts without npm. It must not turn the
-    // same inner scripts into an unguarded alternate entrypoint.
-    pattern: /\bnode\b[^\n;&|]*\s--run(?:=|\s+)[\w:.-]*:(run|inner)(?![\w:-])/u,
-    what: 'unguarded inner package script',
-  },
-  {
     // Headed/interactive runs open GUI windows on the shared desktop.
     pattern: /\bnpm\s+run\s+test:e2e:(ui|headed)(?![\w:-])/u,
     what: 'headed/interactive e2e run',
@@ -107,6 +96,12 @@ const BLOCKED = [
 // `AGENT_GUARD_FORCE=1 node tools/agent-guard/run-guarded.mjs …` cannot slip
 // through as a sanctioned run.
 const TAMPERING = [
+  {
+    pattern: /(?:^|[\s;&|])(?:CI|GITHUB_ACTIONS|CONTINUOUS_INTEGRATION|BUILDKITE|GITLAB_CI|JENKINS_URL)=/u,
+    reason:
+      'Blocked a command-local CI marker: hosted CI is exempt from admission because its runner is isolated, but a ' +
+      `local command cannot grant itself that exemption. Remove the assignment and use the guarded entrypoint. ${GUIDANCE}`,
+  },
   {
     pattern: /\bAGENT_GUARD_FORCE=/u,
     reason:
@@ -190,7 +185,7 @@ export function resolveExecutionDir(cwd, command) {
 }
 
 const QUOTED = /'[^']*'|"(?:[^"\\]|\\.)*"/u;
-const SHELL_C_TAIL = /(?:^|[\s;&|(`{])(?:env\s+(?:\w+=\S*\s+)*)?(?:\S*\/)?(?:ba|da|z)?sh\s+(?:-\S+\s+)*-\S*c\s+$/u;
+const SHELL_C_TAIL = /(?:^|[\s;&|(`{])(?:env\s+(?:\w+=\S*\s+)*)?(?:\S*\/)?(?:ba|da|z)?sh\s+(?:(?:(?:-[A-Za-z]*[oO]|--(?:option|shopt))\s+\S+|-\S+)\s+)*-\S*c\s+$/u;
 
 function quotedWord(quoted) {
   const inner = quoted.startsWith("'") ? quoted.slice(1, -1) : quoted.slice(1, -1).replace(/\\(["\\$`])/gu, '$1');
@@ -333,6 +328,10 @@ export function nodeRunScriptNames(command) {
   return names;
 }
 
+function isUnguardedInnerScript(command) {
+  return [...npmScriptNames(command), ...nodeRunScriptNames(command)].some((script) => /:(?:run|inner)$/u.test(script));
+}
+
 /**
  * Heavy-lane detection for a raw command line.
  *
@@ -381,6 +380,12 @@ export function evaluateCommand(command, { env = process.env, now = Date.now() }
   // call is real, and the blocked binary rides along beside it.
   for (const segment of splitSegments(effective)) {
     if (WRAPPER_SEGMENT.test(segment)) continue;
+    if (isUnguardedInnerScript(segment)) {
+      return {
+        allow: false,
+        reason: `Blocked unguarded inner package script: it bypasses the machine-scoped memory guard. ${USE_ENTRYPOINT}`,
+      };
+    }
     for (const { pattern, what, reason } of BLOCKED) {
       if (pattern.test(segment)) {
         return {
