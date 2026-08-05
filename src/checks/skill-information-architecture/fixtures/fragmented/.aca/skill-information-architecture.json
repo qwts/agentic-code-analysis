@@ -1,0 +1,10 @@
+{
+  "schemaVersion": 1,
+  "packages": {
+    "repo:.agents/skills/git": {
+      "scenarios": [
+        { "id": "switch-and-update", "description": "Switch branches and fast-forward from the remote.", "frequency": 0.9, "value": 5, "expectedResources": ["references/checkout.md", "references/pull.md"] }
+      ]
+    }
+  }
+}

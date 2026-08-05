@@ -1,0 +1,11 @@
+{
+  "schemaVersion": 1,
+  "packages": {
+    "repo:.agents/skills/git": {
+      "scenarios": [
+        { "id": "routine-sync", "description": "Switch and update a branch.", "frequency": 0.8 },
+        { "id": "rebase-recovery", "description": "Recover from a conflicted rebase.", "frequency": 0.2, "critical": true, "expectedResources": ["references/rebase.md"] }
+      ]
+    }
+  }
+}

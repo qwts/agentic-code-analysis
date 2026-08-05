@@ -111,6 +111,53 @@ node path/to/agentic-code-analysis/src/cli.ts context-footprint src/thing.ts
 
 Explicit paths bypass diff selection; same verdicts, same cache.
 
+### Skill information architecture
+
+Judge a whole corpus-bound Agent Skill package by naming its directory,
+`SKILL.md`, or any resource beneath it:
+
+```bash
+node path/to/agentic-code-analysis/src/cli.ts skill-information-architecture .agents/skills/git --json
+```
+
+Without workload evidence the check uses `basis: cohesion-only` and abstains
+from frequency-dependent placement claims. To ground common/specialist and
+critical scenarios, commit `.aca/skill-information-architecture.json`:
+
+```json
+{
+  "schemaVersion": 1,
+  "packages": {
+    "repo:.agents/skills/git": {
+      "scenarios": [
+        {
+          "id": "switch-and-update",
+          "description": "Switch branches and fast-forward from the remote.",
+          "frequency": 0.8,
+          "value": 5
+        },
+        {
+          "id": "rebase-recovery",
+          "description": "Recover safely from a conflicted rebase.",
+          "frequency": 0.05,
+          "value": 10,
+          "critical": true,
+          "expectedResources": ["references/rebase.md"]
+        }
+      ]
+    }
+  }
+}
+```
+
+Paths in `expectedResources` and `observedReads` must name package resources.
+They are package-relative; Windows separators normalize to `/`, and an optional
+heading fragment is ignored. Absolute, escaping, fragment-only, and unknown
+paths are configuration errors. Rich
+JSON includes verified edits, host-computed load deltas, and measurement seeds;
+apply placement edits first, then rerun this check and `agent-context-cost`
+before applying density changes.
+
 ## Scheduling residual debt (consumer contract)
 
 Residual debt should be scheduled, not ambient. ACA stays a

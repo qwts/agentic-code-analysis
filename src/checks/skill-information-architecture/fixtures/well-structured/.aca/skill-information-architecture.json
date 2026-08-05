@@ -1,0 +1,12 @@
+{
+  "schemaVersion": 1,
+  "packages": {
+    "repo:.agents/skills/git": {
+      "scenarios": [
+        { "id": "switch-and-update", "description": "Switch branches and fast-forward from the remote.", "frequency": 0.8, "value": 5 },
+        { "id": "interactive-rebase", "description": "Rewrite a private commit series.", "frequency": 0.15, "value": 3, "expectedResources": ["references/rebase.md"] },
+        { "id": "rebase-recovery", "description": "Recover safely from a conflicted rebase.", "frequency": 0.05, "value": 10, "critical": true, "expectedResources": ["references/rebase.md"] }
+      ]
+    }
+  }
+}
