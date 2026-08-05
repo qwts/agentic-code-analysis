@@ -1,0 +1,45 @@
+// Submission client with bounded retry and jittered exponential backoff.
+// Clock, transport, sleeping, and jitter arrive as ports so a focused test
+// substitutes them without patching any global.
+export interface SubmitResult {
+  ok: boolean;
+  attempts: number;
+  elapsedMs: number;
+}
+
+export interface Clock {
+  now(): number;
+}
+
+export interface HttpPort {
+  post(url: string, body: string): Promise<{ ok: boolean; status: number }>;
+}
+
+export interface SubmitDeps {
+  clock: Clock;
+  http: HttpPort;
+  sleep: (ms: number) => Promise<void>;
+  jitter: () => number;
+}
+
+const MAX_ATTEMPTS = 5;
+const BASE_DELAY_MS = 250;
+
+function backoffDelay(attempt: number, jitter: () => number): number {
+  return BASE_DELAY_MS * 2 ** attempt + jitter() * 100;
+}
+
+export async function submitWithRetry(url: string, payload: unknown, deps: SubmitDeps): Promise<SubmitResult> {
+  const started = deps.clock.now();
+  for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt += 1) {
+    const response = await deps.http.post(url, JSON.stringify(payload));
+    if (response.ok) {
+      return { ok: true, attempts: attempt + 1, elapsedMs: deps.clock.now() - started };
+    }
+    if (response.status < 500) {
+      return { ok: false, attempts: attempt + 1, elapsedMs: deps.clock.now() - started };
+    }
+    await deps.sleep(backoffDelay(attempt, deps.jitter));
+  }
+  return { ok: false, attempts: MAX_ATTEMPTS, elapsedMs: deps.clock.now() - started };
+}

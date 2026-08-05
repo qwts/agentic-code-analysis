@@ -148,3 +148,26 @@ test('--json emits cache visibility per verdict', async () => {
   assert.equal(parsed.verdicts[0].cached, true);
   assert.equal(parsed.model, 'stub-model');
 });
+
+test('the built-in registry lists seam-audit alongside context-footprint in usage', async () => {
+  const out: string[] = [];
+  await run(['--help'], { stdout: (line: string) => out.push(line), stderr: (line: string) => out.push(line) });
+  assert.match(out[0]!, /checks: .*context-footprint/);
+  assert.match(out[0]!, /checks: .*seam-audit/);
+});
+
+test('--json preserves check-specific verdict subtype fields (seam-audit source/footprint)', async () => {
+  const out: string[] = [];
+  const subtype = {
+    ...PASS,
+    cached: false,
+    assessment: 'new-compliant',
+    source: 'mechanical-prefilter',
+    testabilityFootprint: [],
+  } as FileVerdict;
+  await run(['fake', 'a.ts', '--json'], deps([subtype], out));
+  const parsed = JSON.parse(out.at(-1)!);
+  assert.equal(parsed.verdicts[0].assessment, 'new-compliant');
+  assert.equal(parsed.verdicts[0].source, 'mechanical-prefilter');
+  assert.deepEqual(parsed.verdicts[0].testabilityFootprint, []);
+});
