@@ -82,6 +82,31 @@ test('unknown source languages are candidates, never silently skipped', () => {
   assert.equal(classifyFile('bin/deploy', '#!/bin/sh\ncurl -s https://x\n').candidate, true);
 });
 
+test('a URL literal on the line does not hide the call after it (Codex, PR #35)', () => {
+  const result = classifyFile('src/api.ts', `export async function ping() {\n  const url = "https://coordinator.internal/api"; return fetch(url);\n}\n`);
+  assert.equal(result.candidate, true, 'the // inside the string must not truncate the line');
+  assert.deepEqual(result.hints, [hint('network', 'call', 'fetch')]);
+});
+
+test('effectful package subpaths signal the package (Codex, PR #35)', () => {
+  const cases: [string, PrefilterHint][] = [
+    [`const Client = require('pg/lib/client');\n`, hint('storage', 'import', 'pg/lib/client')],
+    [`import { GetObjectCommand } from '@aws-sdk/client-s3/dist-cjs';\n`, hint('storage', 'import', '@aws-sdk/client-s3/dist-cjs')],
+    [`import commands from 'redis/commands';\n`, hint('storage', 'import', 'redis/commands')],
+  ];
+  for (const [content, expected] of cases) {
+    assert.deepEqual(classifyFile('src/x.ts', content).hints, [expected], content);
+  }
+  assert.equal(classifyFile('src/x.ts', `import x from 'gotcha/anything';\n`).candidate, false, 'anchoring must survive root matching');
+});
+
+test('imports inside comments do not signal (Copilot, PR #35); imports after multi-line comments still do', () => {
+  const commented = `/*\nimport { request } from 'node:https';\n*/\n// const pg = require('pg');\nexport const pure = 1;\n`;
+  assert.equal(classifyFile('src/x.ts', commented).candidate, false, 'commented-out imports must not cost a judge call');
+  const after = `/* header\nspanning lines */\nimport 'kafkajs';\n`;
+  assert.deepEqual(classifyFile('src/x.ts', after).hints, [hint('queue', 'import', 'kafkajs')]);
+});
+
 test('stripInert removes comments and string bodies but keeps code', () => {
   const stripped = stripInert(`// fetch(one)\n/* fetch(two) */\nconst s = "fetch(three)";\nconst t = \`fetch(\${four})\`;\nawait fetch(url);\n`);
   assert.ok(!stripped.includes('one') && !stripped.includes('two') && !stripped.includes('three') && !stripped.includes('four'));

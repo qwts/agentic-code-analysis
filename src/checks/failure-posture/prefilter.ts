@@ -29,8 +29,8 @@ const IAC_EXT = /\.(?:tf|tfvars|hcl)$/i;
 const INERT_EXT =
   /\.(?:md|markdown|rst|txt|json|jsonc|ya?ml|toml|ini|cfg|env|lock|csv|tsv|xml|html|css|scss|less|svg|png|jpe?g|gif|ico|webp|woff2?|ttf|eot|pdf)$/i;
 
-/** Effectful module specifiers → dependency kind. Matched against the bare
- * specifier and its first path segment (`pg/lib/x` still signals `pg`). */
+/** Effectful module specifiers → dependency kind. Matched against the full
+ * specifier and its package root (`pg/lib/x` still signals `pg`). */
 const IMPORT_KINDS: readonly (readonly [RegExp, DependencyKind])[] = [
   [/^(?:node:)?(?:https?|http2|net|tls|dns|dgram)$/, 'network'],
   [/^(?:undici|axios|got|ky|node-fetch|cross-fetch|ws|socket\.io(?:-client)?|@grpc\/grpc-js|graphql-request)$/, 'network'],
@@ -84,15 +84,37 @@ function runtimeSpecifiers(content: string): string[] {
   return found;
 }
 
-/** Comment- and string-only mentions must not signal (design: "where
- * practical") — a best-effort strip, not a parser. */
+/** The package a specifier resolves inside: `pg/lib/client` → `pg`,
+ * `@aws-sdk/client-s3/dist-cjs` → `@aws-sdk/client-s3` — so effectful
+ * subpath imports signal the package (Codex review, PR #35). */
+function packageRoot(spec: string): string {
+  const parts = spec.split('/');
+  return spec.startsWith('@') ? parts.slice(0, 2).join('/') : parts[0]!;
+}
+
+// One alternation, matched left to right in a single pass, so a string
+// shields the `//` inside it (a URL literal must not truncate the line —
+// Codex review, PR #35) and a comment shields the quotes inside it.
+const INERT_TOKEN = /\/\*[\s\S]*?\*\/|\/\/[^\n]*|`(?:\\.|[^\\`])*`|'(?:\\.|[^\\'\n])*'|"(?:\\.|[^\\"\n])*"/g;
+
+// Newlines survive so the line-anchored import scan still sees statement
+// starts after a multi-line comment (Copilot review, PR #35).
+const blanked = (text: string): string => text.replace(/[^\n]/g, ' ');
+const isComment = (token: string): boolean => token.startsWith('/');
+
+/** Comments removed, strings kept — the import scan reads specifiers from
+ * string literals but must not see commented-out imports. */
+function stripComments(content: string): string {
+  return content.replace(INERT_TOKEN, (token) => (isComment(token) ? blanked(token) : token));
+}
+
+/** Comments removed and string bodies blanked (delimiters kept) — the call
+ * scan must not signal on mentions inside either. Best effort, not a parser
+ * (design: "where practical"). */
 export function stripInert(content: string): string {
-  return content
-    .replace(/\/\*[\s\S]*?\*\//g, ' ')
-    .replace(/\/\/[^\n]*/g, ' ')
-    .replace(/`(?:\\.|[^\\`])*`/g, '``')
-    .replace(/'(?:\\.|[^\\'\n])*'/g, "''")
-    .replace(/"(?:\\.|[^\\"\n])*"/g, '""');
+  return content.replace(INERT_TOKEN, (token) =>
+    isComment(token) ? blanked(token) : token[0]! + blanked(token.slice(1, -1)) + token[token.length - 1]!,
+  );
 }
 
 function scanCode(content: string): PrefilterHint[] {
@@ -100,9 +122,10 @@ function scanCode(content: string): PrefilterHint[] {
   const add = (hint: PrefilterHint): void => {
     hints.set(`${hint.kind}\0${hint.source}\0${hint.token}`, hint);
   };
-  for (const spec of runtimeSpecifiers(content)) {
+  for (const spec of runtimeSpecifiers(stripComments(content))) {
+    const root = packageRoot(spec);
     for (const [pattern, kind] of IMPORT_KINDS) {
-      if (pattern.test(spec)) add({ kind, source: 'import', token: spec });
+      if (pattern.test(spec) || pattern.test(root)) add({ kind, source: 'import', token: spec });
     }
   }
   const stripped = stripInert(content);
