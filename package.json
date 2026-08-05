@@ -27,5 +27,9 @@
     "@types/node": "^24.0.0",
     "openai": "^7.4.0",
     "typescript": "^7.0.0"
+  },
+  "dependencies": {
+    "js-tiktoken": "1.0.21",
+    "yaml": "2.9.0"
   }
 }

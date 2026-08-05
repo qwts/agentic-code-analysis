@@ -1,0 +1,1 @@
+Unconditional project rule.

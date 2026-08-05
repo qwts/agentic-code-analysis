@@ -24,3 +24,4 @@ the check issue — rather than one issue per decision.
 | [ACA-0013](ACA-0013-comparative-judgment.md) | Comparative judgment — direction of change for legacy files, pair-addressed cache | Accepted |
 | [ACA-0014](ACA-0014-naming-truth.md) | naming-truth — behavioral contract, three lies, host-enforced comparative mapping | Accepted |
 | [ACA-0020](ACA-0020-diff-fixture-corpus.md) | Diff-fixture corpus and the canonical diff artifact — pair fixtures, diff judge I/O convention | Accepted |
+| [ACA-0023](ACA-0023-agent-context-check-architecture.md) | Agent-context check architecture — independent checks over a shared evidence library; supersedes ACA-0003 D1's "exactly three libraries" | Accepted |

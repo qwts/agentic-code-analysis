@@ -1,0 +1,5 @@
+---
+globs: "**/*.sql"
+alwaysApply: false
+---
+Nested sql rule body.
