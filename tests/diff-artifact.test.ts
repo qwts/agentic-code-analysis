@@ -143,6 +143,24 @@ test('payload bound: an oversized file is omitted whole, named with head hunk ra
   }
 });
 
+test('explicitly named untracked files are judged as additions, not silently missed', () => {
+  const { root, git } = tempRepo();
+  writeFileSync(join(root, 'a.ts'), 'code\n');
+  writeFileSync(join(root, '.gitignore'), 'ignored.ts\n');
+  git('add', '.');
+  git('commit', '-q', '-m', 'base');
+  writeFileSync(join(root, 'untracked.ts'), 'export const fresh = 1;\nconsole.log(fresh);\n');
+  writeFileSync(join(root, 'ignored.ts'), 'export const hidden = 1;\n');
+
+  const artifact = diffArtifactFromGit(root, 'main', ['untracked.ts', 'ignored.ts']);
+  assert.deepEqual(
+    artifact.files.map((f) => [f.path, f.status]),
+    [['untracked.ts', 'added']],
+    'untracked selections are additions; .gitignore is still respected',
+  );
+  assert.deepEqual([...addedLineIndex(artifact).get('untracked.ts')!], [1, 2]);
+});
+
 test('binary diffs keep their identity from the diff header and render as binary, never silently vanish', () => {
   const { root, git } = tempRepo();
   writeFileSync(join(root, 'blob.bin'), Buffer.from([0, 1, 2, 3, 0, 255]));

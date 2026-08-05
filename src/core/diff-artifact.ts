@@ -7,6 +7,8 @@
 // anchors to numbers it can see); the payload is bounded, and files that
 // overflow are omitted whole and named — never silently truncated.
 import { execFileSync } from 'node:child_process';
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import { ConfigError } from './config.ts';
 
 export type FileStatus = 'added' | 'modified' | 'renamed' | 'deleted';
@@ -75,7 +77,34 @@ export function diffArtifactFromGit(repoRoot: string, baseRef: string, files: re
   });
   const scope = new Set(files);
   const parsed = parseGitDiff(raw).filter((file) => scope.has(file.path));
+  // `git diff` cannot see untracked files, but explicit CLI paths bypass
+  // change-scope selection precisely so a not-yet-added file can be judged
+  // during local iteration (ACA-0003 D5). Without this they would report
+  // "no changes vs merge-base" — a silent miss (Codex, PR #36).
+  const seen = new Set(parsed.map((file) => file.path));
+  for (const file of untrackedIn(repoRoot, files)) {
+    if (seen.has(file)) continue;
+    let content: string;
+    try {
+      content = readFileSync(join(repoRoot, file), 'utf8');
+    } catch {
+      continue;
+    }
+    parsed.push(...diffArtifactFromTrees(new Map(), new Map([[file, content]])).files);
+  }
   return { files: parsed.sort((a, b) => (a.path < b.path ? -1 : 1)) };
+}
+
+/** Which of the selected paths git considers untracked (respecting
+ * .gitignore); empty when none are, and never throws on an odd path. */
+function untrackedIn(repoRoot: string, files: readonly string[]): string[] {
+  if (files.length === 0) return [];
+  try {
+    const out = git(['ls-files', '--others', '--exclude-standard', '--', ...files], repoRoot);
+    return out === '' ? [] : out.split('\n');
+  } catch {
+    return [];
+  }
 }
 
 /**
