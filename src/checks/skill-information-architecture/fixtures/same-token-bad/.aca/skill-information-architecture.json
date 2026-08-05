@@ -1,0 +1,8 @@
+{
+  "schemaVersion": 1,
+  "packages": {
+    "repo:.agents/skills/git": {
+      "scenarios": [{ "id": "routine-sync", "description": "Switch and update a branch.", "frequency": 0.95, "value": 5 }]
+    }
+  }
+}

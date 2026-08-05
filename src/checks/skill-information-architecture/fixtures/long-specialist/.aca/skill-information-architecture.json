@@ -1,0 +1,8 @@
+{
+  "schemaVersion": 1,
+  "packages": {
+    "repo:.agents/skills/git": {
+      "scenarios": [{ "id": "interactive-rebase", "description": "Rewrite and validate a private commit series.", "frequency": 1, "value": 8, "critical": true }]
+    }
+  }
+}

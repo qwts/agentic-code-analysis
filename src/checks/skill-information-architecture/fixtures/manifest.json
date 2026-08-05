@@ -1,0 +1,126 @@
+{
+  "schemaVersion": 1,
+  "requiredLevel": "boundaries",
+  "levels": [
+    { "id": "foundation" },
+    { "id": "coverage" },
+    { "id": "boundaries" }
+  ],
+  "fixtures": [
+    {
+      "name": "well-structured-git",
+      "level": "foundation",
+      "root": "well-structured",
+      "files": [
+        { "path": ".aca/skill-information-architecture.json", "sha256": "6b4a5704dbdcd6491b0cf5854edc5a2c58b28ca3506b94a282ab56d9988013d9" },
+        { "path": ".agents/skills/git/SKILL.md", "sha256": "74040baacfcd9c5ce935c66cc863b41518630879a94a70a8ca7d66b97c6d5958" },
+        { "path": ".agents/skills/git/references/rebase.md", "sha256": "f9cd761466270553720b287bf659fe43ab0d41221923af2e050db045e7f88842" }
+      ],
+      "expect": { "assessment": "well-structured", "verdict": "pass" }
+    },
+    {
+      "name": "monolithic-specialist-first",
+      "level": "foundation",
+      "root": "monolithic",
+      "files": [
+        { "path": ".aca/skill-information-architecture.json", "sha256": "270b8742c2033a1e28b1ab67e0c0beb8b422cd439bf5f339d99ac298b457a291" },
+        { "path": ".agents/skills/git/SKILL.md", "sha256": "c68f7a165d9df4f98548bdc485d6d4af818b384955bb9b361a4090dfeb41effd" }
+      ],
+      "expect": {
+        "assessment": "needs-restructure",
+        "verdict": "fail",
+        "criteriaAnyOf": ["buried-core-guidance", "eager-specialist-detail"],
+        "actionsAnyOf": ["move-earlier", "extract-resource"]
+      }
+    },
+    {
+      "name": "fragmented-routine-workflow",
+      "level": "coverage",
+      "root": "fragmented",
+      "files": [
+        { "path": ".aca/skill-information-architecture.json", "sha256": "b8efb08807819f8e40f3e26fef378bcf7e69afa679e3f3044dbab72ebffcd3ff" },
+        { "path": ".agents/skills/git/SKILL.md", "sha256": "8ba97dfa9906f0a56d208d1858fac297540be23c11bee7314c94c25d61fdb762" },
+        { "path": ".agents/skills/git/references/checkout.md", "sha256": "d5b7c79c8eb14a5521e437fe124183e65261f0569f32a44ad07a0a25faeda669" },
+        { "path": ".agents/skills/git/references/pull.md", "sha256": "5f9cd35fbc9809452cd45b230fa53d522708bab947355244ba193f41acdb5a62" }
+      ],
+      "expect": {
+        "assessment": "needs-restructure",
+        "verdict": "fail",
+        "criteriaAnyOf": ["fragmented-core-workflow"],
+        "actionsAnyOf": ["co-locate", "inline-core"]
+      }
+    },
+    {
+      "name": "weak-rebase-route",
+      "level": "coverage",
+      "root": "weak-route",
+      "files": [
+        { "path": ".aca/skill-information-architecture.json", "sha256": "31d1fdcc6f8026489ae1caf767b7723b5c8714c420c270241c7ed96723ee0ed4" },
+        { "path": ".agents/skills/git/SKILL.md", "sha256": "d7c095a372125c89a2ac2fcecace3ecd49d185ae9dc0869bcad41672e41d6500" },
+        { "path": ".agents/skills/git/references/rebase.md", "sha256": "e8debd008629fe7d4cf68fd93f48a53aef40b19d81b510f55af105e6d069bab4" }
+      ],
+      "expect": {
+        "assessment": "needs-restructure",
+        "verdict": "fail",
+        "criteriaAnyOf": ["weak-disclosure-route"],
+        "actionsAnyOf": ["add-route"]
+      }
+    },
+    {
+      "name": "same-token-good-order",
+      "level": "coverage",
+      "root": "same-token-good",
+      "files": [
+        { "path": ".aca/skill-information-architecture.json", "sha256": "872e90a42a6a5de40851e2c20176044517bbde2495c065003c3ab519cff220ab" },
+        { "path": ".agents/skills/git/SKILL.md", "sha256": "fc308a56532a86e4ac049084ed39acf8b46a32301e78fa5a46f6940e99a38932" }
+      ],
+      "expect": { "assessment": "well-structured", "verdict": "pass" }
+    },
+    {
+      "name": "same-token-bad-order",
+      "level": "coverage",
+      "root": "same-token-bad",
+      "sameBodyTokensAs": "same-token-good-order",
+      "files": [
+        { "path": ".aca/skill-information-architecture.json", "sha256": "872e90a42a6a5de40851e2c20176044517bbde2495c065003c3ab519cff220ab" },
+        { "path": ".agents/skills/git/SKILL.md", "sha256": "22a4bb531d2f8fb78e036b9e2c723af6ac15785312403d7c1b0dba102ec6a019" }
+      ],
+      "expect": {
+        "assessment": "needs-restructure",
+        "verdict": "fail",
+        "criteriaAnyOf": ["buried-core-guidance"],
+        "actionsAnyOf": ["move-earlier"]
+      }
+    },
+    {
+      "name": "long-cohesive-specialist",
+      "level": "boundaries",
+      "root": "long-specialist",
+      "files": [
+        { "path": ".aca/skill-information-architecture.json", "sha256": "72690950042cdbcdbf271eb4498ad566ff528bf27a7442852eb1f16d77bd63c1" },
+        { "path": ".agents/skills/git/SKILL.md", "sha256": "0d7ffd28f3fed8be982dfcc8fbb5700ddaab0e0aecebf766bb3fb3f7932a21c2" }
+      ],
+      "expect": { "assessment": "well-structured", "verdict": "pass" }
+    },
+    {
+      "name": "rare-critical-cue-stays-eager",
+      "level": "boundaries",
+      "root": "critical-cue",
+      "files": [
+        { "path": ".aca/skill-information-architecture.json", "sha256": "d7c37fe0b4064232b7ec2c8c304748a09eb01ca6460740b3e0f3045b8b960008" },
+        { "path": ".agents/skills/git/SKILL.md", "sha256": "024e44d49596649e1fbfcd9da50dc13b41d3d9f4f10efdcfad9ed529037b7995" },
+        { "path": ".agents/skills/git/references/rebase.md", "sha256": "0baf9420002835a403c7467c97645dcc20a9434509bf821e2fd491782ce8d3c9" }
+      ],
+      "expect": { "assessment": "well-structured", "verdict": "pass" }
+    },
+    {
+      "name": "unknown-frequency-abstains",
+      "level": "boundaries",
+      "root": "unknown-frequency",
+      "files": [
+        { "path": ".agents/skills/git/SKILL.md", "sha256": "30ca6aea0d5993296faadce9f776272ef93a91ac891fe07e845f1769bc850f33" }
+      ],
+      "expect": { "assessment": "uncertain", "verdict": "warn" }
+    }
+  ]
+}

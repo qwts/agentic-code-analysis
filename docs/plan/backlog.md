@@ -142,6 +142,8 @@ design-first working agreement:
 | `agent-instruction-drift` | Rules referencing files/scripts that no longer exist; claims git history shows are stale ("mid-migration to X", finished) | instructions |
 | `agent-standing-orders` | Standing permissions for risky behavior ("skip slow tests", "use --force") — what's the worst session this rule authorizes? | instructions |
 | `skill-trigger-quality` | Skill/command descriptions as routing: distinctive triggers, no overlap between skills, scope matching behavior | instructions |
+| `skill-information-architecture` | Whole-skill ordering, cohesion, and progressive-disclosure routing grounded in declared workloads | instructions |
+| `skill-guidance-duplication` | Repeated guidance across a skill body and its resources that no single-source density check can see | instructions |
 
 ## Promoted (2026-08-04)
 
