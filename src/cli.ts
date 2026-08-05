@@ -27,7 +27,7 @@ checks: ${[...registry.keys()].join(', ') || '(none registered yet)'}
   --enforce    exit 1 on any fail verdict (default: advisory, always exit 0)
   --json       machine-readable output
   --base       diff base ref (default: origin/main)
-  --self-test  run the check's calibration fixtures (exit 1 on miss, 78 without credentials)`;
+  --self-test  run the check's calibration fixtures (exit 1 on miss, 78 without credentials; honors --json)`;
 
 export async function run(argv: string[], deps?: Partial<RunDeps>): Promise<number> {
   const d: RunDeps = {
@@ -94,7 +94,18 @@ export async function run(argv: string[], deps?: Partial<RunDeps>): Promise<numb
         return EXIT.usage;
       }
       const result = await check.selfTest(client);
-      for (const line of result.lines) d.stdout(line);
+      if (args.values.json) {
+        // Generic rendering of the check-local structural `report` (ACA-0012):
+        // one object, no fixture contents, no prompts. Checks without a
+        // report fall back to the shared contract's fields.
+        const report = (result as { report?: unknown }).report;
+        const body = typeof report === 'object' && report !== null ? report : { passed: result.passed, lines: result.lines };
+        // Shared fields last: a check-local report is duck-typed, so it must
+        // not be able to overwrite the run's own identity (Copilot, PR #30).
+        d.stdout(JSON.stringify({ ...body, check: check.name, provider: client.provider, model: client.model }));
+      } else {
+        for (const line of result.lines) d.stdout(line);
+      }
       return result.passed ? EXIT.ok : EXIT.fail;
     }
     const files = paths.length > 0 ? paths : filterScope(changedFiles(args.values.base, root), config);

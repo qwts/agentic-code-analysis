@@ -131,33 +131,51 @@ both snapshots, roughly doubling that file's input tokens — accepted; it is
 one call, and the alternative (two absolute verdicts subtracted) is both
 costlier and less reliable.
 
-## Calibration — the self-test (decision D8)
+## Calibration — the graded self-test (decisions D8, ACA-0012)
 
 `aca context-footprint --self-test` runs the judge against golden fixtures in
-`checks/context-footprint/fixtures/` and asserts expected assessment,
-effective verdict, and (residual) criteria from a manifest. The cases
-calibrate the transition, not only the endpoints:
+`checks/context-footprint/fixtures/` and grades the result as cumulative
+**qualification levels** (never to be confused with ENG-0151 routing tiers —
+a tier selects a candidate model; a level records what one exact
+`check + prompt version + fixture suite + provider + model` tuple
+demonstrated):
 
-- **the enumerated union file as new** — `new-violating`/`fail`
-  (`relocation-not-design` or `duplicated-context`);
-- **the composed version as new** — `new-compliant`/`pass`;
-- **enumerated → composed** — `improved`/`pass`;
-- **composed → enumerated** — `regressed`/`fail`;
-- **the real image-trail `messages.ts` pair (550→356 lines, PR 786)** —
-  `improved`/`pass` **with required residual criteria**: the retained guard
-  enumeration and barrel re-exports must be named as residual debt. This is
-  issue #12's judge-quality discriminator, preserved under comparative
-  semantics.
+- **`foundation`** — the contract/sanity minimum any qualified judge must
+  pass: the enumerated union file as new (`new-violating`/`fail`,
+  `relocation-not-design` or `duplicated-context`); the composed version as
+  new (`new-compliant`/`pass`); enumerated → composed (`improved`/`pass`);
+  composed → enumerated (`regressed`/`fail`).
+- **`field`** — the judge-quality discriminator: the real image-trail
+  `messages.ts` pair (550→356 lines, PR 786) must judge `improved`/`pass`
+  **and** name the retained guard-enumeration/barrel debt as a residual with
+  nonblank evidence and suggestion. A clean pass is a miss (blind to known
+  debt); an absolute fail is a miss (punishes real improvement). This check's
+  **required level is `field`**.
+
+The manifest (`schemaVersion: 2`) declares levels, the required level, and
+per-fixture expectations, checksums, and provenance; it is validated in full
+before any judge call — a malformed or tampered package is a
+configuration/integrity error (exit 2), never a judge miss. Levels execute
+in order through the production concurrency-3 pool and stop after a failed
+level; `achievedLevel` is the highest contiguous passing level, no partial
+credit. `--json` emits one machine-readable qualification object (prompt
+version, deterministic fixture-suite identity, achieved/required level,
+per-level and per-fixture results — no fixture contents, no prompts).
 
 This is simultaneously the negative control (proof the gate *can* fail) and
 the prompt-change gate: **if a fixture assertion breaks, the prompt is wrong,
 not the fixture.** Iterate on the prompt until all fixtures hold, then bump
 the pinned prompt-version string (which invalidates the verdict cache by
-construction). CI runs the self-test whenever the prompt or fixtures change.
+construction). CI runs the self-test whenever the prompt or fixtures change;
+requalify live whenever the prompt, rule, schema, manifest, or fixture
+contents change. Production misses with agreed ground truth become immutable
+fixtures extending the ladder; verdict instability means unqualified, never
+"average the runs."
 
 Full decision text, rationale, and downsides:
-[ACA-0004](../decisions/ACA-0004-context-footprint-judgment.md) (D8) and
-[ACA-0013](../decisions/ACA-0013-comparative-judgment.md).
+[ACA-0004](../decisions/ACA-0004-context-footprint-judgment.md) (D8),
+[ACA-0013](../decisions/ACA-0013-comparative-judgment.md), and
+[ACA-0012](../decisions/ACA-0012-graded-calibration.md).
 
 ## Consuming-repo wiring (reference, not part of this repo)
 

@@ -1,177 +1,231 @@
-[
-  {
-    "name": "new-enumerated",
-    "kind": "new",
-    "file": "extension/src/background/extension-messages.ts",
-    "head": {
-      "content": "enumerated-messages.txt",
-      "importedBy": [
-        "extension/src/background/router.ts",
-        "extension/src/background/dispatch.ts",
-        "extension/src/content/bridge.ts",
-        "extension/src/panel/client.ts"
-      ]
+{
+  "schemaVersion": 2,
+  "requiredLevel": "field",
+  "levels": [
+    { "id": "foundation" },
+    { "id": "field" }
+  ],
+  "fixtures": [
+    {
+      "name": "new-enumerated",
+      "level": "foundation",
+      "kind": "new",
+      "file": "extension/src/background/extension-messages.ts",
+      "head": {
+        "content": "enumerated-messages.txt",
+        "sha256": "2a038020970bd6afbdd01eb183ed857850c369f92c2e0fc37eb287ea0db0b10c",
+        "importedBy": [
+          "extension/src/background/router.ts",
+          "extension/src/background/dispatch.ts",
+          "extension/src/content/bridge.ts",
+          "extension/src/panel/client.ts"
+        ]
+      },
+      "growth": "new file, 245 lines (extracted from a 550-line messages.ts to satisfy a size ratchet)",
+      "expect": {
+        "assessment": "new-violating",
+        "verdict": "fail",
+        "criteriaAnyOf": [
+          "relocation-not-design",
+          "duplicated-context"
+        ]
+      },
+      "source": {
+        "kind": "synthetic",
+        "note": "authored for this repository (Apache-2.0), modeled on the image-trail message barrel"
+      }
     },
-    "growth": "new file, 245 lines (extracted from a 550-line messages.ts to satisfy a size ratchet)",
-    "expect": {
-      "assessment": "new-violating",
-      "verdict": "fail",
-      "criteriaAnyOf": [
-        "relocation-not-design",
-        "duplicated-context"
-      ]
+    {
+      "name": "new-composed",
+      "level": "foundation",
+      "kind": "new",
+      "file": "extension/src/background/extension-messages.ts",
+      "head": {
+        "content": "composed-messages.txt",
+        "sha256": "97a6d35b0e6ac94e20f962e50ad6cdc2e548d6ca2954711761fd94b6d89c9117",
+        "importedBy": [
+          "extension/src/background/router.ts",
+          "extension/src/background/dispatch.ts",
+          "extension/src/content/bridge.ts",
+          "extension/src/panel/client.ts"
+        ]
+      },
+      "growth": "new file, 51 lines",
+      "expect": {
+        "assessment": "new-compliant",
+        "verdict": "pass"
+      },
+      "source": {
+        "kind": "synthetic",
+        "note": "authored for this repository (Apache-2.0), modeled on the image-trail message barrel"
+      }
+    },
+    {
+      "name": "legacy-composed",
+      "level": "foundation",
+      "kind": "legacy",
+      "file": "extension/src/background/extension-messages.ts",
+      "base": {
+        "content": "enumerated-messages.txt",
+        "sha256": "2a038020970bd6afbdd01eb183ed857850c369f92c2e0fc37eb287ea0db0b10c",
+        "importedBy": [
+          "extension/src/background/router.ts",
+          "extension/src/background/dispatch.ts",
+          "extension/src/content/bridge.ts",
+          "extension/src/panel/client.ts"
+        ]
+      },
+      "head": {
+        "content": "composed-messages.txt",
+        "sha256": "97a6d35b0e6ac94e20f962e50ad6cdc2e548d6ca2954711761fd94b6d89c9117",
+        "importedBy": [
+          "extension/src/background/router.ts",
+          "extension/src/background/dispatch.ts",
+          "extension/src/content/bridge.ts",
+          "extension/src/panel/client.ts"
+        ]
+      },
+      "growth": "shrank from 245 to 51 lines",
+      "expect": {
+        "assessment": "improved",
+        "verdict": "pass"
+      },
+      "source": {
+        "kind": "synthetic",
+        "note": "authored for this repository (Apache-2.0), modeled on the image-trail message barrel"
+      }
+    },
+    {
+      "name": "legacy-enumerated-back",
+      "level": "foundation",
+      "kind": "legacy",
+      "file": "extension/src/background/extension-messages.ts",
+      "base": {
+        "content": "composed-messages.txt",
+        "sha256": "97a6d35b0e6ac94e20f962e50ad6cdc2e548d6ca2954711761fd94b6d89c9117",
+        "importedBy": [
+          "extension/src/background/router.ts",
+          "extension/src/background/dispatch.ts",
+          "extension/src/content/bridge.ts",
+          "extension/src/panel/client.ts"
+        ]
+      },
+      "head": {
+        "content": "enumerated-messages.txt",
+        "sha256": "2a038020970bd6afbdd01eb183ed857850c369f92c2e0fc37eb287ea0db0b10c",
+        "importedBy": [
+          "extension/src/background/router.ts",
+          "extension/src/background/dispatch.ts",
+          "extension/src/content/bridge.ts",
+          "extension/src/panel/client.ts"
+        ]
+      },
+      "growth": "grew from 51 to 245 lines",
+      "expect": {
+        "assessment": "regressed",
+        "verdict": "fail",
+        "criteriaAnyOf": [
+          "relocation-not-design",
+          "duplicated-context"
+        ]
+      },
+      "source": {
+        "kind": "synthetic",
+        "note": "authored for this repository (Apache-2.0), modeled on the image-trail message barrel"
+      }
+    },
+    {
+      "name": "legacy-improved-residual",
+      "level": "field",
+      "kind": "legacy",
+      "file": "extension/src/background/messages.ts",
+      "base": {
+        "content": "residual-messages-base.txt",
+        "sha256": "d37e038a6da78c7c841b2058948ec88a735377ab3854699948f483f673625817",
+        "importedBy": [
+          "extension/src/background/fetch-linked-page.ts",
+          "extension/src/background/message-dispatch.ts",
+          "extension/src/background/service-worker.ts",
+          "extension/src/content/buffered-image-source.ts",
+          "extension/src/content/capture-controller.ts",
+          "extension/src/content/content-script.ts",
+          "extension/src/content/download-controller.ts",
+          "extension/src/content/extension-album-store.ts",
+          "extension/src/content/extension-bookmark-store.ts",
+          "extension/src/content/image-request-policy.ts",
+          "extension/src/content/local-settings-store.ts",
+          "extension/src/content/page-adapter.ts",
+          "extension/src/content/panel-position-store.ts",
+          "extension/src/content/parsed-field-state-store.ts",
+          "extension/src/content/pcloud-provider-client.ts",
+          "extension/src/content/recall-store.ts",
+          "extension/src/content/recent-history-store.ts",
+          "extension/src/content/thumbnail-generator.ts",
+          "extension/src/content/url-review-status-store.ts",
+          "extension/src/content/url-template-store.ts",
+          "extension/src/content/workspace-layout-store.ts",
+          "extension/src/core/interop/runtime-state.ts",
+          "extension/src/destinations/destination-services.ts",
+          "extension/src/gallery/gallery.ts"
+        ]
+      },
+      "head": {
+        "content": "residual-messages-head.txt",
+        "sha256": "1fde4b35b15bb2809a0d572c261735100d7a8573292f57564dce9a258e16e8d2",
+        "importedBy": [
+          "extension/src/background/fetch-linked-page.ts",
+          "extension/src/background/message-dispatch.ts",
+          "extension/src/background/service-worker.ts",
+          "extension/src/content/buffered-image-source.ts",
+          "extension/src/content/capture-controller.ts",
+          "extension/src/content/content-script.ts",
+          "extension/src/content/download-controller.ts",
+          "extension/src/content/extension-album-store.ts",
+          "extension/src/content/extension-bookmark-store.ts",
+          "extension/src/content/image-request-policy.ts",
+          "extension/src/content/local-settings-store.ts",
+          "extension/src/content/page-adapter.ts",
+          "extension/src/content/panel-position-store.ts",
+          "extension/src/content/parsed-field-state-store.ts",
+          "extension/src/content/pcloud-provider-client.ts",
+          "extension/src/content/recall-store.ts",
+          "extension/src/content/recent-history-store.ts",
+          "extension/src/content/thumbnail-generator.ts",
+          "extension/src/content/url-review-status-store.ts",
+          "extension/src/content/url-template-store.ts",
+          "extension/src/content/workspace-layout-store.ts",
+          "extension/src/core/interop/runtime-state.ts",
+          "extension/src/destinations/destination-services.ts",
+          "extension/src/gallery/gallery.ts"
+        ]
+      },
+      "growth": "shrank from 550 to 356 lines",
+      "expect": {
+        "assessment": "improved",
+        "verdict": "pass",
+        "residualCriteriaAnyOf": [
+          "mixed-responsibility",
+          "duplicated-context",
+          "relocation-not-design"
+        ]
+      },
+      "source": {
+        "kind": "vendored",
+        "repository": "qwts/image-trail",
+        "path": "extension/src/background/messages.ts",
+        "pullRequest": "https://github.com/qwts/image-trail/pull/786",
+        "base": {
+          "commit": "dce6e9c38e7f38860c30ff8d037198499caaac76",
+          "gitBlob": "b065a475e67b305f969986a4e3a4ebb0c73d9b2c"
+        },
+        "head": {
+          "commit": "ef4f8bc3297b92e34ce6c0b691821ce74bae4a07",
+          "gitBlob": "ff84d940128d5e8849611b7114edc8c8aade1531",
+          "sameBlobAt": "28b3ed5e91a75e70fdb17f10f742fff024c33888"
+        },
+        "license": "proprietary — all rights reserved (see qwts/image-trail LICENSE)",
+        "permission": "written permission from the copyright holder (zts1.com, @qwts): approving review on the qwts/agentic-code-analysis pull request that introduced this record (issue #12, step 0)"
+      }
     }
-  },
-  {
-    "name": "new-composed",
-    "kind": "new",
-    "file": "extension/src/background/extension-messages.ts",
-    "head": {
-      "content": "composed-messages.txt",
-      "importedBy": [
-        "extension/src/background/router.ts",
-        "extension/src/background/dispatch.ts",
-        "extension/src/content/bridge.ts",
-        "extension/src/panel/client.ts"
-      ]
-    },
-    "growth": "new file, 51 lines",
-    "expect": {
-      "assessment": "new-compliant",
-      "verdict": "pass"
-    }
-  },
-  {
-    "name": "legacy-composed",
-    "kind": "legacy",
-    "file": "extension/src/background/extension-messages.ts",
-    "base": {
-      "content": "enumerated-messages.txt",
-      "importedBy": [
-        "extension/src/background/router.ts",
-        "extension/src/background/dispatch.ts",
-        "extension/src/content/bridge.ts",
-        "extension/src/panel/client.ts"
-      ]
-    },
-    "head": {
-      "content": "composed-messages.txt",
-      "importedBy": [
-        "extension/src/background/router.ts",
-        "extension/src/background/dispatch.ts",
-        "extension/src/content/bridge.ts",
-        "extension/src/panel/client.ts"
-      ]
-    },
-    "growth": "shrank from 245 to 51 lines",
-    "expect": {
-      "assessment": "improved",
-      "verdict": "pass"
-    }
-  },
-  {
-    "name": "legacy-enumerated-back",
-    "kind": "legacy",
-    "file": "extension/src/background/extension-messages.ts",
-    "base": {
-      "content": "composed-messages.txt",
-      "importedBy": [
-        "extension/src/background/router.ts",
-        "extension/src/background/dispatch.ts",
-        "extension/src/content/bridge.ts",
-        "extension/src/panel/client.ts"
-      ]
-    },
-    "head": {
-      "content": "enumerated-messages.txt",
-      "importedBy": [
-        "extension/src/background/router.ts",
-        "extension/src/background/dispatch.ts",
-        "extension/src/content/bridge.ts",
-        "extension/src/panel/client.ts"
-      ]
-    },
-    "growth": "grew from 51 to 245 lines",
-    "expect": {
-      "assessment": "regressed",
-      "verdict": "fail",
-      "criteriaAnyOf": [
-        "relocation-not-design",
-        "duplicated-context"
-      ]
-    }
-  },
-  {
-    "name": "legacy-improved-residual",
-    "kind": "legacy",
-    "file": "extension/src/background/messages.ts",
-    "base": {
-      "content": "residual-messages-base.txt",
-      "importedBy": [
-        "extension/src/background/fetch-linked-page.ts",
-        "extension/src/background/message-dispatch.ts",
-        "extension/src/background/service-worker.ts",
-        "extension/src/content/buffered-image-source.ts",
-        "extension/src/content/capture-controller.ts",
-        "extension/src/content/content-script.ts",
-        "extension/src/content/download-controller.ts",
-        "extension/src/content/extension-album-store.ts",
-        "extension/src/content/extension-bookmark-store.ts",
-        "extension/src/content/image-request-policy.ts",
-        "extension/src/content/local-settings-store.ts",
-        "extension/src/content/page-adapter.ts",
-        "extension/src/content/panel-position-store.ts",
-        "extension/src/content/parsed-field-state-store.ts",
-        "extension/src/content/pcloud-provider-client.ts",
-        "extension/src/content/recall-store.ts",
-        "extension/src/content/recent-history-store.ts",
-        "extension/src/content/thumbnail-generator.ts",
-        "extension/src/content/url-review-status-store.ts",
-        "extension/src/content/url-template-store.ts",
-        "extension/src/content/workspace-layout-store.ts",
-        "extension/src/core/interop/runtime-state.ts",
-        "extension/src/destinations/destination-services.ts",
-        "extension/src/gallery/gallery.ts"
-      ]
-    },
-    "head": {
-      "content": "residual-messages-head.txt",
-      "importedBy": [
-        "extension/src/background/fetch-linked-page.ts",
-        "extension/src/background/message-dispatch.ts",
-        "extension/src/background/service-worker.ts",
-        "extension/src/content/buffered-image-source.ts",
-        "extension/src/content/capture-controller.ts",
-        "extension/src/content/content-script.ts",
-        "extension/src/content/download-controller.ts",
-        "extension/src/content/extension-album-store.ts",
-        "extension/src/content/extension-bookmark-store.ts",
-        "extension/src/content/image-request-policy.ts",
-        "extension/src/content/local-settings-store.ts",
-        "extension/src/content/page-adapter.ts",
-        "extension/src/content/panel-position-store.ts",
-        "extension/src/content/parsed-field-state-store.ts",
-        "extension/src/content/pcloud-provider-client.ts",
-        "extension/src/content/recall-store.ts",
-        "extension/src/content/recent-history-store.ts",
-        "extension/src/content/thumbnail-generator.ts",
-        "extension/src/content/url-review-status-store.ts",
-        "extension/src/content/url-template-store.ts",
-        "extension/src/content/workspace-layout-store.ts",
-        "extension/src/core/interop/runtime-state.ts",
-        "extension/src/destinations/destination-services.ts",
-        "extension/src/gallery/gallery.ts"
-      ]
-    },
-    "growth": "shrank from 550 to 356 lines",
-    "expect": {
-      "assessment": "improved",
-      "verdict": "pass",
-      "residualCriteriaAnyOf": [
-        "mixed-responsibility",
-        "duplicated-context",
-        "relocation-not-design"
-      ]
-    }
-  }
-]
+  ]
+}
