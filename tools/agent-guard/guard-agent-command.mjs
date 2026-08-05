@@ -83,6 +83,10 @@ const BLOCKED = [
     what: 'direct c8 coverage invocation',
   },
   {
+    pattern: /^(?:\w+=\S*\s+)*(?:\S*\/)?npm\s+(?:exec|x)\s+(?:-\S+\s+)*(?:\S*\/)?(?:vitest|c8|playwright|test-storybook)(?:\s|$)/u,
+    what: 'direct test-binary invocation through npm exec',
+  },
+  {
     // Headed/interactive runs open GUI windows on the shared desktop.
     pattern: /\bnpm\s+run\s+test:e2e:(ui|headed)(?![\w:-])/u,
     what: 'headed/interactive e2e run',
@@ -210,6 +214,45 @@ function endsWithShellC(scanned) {
   return false;
 }
 
+function shellHeredocBody(command, offset, body) {
+  const prefix = command.slice(0, offset);
+  const segment = prefix.split(/\|\||&&|[;\n|&]/u).at(-1).trim();
+  const tokens = segment.split(/\s+/u).filter(Boolean);
+  let i = 0;
+  if (tokens[i] === 'env') {
+    i += 1;
+    while (/^\w+=\S*$/u.test(tokens[i] ?? '')) i += 1;
+  }
+  return /(?:^|\/)(?:ba|da|z)?sh$/u.test(tokens[i] ?? '') ? `\n${body}\n` : ' ';
+}
+
+function commandSubstitutionBodies(text) {
+  const bodies = [];
+  for (let i = 0; i < text.length - 1; i += 1) {
+    if (text[i] === '\\') {
+      i += 1;
+      continue;
+    }
+    if (text[i] !== '$' || text[i + 1] !== '(') continue;
+    let depth = 1;
+    let j = i + 2;
+    for (; j < text.length && depth > 0; j += 1) {
+      if (text[j] === '\\') {
+        j += 1;
+      } else if (text[j] === '(') {
+        depth += 1;
+      } else if (text[j] === ')') {
+        depth -= 1;
+      }
+    }
+    if (depth === 0) {
+      bodies.push(text.slice(i + 2, j - 1));
+      i = j - 1;
+    }
+  }
+  return bodies;
+}
+
 function quotedWord(quoted) {
   const inner = quoted.startsWith("'") ? quoted.slice(1, -1) : quoted.slice(1, -1).replace(/\\(["\\$`])/gu, '$1');
   return /\s|[;&|]/u.test(inner) ? null : inner;
@@ -253,7 +296,10 @@ function isExecutableQuotedWord(scanned, word) {
 // `bash -c "npm run test:e2e"` is blanked before its inner text is inspected.
 export function stripInertText(command) {
   let scanned = '';
-  let rest = command.replace(/<<-?\s*(["']?)([A-Za-z_][A-Za-z0-9_]*)\1[\s\S]*?(\n\2(?=\n|$)|$)/gu, ' ');
+  let rest = command.replace(
+    /<<-?\s*(["']?)([A-Za-z_][A-Za-z0-9_]*)\1[^\n]*\n([\s\S]*?)(?:\n\2(?=\n|$)|$)/gu,
+    (match, quote, delimiter, body, offset) => shellHeredocBody(command, offset, body),
+  );
   for (let i = 0; i < 200; i += 1) {
     const match = QUOTED.exec(rest);
     if (!match) break;
@@ -263,10 +309,16 @@ export function stripInertText(command) {
     if (endsWithShellC(scanned)) {
       const inner = quoted.startsWith("'") ? quoted.slice(1, -1) : quoted.slice(1, -1).replace(/\\(["\\$`])/gu, '$1');
       rest = `${inner}${rest}`;
-    } else if (isExecutableQuotedWord(scanned, quotedWord(quoted))) {
-      scanned += quotedWord(quoted);
     } else {
-      scanned += quoted.startsWith("'") ? "''" : '""';
+      const substitutions = quoted.startsWith('"') ? commandSubstitutionBodies(quoted.slice(1, -1)) : [];
+      if (substitutions.length > 0) {
+        rest = `${substitutions.join('\n')}${rest}`;
+        scanned += '""\n';
+      } else if (isExecutableQuotedWord(scanned, quotedWord(quoted))) {
+        scanned += quotedWord(quoted);
+      } else {
+        scanned += quoted.startsWith("'") ? "''" : '""';
+      }
     }
   }
   return scanned + rest;
@@ -274,7 +326,11 @@ export function stripInertText(command) {
 
 // Codex's shell tool submits argv arrays; the patterns match command text.
 export function normalizeCommand(command) {
-  if (Array.isArray(command) && command.every((part) => typeof part === 'string')) return command.join(' ');
+  if (Array.isArray(command) && command.every((part) => typeof part === 'string')) {
+    return command
+      .map((part) => (/^[A-Za-z0-9_./:=+-]+$/u.test(part) ? part : `"${part.replace(/\\/gu, '\\\\').replace(/"/gu, '\\"').replace(/[$`]/gu, '\\$&')}"`))
+      .join(' ');
+  }
   return command;
 }
 
