@@ -1,0 +1,117 @@
+[
+  {
+    "name": "new-dual-actor",
+    "kind": "new",
+    "file": "billing/line-item-price.ts",
+    "head": {
+      "content": "line-item-price-inline.txt",
+      "importedBy": [
+        "billing/checkout-total.ts",
+        "billing/invoice-renderer.ts"
+      ]
+    },
+    "growth": "new file, 14 lines",
+    "expect": {
+      "assessment": "new-violating",
+      "verdict": "fail",
+      "criteriaAnyOf": [
+        "multiple-actors"
+      ]
+    }
+  },
+  {
+    "name": "new-focused",
+    "kind": "new",
+    "file": "billing/line-item-price.ts",
+    "head": {
+      "content": "line-item-price-policy-injected.txt",
+      "importedBy": [
+        "billing/checkout-total.ts",
+        "billing/invoice-renderer.ts"
+      ]
+    },
+    "growth": "new file, 17 lines",
+    "expect": {
+      "assessment": "new-compliant",
+      "verdict": "pass"
+    }
+  },
+  {
+    "name": "legacy-focused",
+    "kind": "legacy",
+    "file": "billing/line-item-price.ts",
+    "base": {
+      "content": "line-item-price-inline.txt",
+      "importedBy": [
+        "billing/checkout-total.ts",
+        "billing/invoice-renderer.ts"
+      ]
+    },
+    "head": {
+      "content": "line-item-price-policy-injected.txt",
+      "importedBy": [
+        "billing/checkout-total.ts",
+        "billing/invoice-renderer.ts"
+      ]
+    },
+    "growth": "grew from 14 to 17 lines",
+    "expect": {
+      "assessment": "improved",
+      "verdict": "pass"
+    }
+  },
+  {
+    "name": "legacy-dual-back",
+    "kind": "legacy",
+    "file": "billing/line-item-price.ts",
+    "base": {
+      "content": "line-item-price-policy-injected.txt",
+      "importedBy": [
+        "billing/checkout-total.ts",
+        "billing/invoice-renderer.ts"
+      ]
+    },
+    "head": {
+      "content": "line-item-price-inline.txt",
+      "importedBy": [
+        "billing/checkout-total.ts",
+        "billing/invoice-renderer.ts"
+      ]
+    },
+    "growth": "shrank from 17 to 14 lines",
+    "expect": {
+      "assessment": "regressed",
+      "verdict": "fail",
+      "criteriaAnyOf": [
+        "multiple-actors"
+      ]
+    }
+  },
+  {
+    "name": "legacy-held-dual",
+    "kind": "legacy",
+    "file": "billing/line-item-price.ts",
+    "base": {
+      "content": "line-item-price-inline.txt",
+      "importedBy": [
+        "billing/checkout-total.ts",
+        "billing/invoice-renderer.ts"
+      ]
+    },
+    "head": {
+      "content": "line-item-price-inline.txt",
+      "importedBy": [
+        "billing/checkout-total.ts",
+        "billing/invoice-renderer.ts"
+      ]
+    },
+    "growth": "unchanged at 14 lines",
+    "expect": {
+      "assessment": "held",
+      "verdict": "pass",
+      "residualCriteriaAnyOf": [
+        "multiple-actors"
+      ]
+    }
+  }
+]

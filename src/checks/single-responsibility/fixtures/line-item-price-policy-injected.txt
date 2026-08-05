@@ -1,0 +1,17 @@
+// The final price of one invoice line item. Discount, tax, and rounding
+// interact — the discount applies before VAT, and rounding happens exactly
+// once, on the taxed amount — so the sequencing is kept in one place and
+// reasoned about together. The policy values come from the pricing
+// configuration the caller owns.
+export interface PricingPolicy {
+  discountPercent: number;
+  vatRate: number;
+}
+
+export function lineItemPriceCents(listCents: number, quantity: number, policy: PricingPolicy): number {
+  const discounted = listCents * (100 - policy.discountPercent) / 100;
+  const taxed = discounted * quantity * (1 + policy.vatRate);
+  // Always round up to the whole cent, in the invoice's favor never the
+  // customer's — auditors check this direction.
+  return Math.ceil(taxed);
+}

@@ -51,4 +51,5 @@ export const checks: ReadonlyMap<string, CheckLoader> = new Map([
   ['test-honesty', async () => (await import('./test-honesty/index.ts')).check],
   ['naming-truth', async () => (await import('./naming-truth/index.ts')).check],
   ['review-readiness', async () => (await import('./review-readiness/index.ts')).check],
+  ['single-responsibility', async () => (await import('./single-responsibility/index.ts')).check],
 ]);

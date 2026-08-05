@@ -1,0 +1,14 @@
+// The final price of one invoice line item. Discount, tax, and rounding
+// interact — the discount applies before VAT, and rounding happens exactly
+// once, on the taxed amount — so the whole computation is kept in one place
+// and reasoned about together.
+const SEASONAL_PROMO_PERCENT = 15;
+const VAT_RATE = 0.19;
+
+export function lineItemPriceCents(listCents: number, quantity: number): number {
+  const discounted = listCents * (100 - SEASONAL_PROMO_PERCENT) / 100;
+  const taxed = discounted * quantity * (1 + VAT_RATE);
+  // Always round up to the whole cent, in the invoice's favor never the
+  // customer's — auditors check this direction.
+  return Math.ceil(taxed);
+}
