@@ -60,11 +60,13 @@ function comparisonOf(fixture: Fixture): Comparison {
 }
 
 /** A judged finding satisfies an expectation when the criterion is one of
- * the allowed labels and the symbol matches (substring either way covers
- * spellings like `getUser` vs `getUser()`). */
+ * the allowed labels and the symbol matches exactly, modulo the call-parens
+ * spelling (`getUser` vs `getUser()`) — substring matching would let a wrong
+ * symbol like `getUserOrThrow` satisfy `getUser` (Copilot review, PR #31). */
+const canonicalSymbol = (symbol: string): string => symbol.replace(/\(\)$/, '');
 function matches(found: NamingViolation[], expected: ExpectedFinding[]): boolean {
   return expected.every((want) =>
-    found.some((f) => want.criteriaAnyOf.includes(f.criterion) && (f.symbol.includes(want.symbol) || want.symbol.includes(f.symbol))),
+    found.some((f) => want.criteriaAnyOf.includes(f.criterion) && canonicalSymbol(f.symbol) === canonicalSymbol(want.symbol)),
   );
 }
 
