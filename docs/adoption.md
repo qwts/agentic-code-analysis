@@ -13,17 +13,17 @@ it passes the ratchet AND the semantic check.
   "include": ["src/**"],
   "exclude": ["src/generated/**", "**/*.lock"],
   "tiers": {
-    "T1": { "provider": "anthropic", "model": "claude-opus-5" }
+    "T1": { "provider": "anthropic", "model": "<model id>" }
   }
 }
 ```
 
 - `include`/`exclude`: the guarded source globs. Exclude generated files,
   vendored copies, and lockfiles — judging them wastes spend.
-- `tiers`: provider/model per tier from the routing registry (ENG-0151);
-  `context-footprint` and `doc-drift` both declare T1 (the CI step below
-  applies to either check — swap the check name). `ACA_PROVIDER`/`ACA_MODEL`
-  env vars override for one-off runs.
+- `tiers`: provider/model per tier from the routing registry (ENG-0151). All
+  built-in checks currently declare T1 (the CI step below applies to any check
+  — swap the check name). `ACA_PROVIDER`/`ACA_MODEL` env vars override for
+  one-off runs.
 - Per-check sections nest under `checks`: `doc-drift` reads its document
   globs from `checks.doc-drift.include`/`exclude` (default `README.md` +
   `docs/**/*.md`; a configured include replaces the default, and an empty
@@ -33,12 +33,11 @@ it passes the ratchet AND the semantic check.
   hard-excluded regardless of globs. The top-level globs keep meaning
   "guarded source" — for `doc-drift` they scope which *changed code* is
   worth checking docs against, not which docs are read.
-- Zero-egress option — **requires the adapters from issue #5
-  ([PR #9](https://github.com/qwts/agentic-code-analysis/pull/9)); until that
-  merges, `anthropic` is the only routable provider**:
-  `{ "provider": "local", "model": "<loaded model>" }` judges against an
-  OpenAI-compatible server on the runner (`ACA_LOCAL_BASE_URL`, default LM
-  Studio's `http://localhost:1234/v1`) — no file content leaves the machine.
+- Supported providers are `anthropic` (`ANTHROPIC_API_KEY`), `openai`
+  (`OPENAI_API_KEY`), and `local`. The zero-egress local route
+  (`{ "provider": "local", "model": "<loaded model id>" }`) judges against
+  an OpenAI-compatible server on the runner (`ACA_LOCAL_BASE_URL`, default
+  `http://localhost:1234/v1`) and requires no credential.
 
 ## 2. CI step (advisory)
 
@@ -58,15 +57,18 @@ jobs:
         with:
           repository: qwts/agentic-code-analysis
           ref: <pin a commit sha>
-          path: .aca
+          path: .tools/aca
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: 24
-      - run: npm --prefix .aca clean-install
-      - run: node .aca/src/cli.ts context-footprint --base origin/main
+      - run: npm --prefix .tools/aca clean-install
+      - run: node .tools/aca/src/cli.ts context-footprint --base origin/main
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
 ```
+
+The `.tools/aca` checkout path avoids colliding with the consuming repository's
+`.aca/` directory, which ACA reserves for check-local evidence sidecars.
 
 Behavior you can rely on (exit-code contract, ACA-0003 D3):
 
@@ -83,9 +85,9 @@ Behavior you can rely on (exit-code contract, ACA-0003 D3):
   cache, D7 as extended by ACA-0013 — a moving merge-base does not re-bill);
   add `.cache/aca/` to the runner's cache action to carry it between runs
   (that exact subdirectory — `.cache/` would sweep up unrelated tooling).
-  Observed spend: calibration + a 6-file change = $0.32 at T1
-  (2026-08-04, claude-opus-5, prompt v1; v2 sends base+head for legacy
-  files, roughly doubling those files' input tokens).
+  Observed spend: calibration + a 6-file change = $0.32 at the then-configured
+  T1 route (2026-08-04, prompt v1; v2 sends base+head for legacy files,
+  roughly doubling those files' input tokens).
 - `context-footprint` verdicts are comparative
   ([ACA-0013](decisions/ACA-0013-comparative-judgment.md)): a new file
   violating the rule fails; a legacy file made worse fails; a legacy file
