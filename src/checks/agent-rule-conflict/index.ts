@@ -10,7 +10,7 @@ import type { JudgeClient } from '../../core/judge-client.ts';
 import { VerdictCache } from '../../core/verdict-cache.ts';
 import { defaultEstimator, discoverInstructionCorpus } from '../../corpora/instructions/index.ts';
 import { buildArtifact, serializePayload, slice, type ConflictArtifact } from './artifact.ts';
-import { ASSESSMENTS, MAX_TOKENS, PROMPT_VERSION, systemPrompt, userPrompt, verdictSchema } from './judge-io.ts';
+import { ASSESSMENTS, CRITERIA, MAX_TOKENS, PROMPT_VERSION, RESOLUTIONS, systemPrompt, userPrompt, verdictSchema } from './judge-io.ts';
 import { PLAN_VERSION, planPartitions, type Partition } from './partition.ts';
 import { CORPUS_ROW, POLICY_VERSION, toVerdicts, validatePartition, type ConflictVerdict, type PartitionOutcome, type PartitionResult } from './outcome.ts';
 import { CONCURRENCY, mapPool } from './pool.ts';
@@ -27,15 +27,41 @@ function cacheKey(partition: Partition, payload: string, estimator: string, clie
   return VerdictCache.key([PROMPT_VERSION, PLAN_VERSION, POLICY_VERSION, partition.kind, payload, estimator, client.provider, client.model]);
 }
 
-/** Guard for cache reads: a corrupted entry must re-judge, never crash. */
+/** Guard for cache reads: a corrupted entry must re-judge, never crash —
+ * downstream attribution reads every RuleRef field, so each conflict is
+ * checked to the same depth validation produced it at. */
 function isOutcome(value: unknown): value is PartitionOutcome {
   const outcome = value as PartitionOutcome;
+  const isRef = (ref: unknown): boolean => {
+    const r = ref as { sourceId: unknown; file: unknown; startLine: unknown; endLine: unknown; offset: unknown; quote: unknown };
+    return (
+      typeof r === 'object' &&
+      r !== null &&
+      typeof r.sourceId === 'string' &&
+      typeof r.file === 'string' &&
+      typeof r.startLine === 'number' &&
+      typeof r.endLine === 'number' &&
+      typeof r.offset === 'number' &&
+      typeof r.quote === 'string'
+    );
+  };
   return (
     typeof outcome === 'object' &&
     outcome !== null &&
     (ASSESSMENTS as readonly string[]).includes(outcome.assessment) &&
     typeof outcome.note === 'string' &&
-    Array.isArray(outcome.conflicts)
+    Array.isArray(outcome.conflicts) &&
+    outcome.conflicts.every(
+      (c) =>
+        typeof c === 'object' &&
+        c !== null &&
+        (CRITERIA as readonly string[]).includes(c.criterion) &&
+        isRef(c.ruleA) &&
+        isRef(c.ruleB) &&
+        typeof c.explanation === 'string' &&
+        (RESOLUTIONS as readonly string[]).includes(c.resolution) &&
+        typeof c.suggestion === 'string',
+    )
   );
 }
 

@@ -72,6 +72,19 @@ test('a different corpus, provider, or model misses the cache', async () => {
   assert.equal(cache.store.size, 3);
 });
 
+test('a corrupted cache entry re-judges instead of crashing attribution', async () => {
+  const cache = memoryCache();
+  await judgeCorpus(CROSS_FILE, fakeClient([crossFileReply()]), cache, []);
+  const [key] = [...cache.store.keys()];
+  // Structurally plausible envelope whose conflict lacks RuleRef fields —
+  // exactly what a hand-edited or stale-schema entry looks like.
+  cache.store.set(key!, { assessment: 'conflicts-found', note: 'rs', conflicts: [{ criterion: 'direct-contradiction' }] });
+  const retry = fakeClient([crossFileReply()]);
+  const verdicts = await judgeCorpus(CROSS_FILE, retry, cache, []);
+  assert.equal(retry.requests.length, 1);
+  assert.equal(verdicts.find((v) => v.file === CORPUS_ROW)!.partitions![0]!.status, 'judged');
+});
+
 test('degraded replies warn and are never cached', async () => {
   const client = fakeClient([{ ok: false, note: 'judge refused' }]);
   const cache = memoryCache();

@@ -178,8 +178,10 @@ artifact → partition → judge → policy path per tree.
 - `scoped-override` — nested AGENTS.md explicitly superseding the root rule
   for its subtree under verified precedence → clean `pass` (the negative
   control: hierarchy is not conflict);
-- `cross-tool` — CLAUDE.md vs a Cursor always-apply rule, no session loads
-  both → `warn`/`cross-tool-divergence` with empty `sessionsLoadingBoth`.
+- `cross-tool` — `.github/copilot-instructions.md` vs a Cursor always-apply
+  rule, no session loads both (CLAUDE.md is deliberately unusable here:
+  `cursor-cli` co-loads it with Cursor rules) → `warn`/`cross-tool-divergence`
+  with empty `sessionsLoadingBoth`.
 
 The oracle asserts assessment, effective verdict, criterion, grounded
 quotes, shared-session emptiness/non-emptiness, and resolution shape — not
