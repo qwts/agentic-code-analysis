@@ -64,11 +64,20 @@ Behavior you can rely on (exit-code contract, ACA-0003 D3):
 - Secret unset → one line (`context-footprint: skipped — no anthropic
   credentials resolve`), still exit 0. CI can distinguish "code is fine"
   from "judge never ran" the day it promotes to `--enforce` (exit 78).
-- Unchanged files across pushes cost zero API calls (verdict cache, D7);
+- Unchanged semantic pairs across pushes cost zero API calls (verdict
+  cache, D7 as extended by ACA-0013 — a moving merge-base does not re-bill);
   add `.cache/aca/` to the runner's cache action to carry it between runs
   (that exact subdirectory — `.cache/` would sweep up unrelated tooling).
   Observed spend: calibration + a 6-file change = $0.32 at T1
-  (2026-08-04, claude-opus-5).
+  (2026-08-04, claude-opus-5, prompt v1; v2 sends base+head for legacy
+  files, roughly doubling those files' input tokens).
+- Verdicts are comparative
+  ([ACA-0013](decisions/ACA-0013-comparative-judgment.md)): a new file
+  violating the rule fails; a legacy file made worse fails; a legacy file
+  improved or held passes even while still violating, with the remaining
+  debt named as **residual** findings
+  (`pass (footprint improved; residual debt)` in text; `assessment` and
+  `residualViolations` in `--json`). Residuals never block `--enforce`.
 
 ## 3. Local dev loop
 
@@ -77,6 +86,30 @@ node path/to/agentic-code-analysis/src/cli.ts context-footprint src/thing.ts
 ```
 
 Explicit paths bypass diff selection; same verdicts, same cache.
+
+## Scheduling residual debt (consumer contract)
+
+Residual debt should be scheduled, not ambient. ACA stays a
+platform-neutral verdict emitter — no GitHub tokens, issue search/creation,
+or PR commenting, and no mutable issue URLs inside cached verdicts. A repo
+that wants residuals turned into tracked cleanup work runs its own trusted,
+least-privilege workflow over the `--json` output, with this contract:
+
+- Deduplicate **one** cleanup issue per `check + normalized repo-relative
+  path`, keyed by an exact machine-readable marker in the issue body (e.g.
+  `<!-- aca:context-footprint:src/background/messages.ts -->`); search for
+  the marker before creating, never create-or-comment on every run. When a
+  verdict carries `basePath` (a rename), retain the base path as an alias
+  of the same issue rather than opening a second one.
+- On later PRs whose residuals match an existing marker, surface a pointer
+  to that issue instead of restating the debt — nobody is taxed twice for
+  a file they didn't make worse.
+- Reconciliation failure (missing token, rate limit) is an integration
+  signal for that workflow, never a semantic-check failure; the aca step's
+  exit code must not depend on it.
+
+The GitHub reconciler itself belongs in the consuming repo or its playbook,
+as a follow-up there.
 
 ## Promotion to `--enforce`
 

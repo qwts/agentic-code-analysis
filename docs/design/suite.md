@@ -104,19 +104,21 @@ consuming repo's `aca.config.json`: `include` globs (its guarded source),
 `exclude` globs (generated files, vendored copies, lockfiles). Explicit paths
 on the CLI bypass diff selection for local iteration.
 
-### Verdict cache (decision D7)
+### Verdict cache (decision D7, key extended by ACA-0013)
 
-`.cache/aca/<check>/` (gitignored), keyed
-`sha256(file content ‖ sorted import paths ‖ sorted imported-by paths ‖ rule text ‖ prompt version ‖ provider ‖ model id)`.
+`.cache/aca/<check>/` (gitignored), keyed on every semantic input to the
+comparative judgment:
+`sha256(comparison kind ‖ base path+content+import edges (or an explicit absent-base marker) ‖ head path+content+import edges ‖ rule text ‖ prompt version ‖ provider ‖ model id)`.
 The import edges are in the key because the verdict depends on them (review
 finding, PR #1): a new importer changes the footprint question even when the
-file's content is unchanged. Diff hunks and the growth line are deliberately
-*excluded* — they are orientation, not semantic state, and they change
-whenever the merge-base moves; keying on them would re-bill every file on
-every push and defeat the guarantee. So: semantically unchanged files across
-runs cost zero API calls — verifiably, cache hits are observable in `--json`
-output. Iterating on the judge prompt invalidates the cache by construction;
-that re-billing spike is accepted.
+file's content is unchanged. The base ref/SHA, diff hunks, and line counts
+are deliberately *excluded* — identity-independent or derived from the
+snapshots; keying on them would re-bill every file whenever the merge-base
+moves and defeat the guarantee. So: the same semantic pair across runs costs
+zero API calls even as the merge-base moves, while the same head against a
+*different* base is rejudged — verifiably, cache hits are observable in
+`--json` output. Iterating on the judge prompt invalidates the cache by
+construction; that re-billing spike is accepted.
 
 ### Exit codes (decision D3)
 
@@ -144,6 +146,10 @@ not in the ENG series):
 - **[ACA-0004](../decisions/ACA-0004-context-footprint-judgment.md)** —
   judgment semantics: D5 file-as-it-stands with load-set accounting,
   D8 fixture-gated prompts.
+- **[ACA-0013](../decisions/ACA-0013-comparative-judgment.md)** —
+  comparative judgment (2026-08-05): direction of change for legacy files,
+  residual debt as structured nonblocking findings, pair-addressed cache
+  key. Supersedes D5's absolute state for legacy files.
 
 ## Security posture (ENG-0012 priority 1)
 

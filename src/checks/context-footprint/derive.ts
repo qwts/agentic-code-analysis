@@ -1,20 +1,13 @@
-// Static derivations for the per-file judge payload (check design, "Judge
-// input"): import paths, imported-by paths, diff hunks, growth line. Paths
-// only, never contents — they exist so the judge reasons about footprint
-// instead of guessing from content alone.
-import { execFileSync } from 'node:child_process';
+// Import-graph derivations for the judge payload (check design, "Judge
+// input"): import paths and imported-by paths, per snapshot. Paths only,
+// never contents — they exist so the judge reasons about footprint instead
+// of guessing from content alone. Git snapshot assembly lives in
+// comparison.ts; this module never runs git.
 import { readFileSync } from 'node:fs';
 import { dirname, join, normalize } from 'node:path';
 
-export interface FileFacts {
-  imports: string[];
-  importedBy: string[];
-  hunks: string;
-  growth: string;
-}
-
 const SPECIFIER = /(?:^|\n)\s*(?:import|export)\s[^;'"]*?from\s*['"]([^'"]+)['"]|(?:^|\n)\s*import\s*['"]([^'"]+)['"]|\bimport\s*\(\s*['"]([^'"]+)['"]\s*\)/g;
-const CODE_EXT = /\.(?:ts|tsx|mts|cts|js|jsx|mjs|cjs)$/;
+export const CODE_EXT = /\.(?:ts|tsx|mts|cts|js|jsx|mjs|cjs)$/;
 
 export function importSpecifiers(content: string): string[] {
   const found: string[] = [];
@@ -38,21 +31,29 @@ export function importsOf(file: string, content: string): string[] {
   return [...new Set(importSpecifiers(content).map((spec) => resolveSpecifier(file, spec)))].sort();
 }
 
-/**
- * One pass over the repo builds the reverse import graph; per-file lookups
- * are then O(1). Scanning per changed file instead would be
- * O(changed × repo) sync I/O (review finding, PR #8).
- */
-export function buildImporterIndex(repoRoot: string, repoFiles: string[]): Map<string, string[]> {
-  const index = new Map<string, string[]>();
-  for (const candidate of repoFiles) {
-    if (!CODE_EXT.test(candidate)) continue;
-    let content: string;
+/** Read the code files of one snapshot once; both graph builds and the
+ * per-file judge payloads draw from this map instead of re-reading disk. */
+export function readContents(repoRoot: string, files: string[]): Map<string, string> {
+  const contents = new Map<string, string>();
+  for (const file of files) {
+    if (!CODE_EXT.test(file)) continue;
     try {
-      content = readFileSync(join(repoRoot, candidate), 'utf8');
+      contents.set(file, readFileSync(join(repoRoot, file), 'utf8'));
     } catch {
       continue;
     }
+  }
+  return contents;
+}
+
+/**
+ * One pass over a snapshot's contents builds the reverse import graph;
+ * per-file lookups are then O(1). Scanning per changed file instead would be
+ * O(changed × repo) sync I/O (review finding, PR #8).
+ */
+export function buildImporterIndex(contents: ReadonlyMap<string, string>): Map<string, string[]> {
+  const index = new Map<string, string[]>();
+  for (const [candidate, content] of contents) {
     for (const spec of new Set(importSpecifiers(content))) {
       const resolved = comparable(resolveSpecifier(candidate, spec));
       const importers = index.get(resolved) ?? [];
@@ -67,46 +68,4 @@ export function buildImporterIndex(repoRoot: string, repoFiles: string[]): Map<s
 export function importedBy(index: Map<string, string[]>, file: string): string[] {
   const target = normalize(file);
   return (index.get(comparable(target)) ?? []).filter((importer) => importer !== target);
-}
-
-function git(repoRoot: string, args: string[]): string {
-  // stderr is piped, not inherited: an absent path at the merge-base is
-  // expected control flow (new file), and findings-only output (D4) must not
-  // carry git's noise.
-  return execFileSync('git', args, { cwd: repoRoot, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] });
-}
-
-export function repoFiles(repoRoot: string): string[] {
-  return git(repoRoot, ['ls-files']).split('\n').filter(Boolean);
-}
-
-function lineCount(text: string): number {
-  if (text === '') return 0;
-  return text.split('\n').length - (text.endsWith('\n') ? 1 : 0);
-}
-
-/** Diff hunks and the growth line for one file vs the merge-base of baseRef. */
-export function changeFacts(repoRoot: string, baseRef: string, file: string, content: string): { hunks: string; growth: string } {
-  const lines = lineCount(content);
-  let base: string | undefined;
-  try {
-    base = git(repoRoot, ['merge-base', baseRef, 'HEAD']).trim();
-  } catch {
-    return { hunks: '', growth: `${lines} lines (no diff base)` };
-  }
-  let hunks = '';
-  try {
-    const diff = git(repoRoot, ['diff', base, '--', file]);
-    hunks = diff.slice(diff.indexOf('@@'));
-    if (!diff.includes('@@')) hunks = '';
-  } catch {
-    hunks = '';
-  }
-  try {
-    const before = lineCount(git(repoRoot, ['show', `${base}:${file}`]));
-    if (before === lines) return { hunks, growth: `unchanged at ${lines} lines` };
-    return { hunks, growth: `${before < lines ? 'grew' : 'shrank'} from ${before} to ${lines} lines` };
-  } catch {
-    return { hunks, growth: `new file, ${lines} lines` };
-  }
 }
