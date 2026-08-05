@@ -31,10 +31,19 @@ interface ChangeStatus {
   renamedFrom: Map<string, string>;
 }
 
+// A hung git (e.g. a stale index lock) must fail the run, not occupy it
+// forever (failure-posture missing-timeout, backported from that check's
+// fork of this module).
+const GIT_TIMEOUT_MS = 60_000;
+
+// execFileSync's default 1 MiB maxBuffer would turn `git show` of a large
+// base blob into a spurious integrity fault (Codex review, PR #39).
+const GIT_MAX_BUFFER_BYTES = 256 * 1024 * 1024;
+
 function git(repoRoot: string, args: string[]): string {
   // stderr piped, not inherited: findings-only output (D4) must not carry
   // git's noise.
-  return execFileSync('git', args, { cwd: repoRoot, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] });
+  return execFileSync('git', args, { cwd: repoRoot, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'], timeout: GIT_TIMEOUT_MS, maxBuffer: GIT_MAX_BUFFER_BYTES });
 }
 
 export function repoFiles(repoRoot: string): string[] {
@@ -119,8 +128,15 @@ export function buildComparisons(repoRoot: string, baseRef: string, files: strin
     // (Codex review, PR #29).
     if (!CODE_EXT.test(path)) continue;
     const content = showBase(path);
-    if (content === undefined) baseContents.delete(path);
-    else baseContents.set(path, content);
+    if (content === undefined) {
+      // Every path here existed at the merge-base (the diff said so), so a
+      // failed read is a transient/integrity fault. Judging on a silently
+      // thinned base graph would cache verdicts built on wrong evidence
+      // (failure-posture swallowed-failure, backported from that check's
+      // fork of this module).
+      throw new ConfigError(`cannot read ${path} at the merge-base; the repository may need a fetch or fsck`);
+    }
+    baseContents.set(path, content);
   }
   const baseIndex = buildImporterIndex(baseContents);
 
