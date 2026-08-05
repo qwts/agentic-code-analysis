@@ -34,7 +34,15 @@ it passes the ratchet AND the semantic check.
   "guarded source" — for `doc-drift` they scope which *changed code* is
   worth checking docs against, not which docs are read.
 - Supported providers are `anthropic` (`ANTHROPIC_API_KEY`), `openai`
-  (`OPENAI_API_KEY`), and `local`. The zero-egress local route
+  (`OPENAI_API_KEY`), `qwen` (`QWEN_API_KEY` plus the matching
+  `QWEN_BASE_URL`), and `local`. Qwen keys and endpoints vary by account plan,
+  so both variables are explicit; ACA never borrows the OpenAI settings or
+  guesses a Qwen endpoint. Its dedicated adapter uses Qwen's documented
+  answer-only `max_tokens` and a deterministic `thinking_budget` equal to the
+  check's visible-answer allowance. There is no runtime reasoning knob; see
+  [ACA-0064](decisions/ACA-0064-qwen-reasoning-budgets.md) and Qwen's
+  [Chat API](https://docs.qwencloud.com/api-reference/chat/openai-chat).
+  The zero-egress local route
   (`{ "provider": "local", "model": "<loaded model id>" }`) judges against
   an OpenAI-compatible server on the runner (`ACA_LOCAL_BASE_URL`, default
   `http://localhost:1234/v1`) and requires no credential.

@@ -17,11 +17,12 @@ the check issue — rather than one issue per decision.
 
 | ID | Title | Status |
 | --- | --- | --- |
-| [ACA-0003](ACA-0003-suite-contracts.md) | Suite contracts — CLI shape, JudgeClient, exit codes, output, model routing, verdict cache (D1–D4, D6, D7) | Accepted; D7 key extended by ACA-0013 |
+| [ACA-0003](ACA-0003-suite-contracts.md) | Suite contracts — CLI shape, JudgeClient, exit codes, output, model routing, verdict cache (D1–D4, D6, D7) | Accepted; D2/D6 extended by ACA-0064; D7 key extended by ACA-0013 |
 | [ACA-0004](ACA-0004-context-footprint-judgment.md) | Context-footprint judgment — file-as-it-stands, load-set accounting, fixture-gated prompts (D5, D8) | Accepted; D5 superseded for legacy files by ACA-0013; D8 graded by ACA-0012 |
-| [ACA-0011](ACA-0011-gate-down-classification.md) | Gate-down classification — judge auth/quota rejection stops the run, exit 78 | Accepted |
+| [ACA-0011](ACA-0011-gate-down-classification.md) | Gate-down classification — judge auth/quota rejection stops the run, exit 78 | Accepted; Qwen's ambiguous 429 shape extended by ACA-0064 |
 | [ACA-0012](ACA-0012-graded-calibration.md) | Graded calibration — qualification levels, validated exam, machine-readable evidence | Accepted |
 | [ACA-0013](ACA-0013-comparative-judgment.md) | Comparative judgment — direction of change for legacy files, pair-addressed cache | Accepted |
 | [ACA-0014](ACA-0014-naming-truth.md) | naming-truth — behavioral contract, three lies, host-enforced comparative mapping | Accepted |
 | [ACA-0020](ACA-0020-diff-fixture-corpus.md) | Diff-fixture corpus and the canonical diff artifact — pair fixtures, diff judge I/O convention | Accepted |
 | [ACA-0023](ACA-0023-agent-context-check-architecture.md) | Agent-context check architecture — independent checks over a shared evidence library; supersedes ACA-0003 D1's "exactly three libraries" | Accepted |
+| [ACA-0064](ACA-0064-qwen-reasoning-budgets.md) | Qwen reasoning budgets — visible answer bound, deterministic hidden-reasoning bound, frozen JudgeClient | Accepted |

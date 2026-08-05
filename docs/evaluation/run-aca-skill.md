@@ -96,3 +96,15 @@ known-good fixture (44.10s); and Opus progressed from foundation on v1/v2/v3
 (62.05s, 61.38s, 52.51s) to coverage on v4 (55.91s) and boundaries on v5.
 One Kimi K2.6 attempt was terminated without a result after 218.77 seconds and
 is not qualification evidence.
+
+Later `qwen3.8-max-preview` screening isolated the transport-budget effect.
+Default thinking consumed the shared 4,096-token completion allowance and
+returned no verdict after 102.13 seconds. No-thinking and bounded-thinking
+routes both achieved only `foundation` against required `boundaries`; the
+bounded-thinking run took 66.59 seconds. The dedicated adapter decision in
+[ACA-0064](../decisions/ACA-0064-qwen-reasoning-budgets.md) prevents hidden
+reasoning from consuming the visible JSON-answer allowance, but it does not
+turn that measured semantic miss into a qualification. The route remains
+unqualified. Direct post-implementation validation, with no proxy, completed
+in 65.20 seconds: strict-schema transport succeeded, one of four coverage
+controls passed, three missed, and the route again achieved only `foundation`.
