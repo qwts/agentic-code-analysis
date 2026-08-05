@@ -147,9 +147,12 @@ const TAMPERING = [
 // blocked one in the next. Quotes are already blanked by stripInertText, so
 // these separators are structural rather than incidental text.
 export function splitSegments(command) {
+  const REDIRECTION_AMPERSAND = '\0';
   return command
+    .replace(/(\d*>)&(?=\d|-)/gu, `$1${REDIRECTION_AMPERSAND}`)
+    .replace(/&(?=>>?)/gu, REDIRECTION_AMPERSAND)
     .split(/\|\||&&|[;\n|&]/u)
-    .map((segment) => segment.trim())
+    .map((segment) => segment.replaceAll(REDIRECTION_AMPERSAND, '&').trim())
     .filter(Boolean);
 }
 

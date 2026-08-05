@@ -48,7 +48,7 @@ export function parseVmStat(output) {
   const speculative = pages('Pages speculative');
   const inactive = pages('Pages inactive');
   const purgeable = pages('Pages purgeable');
-  const compressed = pages('Pages occupying compressor');
+  const compressed = pages('Pages occupied by compressor') || pages('Pages occupying compressor');
   return {
     pageSize,
     availableMb: toMb((free + speculative + inactive + purgeable) * pageSize),

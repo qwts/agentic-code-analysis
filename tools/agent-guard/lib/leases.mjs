@@ -46,7 +46,7 @@ function parseLease(raw) {
   for (const field of CORE_LEASE_FIELDS) {
     if (value[field] === undefined) return null;
   }
-  if (!Number.isFinite(value.pid) || !Number.isFinite(value.estimatedMb)) return null;
+  if (!Number.isInteger(value.pid) || value.pid <= 0 || !Number.isFinite(value.estimatedMb) || value.estimatedMb <= 0) return null;
   return value;
 }
 
