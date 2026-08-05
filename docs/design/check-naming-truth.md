@@ -2,8 +2,8 @@
 
 **Status:** Accepted (issue #14, [ACA-0014](../decisions/ACA-0014-naming-truth.md));
 comparative semantics inherited from
-[ACA-0013](../decisions/ACA-0013-comparative-judgment.md). Second check of
-the suite; consumes the [suite design](suite.md) contracts (JudgeClient,
+[ACA-0013](../decisions/ACA-0013-comparative-judgment.md). Third check of
+the suite (failure-posture landed second while this was in review); consumes the [suite design](suite.md) contracts (JudgeClient,
 change scope, verdict cache, exit codes) and adds only what is specific to
 this check.
 

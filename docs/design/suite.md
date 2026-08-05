@@ -69,7 +69,7 @@ src/
   checks/
     registry.ts           check contract + name -> loader map (one entry per check)
     context-footprint/    first check — prompt, schema, verdict mapping, fixtures
-    naming-truth/         second check — same shape, forked mechanics (checks stay independent)
+    naming-truth/         later check — same shape, forked mechanics (checks stay independent)
 ```
 
 Language (decided 2026-08-04, issue #3): TypeScript 7 on Node ≥ 24 —

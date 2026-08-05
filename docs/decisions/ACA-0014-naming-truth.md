@@ -13,7 +13,7 @@ semantics, pair-addressed cache) — inherited, not varied.
 Names that lie — `getUser()` that mutates, `isValid` that throws, names
 describing a function three refactors ago — are the highest-tax
 maintainability defect no mechanical tool can see: a linter checks a name's
-format, never its truth. Backlog top-10 promoted this as the second check
+format, never its truth. Backlog top-10 promoted this as an early check
 (issue #14) because it reuses the calibrated-judge pattern end to end and
 its evidence is file-shaped. Judging legacy files absolutely would recreate
 the adoption tax ACA-0013 removed: a correct finding about an old
@@ -68,7 +68,7 @@ lie, not the throw.
 
 ## Consequences
 
-The suite gains its second calibrated judge with zero shared-library
+The suite gains another calibrated judge with zero shared-library
 growth: comparison/import mechanics are forked from context-footprint and
 trimmed (no growth line — line counts are footprint orientation), accepting
 ~200 lines of duplication to keep checks independent (ACA-0003 D1). The
