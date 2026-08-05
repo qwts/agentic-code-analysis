@@ -1,0 +1,43 @@
+// Publishes pipeline run status to the coordinator and waits for the ack.
+// Failure is bounded and surfaced: per-attempt deadline, caller cancellation,
+// capped jittered backoff, and a final error carrying the last cause.
+const COORDINATOR_URL = 'https://coordinator.internal/api/v1/status';
+const MAX_ATTEMPTS = 5;
+const ATTEMPT_TIMEOUT_MS = 3_000;
+const BASE_DELAY_MS = 200;
+const MAX_DELAY_MS = 5_000;
+
+export interface StatusUpdate {
+  runId: string;
+  state: 'running' | 'succeeded' | 'failed';
+  detail?: string;
+}
+
+const sleep = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms));
+
+export async function publishStatus(update: StatusUpdate, signal?: AbortSignal): Promise<void> {
+  const body = JSON.stringify(update);
+  let lastError: unknown;
+  for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt += 1) {
+    const deadline = AbortSignal.timeout(ATTEMPT_TIMEOUT_MS);
+    try {
+      const response = await fetch(COORDINATOR_URL, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body,
+        signal: signal ? AbortSignal.any([signal, deadline]) : deadline,
+      });
+      if (!response.ok) throw new Error(`coordinator rejected status update: HTTP ${response.status}`);
+      const ack = (await response.json()) as { accepted?: boolean };
+      if (ack.accepted !== true) throw new Error('coordinator did not acknowledge the status update');
+      return;
+    } catch (err) {
+      lastError = err;
+      if (signal?.aborted || attempt === MAX_ATTEMPTS) break;
+      // Capped exponential backoff with full jitter over the upper half.
+      const cap = Math.min(MAX_DELAY_MS, BASE_DELAY_MS * 2 ** (attempt - 1));
+      await sleep(cap / 2 + Math.random() * (cap / 2));
+    }
+  }
+  throw new Error(`status publish for run ${update.runId} failed after ${MAX_ATTEMPTS} attempt(s)`, { cause: lastError });
+}
