@@ -92,6 +92,27 @@ test('--self-test without credentials exits 78 even without --enforce', async ()
   assert.equal(await run(['fake', '--self-test'], noCreds), EXIT.noCredentials);
 });
 
+test('a residual pass renders as a finding and counts separately; clean passes stay silent', async () => {
+  const residualPass: FileVerdict & { residualViolations: unknown } = {
+    ...PASS,
+    note: 'footprint improved; residual debt',
+    residualViolations: [{ criterion: 'duplicated-context', evidence: 'guard enumeration', suggestion: 'move guards to their domains' }],
+  };
+  const out: string[] = [];
+  await run(['fake', 'a.ts'], deps([residualPass, { ...PASS, file: 'b.ts' }], out));
+  assert.ok(out.some((l) => l.includes('a.ts: pass (footprint improved; residual debt)')));
+  assert.ok(out.some((l) => l.includes('residual duplicated-context: guard enumeration -> move guards to their domains')));
+  assert.ok(!out.some((l) => l.startsWith('b.ts:')), 'clean pass stays silent');
+  assert.match(out.at(-1)!, /2 file\(s\), 0 fail, 0 warn, 1 residual/);
+});
+
+test('a malformed residualViolations value renders as no residuals, never a crash', async () => {
+  const malformed = { ...PASS, residualViolations: { bogus: true } } as FileVerdict;
+  const out: string[] = [];
+  assert.equal(await run(['fake', 'a.ts'], deps([malformed], out)), EXIT.ok);
+  assert.match(out.at(-1)!, /1 file\(s\), 0 fail, 0 warn$/);
+});
+
 test('--json emits cache visibility per verdict', async () => {
   const out: string[] = [];
   await run(['fake', 'a.ts', '--json'], deps([PASS], out));

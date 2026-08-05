@@ -5,7 +5,7 @@
 import { parseArgs } from 'node:util';
 import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
-import { checks, type CheckLoader, type FileVerdict } from './checks/registry.ts';
+import { checks, type CheckLoader, type FileVerdict, type Violation } from './checks/registry.ts';
 import { changedFiles, filterScope, repoRoot } from './core/change-scope.ts';
 import { ConfigError, loadConfig, resolveTier } from './core/config.ts';
 import { createJudgeClient, MissingCredentialsError, type JudgeClient } from './core/judge-client.ts';
@@ -116,6 +116,12 @@ export async function run(argv: string[], deps?: Partial<RunDeps>): Promise<numb
   }
 }
 
+/** Render-local view of the optional nonblocking-debt field a check's
+ * verdict subtype may carry (ACA-0013); the shared contract stays narrow. */
+interface RenderedVerdict extends FileVerdict {
+  residualViolations?: Violation[];
+}
+
 function render(
   verdicts: FileVerdict[],
   meta: { check: string; provider: string; model: string; json: boolean },
@@ -125,17 +131,27 @@ function render(
     d.stdout(JSON.stringify({ ...meta, json: undefined, verdicts }));
     return;
   }
-  for (const v of verdicts) {
-    if (v.verdict === 'pass') continue;
+  let residualFiles = 0;
+  for (const v of verdicts as RenderedVerdict[]) {
+    // The field is duck-typed, not part of the shared contract — a check
+    // returning a malformed value must degrade to "no residuals", not crash.
+    const residuals = Array.isArray(v.residualViolations) ? v.residualViolations : [];
+    if (residuals.length > 0) residualFiles += 1;
+    // A residual pass is a finding; only clean passes stay silent.
+    if (v.verdict === 'pass' && residuals.length === 0) continue;
     const note = v.note ? ` (${v.note})` : '';
     d.stdout(`${v.file}: ${v.verdict}${note}`);
     for (const violation of v.violations) {
       d.stdout(`  ${violation.criterion}: ${violation.evidence} -> ${violation.suggestion}`);
     }
+    for (const violation of residuals) {
+      d.stdout(`  residual ${violation.criterion}: ${violation.evidence} -> ${violation.suggestion}`);
+    }
   }
   const fails = verdicts.filter((v) => v.verdict === 'fail').length;
   const warns = verdicts.filter((v) => v.verdict === 'warn').length;
-  d.stdout(`${meta.check}: ${verdicts.length} file(s), ${fails} fail, ${warns} warn`);
+  const residual = residualFiles > 0 ? `, ${residualFiles} residual` : '';
+  d.stdout(`${meta.check}: ${verdicts.length} file(s), ${fails} fail, ${warns} warn${residual}`);
 }
 
 const invokedDirectly = process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href;

@@ -1,12 +1,14 @@
 # Design: `aca context-footprint`
 
-**Status:** Proposed. First check of the suite; consumes the
-[suite design](suite.md) contracts (JudgeClient, change scope, verdict cache,
-exit codes) and adds only what is specific to this check.
+**Status:** Accepted; comparative semantics per
+[ACA-0013](../decisions/ACA-0013-comparative-judgment.md) (2026-08-05).
+First check of the suite; consumes the [suite design](suite.md) contracts
+(JudgeClient, change scope, verdict cache, exit codes) and adds only what is
+specific to this check.
 
 ## What it judges
 
-Each changed file, as it now stands, against the vendored
+Each changed file, against the vendored
 [file-context-footprint standard](../standards/file-context-footprint.md).
 The judge answers the standard's own practical test: *what is the smallest set
 of files a model must load to work on this concept safely and correctly?*
@@ -14,6 +16,16 @@ Both failure directions count — oversized mixed-responsibility files and
 excessively fragmented abstractions. The check exists because length ratchets
 punish the symptom, and a model under a ratchet relocates a blob rather than
 fixes the concept; telling relocation from design requires judgment.
+
+**Semantics depend on the file's kind** (ACA-0013, superseding ACA-0004 D5's
+absolute state for legacy files):
+
+- a **new** file (absent at the merge-base) is judged absolutely — greenfield
+  stays honest;
+- a **legacy** file (present at the merge-base) is judged on the *direction*
+  of the change: did its context footprint improve, hold, or regress? Debt
+  that predates the change never blocks; making it worse does. A rename stays
+  legacy under its base path; a copy/extraction is new.
 
 Tier: **T1 (judgment)** — the whole point is discrimination a mechanical
 check cannot make. Routing per the consuming config's tier map (ENG-0151
@@ -25,17 +37,21 @@ The prompt embeds the **vendored rule text read from disk at runtime** — never
 a paraphrase in the script, so the rule and the judge cannot drift apart.
 Rule text plus judging instructions form the `system` prompt (one cached
 prefix shared across every file in a run); the per-file payload is the user
-turn:
+turn, built from the file's comparison:
 
-1. the full file content;
-2. **paths only** (not contents) of files this file imports;
-3. **paths only** of files that import this file (grep of the import graph);
-4. the diff hunks for this file in the current change;
-5. one line: whether the file is new, grew, or shrank, with line counts.
+1. the file's kind (`new` / `legacy`), and the base path when renamed;
+2. one growth line (new / grew / shrank / unchanged, with line counts) —
+   orientation, never the decision;
+3. per snapshot (head; plus base for legacy): **paths only** (not contents)
+   of files it imports and of files that import it;
+4. the full head content — and for legacy, the full base content.
 
-Items 2–5 are cheap static derivations. They exist so the judge reasons about
-footprint (who must load this file, what this file forces into context)
-instead of guessing from content alone.
+The merge-base is resolved once per run (failure is a run-level config
+error, exit 2 — never inferred as "everything is new"); the base import
+graph is reconstructed from the head graph plus the changed paths, so
+modified, deleted, and renamed importers are represented without one git
+process per repository file. Diff hunks were dropped in v2: with both
+snapshots in the payload they are derivable redundancy.
 
 **Load-set accounting (review clarification, 2026-08-04).** The practical
 test counts an import toward the load-set whenever the imported file must be
@@ -56,49 +72,82 @@ fields required):
 
 ```json
 {
-  "verdict": "pass | warn | fail",
-  "practical_test_answer": "the smallest file-set a task on this concept must load, per the judge",
-  "violations": [{
+  "assessment": "new-compliant | new-violating | improved | held | regressed | uncertain",
+  "before_practical_test": "the practical-test answer for the base version; '(none — new file)' for new",
+  "after_practical_test": "the practical-test answer for the head version",
+  "comparison_evidence": "specific before-to-after evidence for the assessment",
+  "head_violations": [{
     "criterion": "mixed-responsibility | incomplete-concept | relocation-not-design | over-fragmentation | duplicated-context",
-    "evidence": "specific, quotable observation from the file",
+    "evidence": "specific, quotable observation from the head version",
     "suggestion": "the concrete restructuring that would fix it"
   }],
   "reasoning_summary": "2-3 sentences max"
 }
 ```
 
-**Verdict semantics — the load-bearing part:**
+The judge describes; host code decides. One comparative call per file — no
+cost doubling, and comparative questions are more reliable than two absolute
+scores subtracted.
 
-- `fail` is reserved for clear violations the rule text names: a file that is
-  enumeration/re-export ceremony over content, a file mixing concerns that are
-  never changed together, a split that increased the load-set.
-- **Ambiguity is `warn`, never `fail`.** A judge that fails on vibes gets the
-  gate disabled within a week; a gate that warns honestly earns promotion to
-  `--enforce`.
-- Refusal, truncation (`stop_reason` checked before content is read), or
-  schema-parse failure → `warn` with a note. Never a crash, never a silent
-  pass.
+**Effective-verdict mapping — the load-bearing part:**
+
+| Kind | Assessment | Effective verdict |
+| --- | --- | --- |
+| new | `new-compliant` | `pass` |
+| new | `new-violating` (evidence required) | `fail` |
+| legacy | `improved` / `held` | `pass`; head violations retained as **residual debt** |
+| legacy | `regressed` (evidence required) | `fail` |
+| either | `uncertain` | `warn`, cacheable |
+| either | malformed, kind-incompatible, or evidence-free blocking assessment | `warn`, **not** cacheable |
+
+- `improved` requires a material footprint reduction and no introduced or
+  materially worsened criterion; any new or worsened criterion is
+  `regressed` even when another area improved — new debt cannot be netted
+  against cleanup elsewhere.
+- Residual debt is structured and nonblocking: `violations` stays blocking
+  evidence on fails; `residualViolations` (the check's verdict subtype —
+  the shared `FileVerdict` contract is not widened) carries what an
+  improved/held legacy file still owes. Text output prints a residual pass
+  as a finding (`pass (footprint improved; residual debt)` plus criteria);
+  only clean passes stay silent; the summary counts residual files
+  separately; `--json` exposes `assessment`, `basePath`, and both violation
+  lists. `--enforce` blocks only effective `fail`.
+- **Ambiguity is `uncertain` → `warn`, never `fail`.** A judge that fails on
+  vibes gets the gate disabled within a week; a gate that warns honestly
+  earns promotion to `--enforce`.
+- Refusal, truncation, or schema-parse failure → non-cacheable `warn` with a
+  note. Never a crash, never a silent pass.
 
 ## Operational bounds
 
 One file per request; concurrency 3; `max_tokens` 4096; no sampling
-parameters. Verdicts memoized per the suite cache design — a second run over
-an unchanged branch makes zero API calls. Target spend: a typical 5-file
-change stays under ~$0.50 on the T1 default.
+parameters. Inputs are normalized and deduplicated before the worker pool.
+Verdicts memoized per the suite cache design with a **pair-addressed key**
+(kind, both snapshots' path/content/import edges, rule, prompt version,
+provider, model) — a second run over an unchanged branch makes zero API
+calls, a moving merge-base cannot re-bill an unchanged semantic pair, and
+the same head against a different base rejudges. A legacy judgment sends
+both snapshots, roughly doubling that file's input tokens — accepted; it is
+one call, and the alternative (two absolute verdicts subtracted) is both
+costlier and less reliable.
 
 ## Calibration — the self-test (decision D8)
 
 `aca context-footprint --self-test` runs the judge against golden fixtures in
-`checks/context-footprint/fixtures/` and asserts expected verdicts from a
-manifest. The seed pair is the worked example from the rule text itself,
-captured as in-repo fixture files:
+`checks/context-footprint/fixtures/` and asserts expected assessment,
+effective verdict, and (residual) criteria from a manifest. The cases
+calibrate the transition, not only the endpoints:
 
-- **the enumerated union file** (~258 lines, every message type restated,
-  ~120 type imports, while every domain module already exported a sub-union)
-  — expected `fail`, criterion `relocation-not-design` or
-  `duplicated-context`;
-- **the composed version** (~58 lines, one arm per domain sub-union) —
-  expected `pass`.
+- **the enumerated union file as new** — `new-violating`/`fail`
+  (`relocation-not-design` or `duplicated-context`);
+- **the composed version as new** — `new-compliant`/`pass`;
+- **enumerated → composed** — `improved`/`pass`;
+- **composed → enumerated** — `regressed`/`fail`;
+- **the real image-trail `messages.ts` pair (550→356 lines, PR 786)** —
+  `improved`/`pass` **with required residual criteria**: the retained guard
+  enumeration and barrel re-exports must be named as residual debt. This is
+  issue #12's judge-quality discriminator, preserved under comparative
+  semantics.
 
 This is simultaneously the negative control (proof the gate *can* fail) and
 the prompt-change gate: **if a fixture assertion breaks, the prompt is wrong,
@@ -107,11 +156,15 @@ the pinned prompt-version string (which invalidates the verdict cache by
 construction). CI runs the self-test whenever the prompt or fixtures change.
 
 Full decision text, rationale, and downsides:
-[ACA-0004](../decisions/ACA-0004-context-footprint-judgment.md) (D5, D8).
+[ACA-0004](../decisions/ACA-0004-context-footprint-judgment.md) (D8) and
+[ACA-0013](../decisions/ACA-0013-comparative-judgment.md).
 
 ## Consuming-repo wiring (reference, not part of this repo)
 
 A consuming repo adds `aca.config.json` (include/exclude globs, tier map) and
 a CI step running `aca context-footprint` **advisory first**. Promotion to
 `--enforce` is a separate owner decision made on accumulated advisory
-evidence, never bundled with adoption.
+evidence, never bundled with adoption. Residual debt is scheduled, not
+ambient: a separate consumer workflow may reconcile `--json` residuals into
+tracked cleanup issues (see the adoption doc); that reconciler stays outside
+ACA.
