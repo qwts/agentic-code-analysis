@@ -7,10 +7,11 @@ minimal context footprint? Runs as a CI gate (`--enforce`) and as advisory
 feedback inside an agent's dev loop, with interchangeable judge models
 (Anthropic / OpenAI / local).
 
-Status: core CLI, JudgeClient port, Anthropic/OpenAI/local adapters, and seven
-checks — `aca context-footprint`, `aca failure-posture`, `aca naming-truth`,
-`aca review-readiness`, `aca seam-audit`, `aca single-responsibility`, and
-`aca test-honesty`, each with a calibration self-test — are in
+Status: core CLI, JudgeClient port, Anthropic/OpenAI/local adapters, and eight
+checks — `aca context-footprint`, `aca doc-drift`, `aca failure-posture`,
+`aca naming-truth`, `aca review-readiness`, `aca seam-audit`,
+`aca single-responsibility`, and `aca test-honesty`, each with a calibration
+self-test — are in
 (TypeScript 7 on Node ≥ 24, no build step —
 `node src/cli.ts <check>`). Remaining work:
 [open issues](https://github.com/qwts/agentic-code-analysis/issues).
@@ -25,6 +26,7 @@ checks — `aca context-footprint`, `aca failure-posture`, `aca naming-truth`,
 - [Fourth check: naming-truth](docs/design/check-naming-truth.md)
 - [Fifth check: seam-audit](docs/design/check-seam-audit.md) — testability footprint of each file
 - [Sixth check: single-responsibility](docs/design/check-single-responsibility.md)
+- [Seventh check: doc-drift](docs/design/check-doc-drift.md) — doc claims vs the code they reference ([truth rubric](docs/standards/doc-drift.md))
 - [Prior art and the bar being raised](docs/design/prior-art.md)
 - [Implementation plan](docs/plan/issues.md)
 - [Check backlog](docs/plan/backlog.md) — candidate checks awaiting design

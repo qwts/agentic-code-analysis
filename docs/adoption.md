@@ -21,8 +21,18 @@ it passes the ratchet AND the semantic check.
 - `include`/`exclude`: the guarded source globs. Exclude generated files,
   vendored copies, and lockfiles — judging them wastes spend.
 - `tiers`: provider/model per tier from the routing registry (ENG-0151);
-  `context-footprint` declares T1. `ACA_PROVIDER`/`ACA_MODEL` env vars
-  override for one-off runs.
+  `context-footprint` and `doc-drift` both declare T1 (the CI step below
+  applies to either check — swap the check name). `ACA_PROVIDER`/`ACA_MODEL`
+  env vars override for one-off runs.
+- Per-check sections nest under `checks`: `doc-drift` reads its document
+  globs from `checks.doc-drift.include`/`exclude` (default `README.md` +
+  `docs/**/*.md`; a configured include replaces the default, and an empty
+  one is a config error, never a silent disable). Agent-instruction files
+  (`AGENTS.md`, `CLAUDE.md`, `GEMINI.md`, `copilot-instructions.md`,
+  anything under `.claude/`, `.cursor/`, or `.github/instructions/`) are
+  hard-excluded regardless of globs. The top-level globs keep meaning
+  "guarded source" — for `doc-drift` they scope which *changed code* is
+  worth checking docs against, not which docs are read.
 - Zero-egress option — **requires the adapters from issue #5
   ([PR #9](https://github.com/qwts/agentic-code-analysis/pull/9)); until that
   merges, `anthropic` is the only routable provider**:
@@ -71,13 +81,22 @@ Behavior you can rely on (exit-code contract, ACA-0003 D3):
   Observed spend: calibration + a 6-file change = $0.32 at T1
   (2026-08-04, claude-opus-5, prompt v1; v2 sends base+head for legacy
   files, roughly doubling those files' input tokens).
-- Verdicts are comparative
+- `context-footprint` verdicts are comparative
   ([ACA-0013](decisions/ACA-0013-comparative-judgment.md)): a new file
   violating the rule fails; a legacy file made worse fails; a legacy file
   improved or held passes even while still violating, with the remaining
   debt named as **residual** findings
   (`pass (footprint improved; residual debt)` in text; `assessment` and
   `residualViolations` in `--json`). Residuals never block `--enforce`.
+- `doc-drift` verdicts are absolute current-truth judgments over one doc
+  plus its changed referents: `drifted` with a blocking criterion → `fail`;
+  `incomplete` (new behavior undocumented) and `uncertain` → `warn`, never
+  fail; `--json` carries `assessment`, structured `findings` with claims
+  and reference ids, the selected `references`/`referents`, and `scanMode`
+  (only explicit Markdown references are scanned — prose-only mentions are
+  a documented miss). Advisory non-cacheable warns also cover unreadable
+  referents, evidence-cap overflow, and malformed judge replies — a warn
+  does not always mean `incomplete`/`uncertain`.
 
 ## 3. Local dev loop
 
@@ -121,7 +140,9 @@ node path/to/agentic-code-analysis/src/cli.ts context-footprint --self-test --js
 ```
 
 Exit 0 means the route reached the check's required qualification level
-(`field` for context-footprint); the JSON object records the evidence tuple —
+(`field` for context-footprint; `discrimination` for doc-drift — each check
+ships its own graded exam, so qualify each check's route separately); the
+JSON object records the evidence tuple —
 prompt version, fixture-suite identity, provider, model, achieved level. That
 qualification applies to that tuple only: requalify whenever you change the
 model, the provider, or update ACA past a prompt/fixture change (the
