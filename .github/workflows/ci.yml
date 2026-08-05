@@ -42,7 +42,7 @@ jobs:
       run_post_merge: ${{ steps.policy.outputs.run_post_merge }}
     steps:
       - id: policy
-        uses: qwts/playbook-engineering/.github/actions/ci-policy@4e70c773155c2c804e52a487352627010bea1897
+        uses: qwts/playbook-engineering/.github/actions/ci-policy@1e0b79c7f64f63b07319adef1d51d100268552f1
 
   merge-evidence:
     name: Verify merged commit evidence
