@@ -11,6 +11,7 @@ Designs are accepted — read them before changing anything:
 - [docs/design/check-test-honesty.md](docs/design/check-test-honesty.md) — test-file scope, evidence bounds, honesty rubric
 - [docs/design/check-doc-drift.md](docs/design/check-doc-drift.md) — doc claims vs changed referents, truth rubric, graded calibration
 - [docs/design/instruction-corpus.md](docs/design/instruction-corpus.md) — shared instruction-corpus evidence library (no judging)
+- [docs/design/check-agent-context-cost.md](docs/design/check-agent-context-cost.md) — value per token of instruction files, host-verified savings
 - [docs/decisions/](docs/decisions/README.md) — ACA records; supersede, never rewrite
 - [docs/plan/issues.md](docs/plan/issues.md) — implementation order (#3 → #4 → #5/#6)
 
