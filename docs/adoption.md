@@ -23,10 +23,12 @@ it passes the ratchet AND the semantic check.
 - `tiers`: provider/model per tier from the routing registry (ENG-0151);
   `context-footprint` declares T1. `ACA_PROVIDER`/`ACA_MODEL` env vars
   override for one-off runs.
-- Zero-egress option: `{ "provider": "local", "model": "<loaded model>" }`
-  judges against an OpenAI-compatible server on the runner
-  (`ACA_LOCAL_BASE_URL`, default LM Studio's `http://localhost:1234/v1`) —
-  no file content leaves the machine.
+- Zero-egress option — **requires the adapters from issue #5
+  ([PR #9](https://github.com/qwts/agentic-code-analysis/pull/9)); until that
+  merges, `anthropic` is the only routable provider**:
+  `{ "provider": "local", "model": "<loaded model>" }` judges against an
+  OpenAI-compatible server on the runner (`ACA_LOCAL_BASE_URL`, default LM
+  Studio's `http://localhost:1234/v1`) — no file content leaves the machine.
 
 ## 2. CI step (advisory)
 
@@ -63,7 +65,8 @@ Behavior you can rely on (exit-code contract, ACA-0003 D3):
   credentials resolve`), still exit 0. CI can distinguish "code is fine"
   from "judge never ran" the day it promotes to `--enforce` (exit 78).
 - Unchanged files across pushes cost zero API calls (verdict cache, D7);
-  add `.cache/` to the runner's cache action to carry it between runs.
+  add `.cache/aca/` to the runner's cache action to carry it between runs
+  (that exact subdirectory — `.cache/` would sweep up unrelated tooling).
   Observed spend: calibration + a 6-file change = $0.32 at T1
   (2026-08-04, claude-opus-5).
 
