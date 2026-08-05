@@ -158,6 +158,12 @@ not in the ENG series):
   comparative judgment (2026-08-05): direction of change for legacy files,
   residual debt as structured nonblocking findings, pair-addressed cache
   key. Supersedes D5's absolute state for legacy files.
+- **[ACA-0020](../decisions/ACA-0020-diff-fixture-corpus.md)** —
+  diff-scoped checks (2026-08-05): before/after pair-fixture corpus, one
+  canonical diff artifact (git and in-memory tree constructors), and the
+  diff judge I/O convention — head-line-numbered unified payload, a
+  120k-char bound all diff checks inherit, whole-file omission that always
+  surfaces as `warn`, findings anchored to added head lines only.
 
 ## Security posture (ENG-0012 priority 1)
 
