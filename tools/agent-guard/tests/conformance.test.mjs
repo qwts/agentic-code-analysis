@@ -138,9 +138,14 @@ describe('agent-guard conformance (ENG-0138)', () => {
       'env - PATH=/usr/bin:/bin node tools/agent-guard/run-guarded.mjs --label test:e2e -- npm run test:e2e',
       "printf 'ci\\n' | xargs npm run",
       'find . -maxdepth 0 -exec npm run ci \\;',
+      'command find . -maxdepth 0 -exec npx vitest \\;',
+      "find . -maxdepth 0 -exec sh -c 'npm run ci' \\;",
+      'lane=ci; npm run "$lane"',
       'AI_AGENT= node tools/agent-guard/run-guarded.mjs -- npm test',
+      'env -uCODEX_THREAD_ID node tools/agent-guard/run-guarded.mjs -- npm test',
       'node --require node:path node_modules/vitest/vitest.mjs run',
       "eval -- 'npx vitest'",
+      "command bash <<'EOF'\nnpx vitest\nEOF",
     ]) {
       assert.equal(evaluateCommand(command, { env }).allow, false, `expected the guard to deny: ${command}`);
     }

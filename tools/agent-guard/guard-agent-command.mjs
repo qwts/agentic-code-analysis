@@ -146,7 +146,7 @@ const TAMPERING = [
   },
   {
     pattern:
-      /(?:\benv\b[^\n;&|]*(?:\s(?:-(?=\s|$)|-i|--ignore-environment)(?=\s|$)|(?:-u|--unset)(?:=|\s+)(?:CLAUDECODE|CLAUDE_CODE_ENTRYPOINT|AI_AGENT|CODEX_\w+|CURSOR_\w+))|\b(?:unset|export\s+-n)\s+(?:CLAUDECODE|CLAUDE_CODE_ENTRYPOINT|AI_AGENT|CODEX_\w+|CURSOR_\w+))[\s\S]*run-guarded\.mjs/u,
+      /(?:\benv\b[^\n;&|]*(?:\s(?:-(?=\s|$)|-i|--ignore-environment)(?=\s|$)|(?:-u(?:=|\s*)|--unset(?:=|\s+))(?:CLAUDECODE|CLAUDE_CODE_ENTRYPOINT|AI_AGENT|CODEX_\w+|CURSOR_\w+))|\b(?:unset|export\s+-n)\s+(?:CLAUDECODE|CLAUDE_CODE_ENTRYPOINT|AI_AGENT|CODEX_\w+|CURSOR_\w+))[\s\S]*run-guarded\.mjs/u,
     reason:
       'Blocked removal of agent identity before run-guarded.mjs: the wrapper must inherit its harness markers so it ' +
       `cannot misclassify an agent as the human owner. ${GUIDANCE}`,
@@ -466,13 +466,8 @@ function endsWithShellC(scanned) {
 function shellHeredocBody(command, offset, body) {
   const prefix = command.slice(0, offset);
   const segment = prefix.split(/\|\||&&|[;\n|&]/u).at(-1).trim();
-  const tokens = segment.split(/\s+/u).filter(Boolean);
-  let i = 0;
-  if (tokens[i] === 'env') {
-    i += 1;
-    while (/^\w+=\S*$/u.test(tokens[i] ?? '')) i += 1;
-  }
-  return /(?:^|\/)(?:ba|da|z)?sh$/u.test(tokens[i] ?? '') ? `\n${body}\n` : ' ';
+  const executable = commandAfterPrefixes(segment).split(/\s+/u).filter(Boolean)[0];
+  return /(?:^|\/)(?:ba|da|z)?sh$/u.test(executable ?? '') ? `\n${body}\n` : ' ';
 }
 
 function commandSubstitutionBodies(text, { processSubstitutions = false } = {}) {
@@ -620,6 +615,7 @@ function normalizeUnquotedEscapes(text) {
 
 function endsWithExecutableString(scanned) {
   if (endsWithShellC(scanned)) return true;
+  if (dispatcherCommandPayloads(scanned).some((payload) => endsWithShellC(payload))) return true;
   if (endsWithWatchCommandString(scanned)) return true;
   const segment = scanned.split(/\|\||&&|[;\n|&]/u).at(-1).trim();
   const rawTokens = segment.split(/\s+/u).filter(Boolean);
@@ -699,7 +695,7 @@ function commandStringPayloads(command) {
 function dispatcherCommandPayloads(command) {
   const payloads = [];
   for (const segment of splitSegments(command)) {
-    const tokens = segment.split(/\s+/u).filter(Boolean);
+    const tokens = commandAfterPrefixes(segment).split(/\s+/u).filter(Boolean);
     if (tokens[0]?.split('/').at(-1) !== 'find') continue;
     for (let index = 1; index < tokens.length; index += 1) {
       if (!/^-exec(?:dir)?$|^-ok(?:dir)?$/u.test(tokens[index])) continue;
@@ -1057,6 +1053,37 @@ function packageScriptNames(command) {
   return [...npmScriptNames(command), ...nodeRunScriptNames(command), ...otherPackageScriptNames(command)];
 }
 
+function hasRuntimeShellExpansion(word) {
+  let quote = null;
+  for (let index = 0; index < word.length; index += 1) {
+    const character = word[index];
+    if (character === '\\' && quote !== "'") {
+      index += 1;
+      continue;
+    }
+    if (quote === "'") {
+      if (character === "'") quote = null;
+      continue;
+    }
+    if (character === "'") {
+      quote = "'";
+      continue;
+    }
+    if (character === '"') {
+      quote = quote === '"' ? null : '"';
+      continue;
+    }
+    if (character === '`') return true;
+    if (character === '$' && /[({A-Za-z0-9_@*#?!$-]/u.test(word[index + 1] ?? '')) return true;
+    if (quote === null && /[*?\[{]/u.test(character)) return true;
+  }
+  return false;
+}
+
+function hasDynamicPackageScript(command) {
+  return packageScriptNames(command).some((script) => hasRuntimeShellExpansion(script));
+}
+
 // Node >=22 exposes package.json scripts through `node --run <script>` and
 // `node --run=<script>`. Those spellings have the same admission policy as npm.
 export function nodeRunScriptNames(command) {
@@ -1238,6 +1265,14 @@ function commandAfterPrefixes(segment) {
 
 export function evaluateCommand(command) {
   if (typeof command !== 'string' || command.length === 0) return { allow: true };
+  if (hasDynamicPackageScript(command)) {
+    return {
+      allow: false,
+      reason:
+        'Blocked a runtime-computed package script name: shell expansion can resolve to a protected heavy lane after ' +
+        `static admission checks. Use the guarded entrypoint with a literal script name. ${USE_ENTRYPOINT}`,
+    };
+  }
   const effective = stripInertText(command);
 
   for (const { pattern, reason } of TAMPERING) {

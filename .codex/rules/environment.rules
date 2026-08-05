@@ -21,7 +21,6 @@ prefix_rule(
             "diff",
             "fetch",
             "format-patch",
-            "grep",
             "help",
             "init",
             "log",
