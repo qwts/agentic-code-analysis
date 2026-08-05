@@ -1,135 +1,227 @@
-[
-  {
-    "name": "asserts-own-mock",
-    "file": "tests/invoice-service.test.ts",
-    "content": "asserts-own-mock.txt",
-    "units": [
-      {
-        "path": "src/invoice-service.ts",
-        "exports": [
-          "export interface InvoiceGateway {",
-          "export async function fetchInvoiceTotal(gateway: InvoiceGateway, id: string): Promise<number> {"
-        ]
-      }
-    ],
-    "snapshots": [],
-    "unavailable": [],
-    "expect": {
-      "assessment": "dishonest",
-      "verdict": "fail",
-      "criteriaAnyOf": ["asserts-own-mock"],
-      "testNameIncludes": "fetchInvoiceTotal returns the gateway total"
+{
+  "schemaVersion": 2,
+  "requiredLevel": "foundation",
+  "levels": [
+    {
+      "id": "foundation"
     }
-  },
-  {
-    "name": "discriminating",
-    "file": "tests/format-money.test.ts",
-    "content": "discriminating.txt",
-    "units": [
-      {
-        "path": "src/format-money.ts",
-        "exports": ["export function formatMoney(cents: number): string {"]
+  ],
+  "gaps": [
+    "field: no production-derived fixture yet. Per ACA-0012 policy the first production miss with agreed ground truth becomes an immutable field fixture (with provenance and permission recorded here); until then requiredLevel stays foundation and passing it is screening evidence, not field authority. Tracked in issue #44."
+  ],
+  "fixtures": [
+    {
+      "name": "asserts-own-mock",
+      "level": "foundation",
+      "file": "tests/invoice-service.test.ts",
+      "content": "asserts-own-mock.txt",
+      "sha256": "6d812a05900a1d6f0c1ac1320807122efb6e98d5681799a46ced26b469617750",
+      "units": [
+        {
+          "path": "src/invoice-service.ts",
+          "exports": [
+            "export interface InvoiceGateway {",
+            "export async function fetchInvoiceTotal(gateway: InvoiceGateway, id: string): Promise<number> {"
+          ]
+        }
+      ],
+      "snapshots": [],
+      "unavailable": [],
+      "expect": {
+        "assessment": "dishonest",
+        "verdict": "fail",
+        "criteriaAnyOf": [
+          "asserts-own-mock"
+        ],
+        "testNameIncludes": "fetchInvoiceTotal returns the gateway total"
+      },
+      "source": {
+        "kind": "synthetic",
+        "note": "authored for this repository (Apache-2.0): the mock return value is also the expected value \u2014 the assertion can only test the mock"
       }
-    ],
-    "snapshots": [],
-    "unavailable": [],
-    "expect": { "assessment": "honest", "verdict": "pass" }
-  },
-  {
-    "name": "tautology",
-    "file": "tests/config-io.test.ts",
-    "content": "tautology.txt",
-    "units": [
-      {
-        "path": "src/config-io.ts",
-        "exports": ["export function serializeConfig(config: Config): string {"]
+    },
+    {
+      "name": "discriminating",
+      "level": "foundation",
+      "file": "tests/format-money.test.ts",
+      "content": "discriminating.txt",
+      "sha256": "9036b3e9a9dff2f7ec3bfbdbb5c46b4e8a0e23d8292dfa67ba8d4740bac50cc0",
+      "units": [
+        {
+          "path": "src/format-money.ts",
+          "exports": [
+            "export function formatMoney(cents: number): string {"
+          ]
+        }
+      ],
+      "snapshots": [],
+      "unavailable": [],
+      "expect": {
+        "assessment": "honest",
+        "verdict": "pass"
+      },
+      "source": {
+        "kind": "synthetic",
+        "note": "authored for this repository (Apache-2.0): independent expected literals that break when formatting behavior breaks"
       }
-    ],
-    "snapshots": [],
-    "unavailable": [],
-    "expect": {
-      "assessment": "dishonest",
-      "verdict": "fail",
-      "criteriaAnyOf": ["tautology"],
-      "testNameIncludes": "serializeConfig produces the expected wire form"
+    },
+    {
+      "name": "tautology",
+      "level": "foundation",
+      "file": "tests/config-io.test.ts",
+      "content": "tautology.txt",
+      "sha256": "d04f9071aa5a92e2c2ff1207fd0bc9081ffbf9b84c40e5d5d7bf7b7237bbec56",
+      "units": [
+        {
+          "path": "src/config-io.ts",
+          "exports": [
+            "export function serializeConfig(config: Config): string {"
+          ]
+        }
+      ],
+      "snapshots": [],
+      "unavailable": [],
+      "expect": {
+        "assessment": "dishonest",
+        "verdict": "fail",
+        "criteriaAnyOf": [
+          "tautology"
+        ],
+        "testNameIncludes": "serializeConfig produces the expected wire form"
+      },
+      "source": {
+        "kind": "synthetic",
+        "note": "authored for this repository (Apache-2.0): expected value computed by re-running the unit under test"
+      }
+    },
+    {
+      "name": "no-meaningful-assertion",
+      "level": "foundation",
+      "file": "tests/manifest.test.ts",
+      "content": "no-meaningful-assertion.txt",
+      "sha256": "6eb4df84ad0f900421155a6d7d652da9a5b63223c9583c1923a883f6a77a8c22",
+      "units": [
+        {
+          "path": "src/manifest.ts",
+          "exports": [
+            "export function parseManifest(raw: string): Manifest | undefined {"
+          ]
+        }
+      ],
+      "snapshots": [],
+      "unavailable": [],
+      "expect": {
+        "assessment": "dishonest",
+        "verdict": "fail",
+        "criteriaAnyOf": [
+          "no-meaningful-assertion"
+        ],
+        "testNameIncludes": "parseManifest extracts the dependency list"
+      },
+      "source": {
+        "kind": "synthetic",
+        "note": "authored for this repository (Apache-2.0): exercises the unit and asserts nothing that could fail meaningfully"
+      }
+    },
+    {
+      "name": "unreviewable-snapshot",
+      "level": "foundation",
+      "file": "tests/dashboard.test.ts",
+      "content": "unreviewable-snapshot.txt",
+      "sha256": "cbd4441ef760b464becdf7a4452d7a111a615a6c15901b02e60c2861c32919a1",
+      "units": [
+        {
+          "path": "src/dashboard.ts",
+          "exports": [
+            "export function renderDashboard(state: DashboardState): RenderTree {"
+          ]
+        }
+      ],
+      "snapshots": [],
+      "unavailable": [],
+      "expect": {
+        "assessment": "dishonest",
+        "verdict": "fail",
+        "criteriaAnyOf": [
+          "unreviewable-snapshot"
+        ],
+        "testNameIncludes": "renderDashboard matches snapshot"
+      },
+      "source": {
+        "kind": "synthetic",
+        "note": "authored for this repository (Apache-2.0): blind snapshot equality no reviewer can check against intent"
+      }
+    },
+    {
+      "name": "interaction-mock",
+      "level": "foundation",
+      "file": "tests/retry.test.ts",
+      "content": "interaction-mock.txt",
+      "sha256": "0569b040f246dbe34bc42f5be44a5d88feb1d2aa585e4dd490b7969349e5a25c",
+      "units": [
+        {
+          "path": "src/retry.ts",
+          "exports": [
+            "export interface Transport {",
+            "export async function sendWithRetry(transport: Transport, message: { id: string }): Promise<void> {"
+          ]
+        }
+      ],
+      "snapshots": [],
+      "unavailable": [],
+      "expect": {
+        "assessment": "honest",
+        "verdict": "pass"
+      },
+      "source": {
+        "kind": "synthetic",
+        "note": "authored for this repository (Apache-2.0): honest interaction test \u2014 the mock records calls, assertions pin the retry contract"
+      }
+    },
+    {
+      "name": "focused-snapshot",
+      "level": "foundation",
+      "file": "tests/error-banner.test.ts",
+      "content": "focused-snapshot.txt",
+      "sha256": "cec2fdd3a2e6bd93f12217c1f090f935613d5d16c3e4412c8988ee5220909dbd",
+      "units": [
+        {
+          "path": "src/error-banner.ts",
+          "exports": [
+            "export function renderErrorBanner(reason: string): string {"
+          ]
+        }
+      ],
+      "snapshots": [],
+      "unavailable": [],
+      "expect": {
+        "assessment": "honest",
+        "verdict": "pass"
+      },
+      "source": {
+        "kind": "synthetic",
+        "note": "authored for this repository (Apache-2.0): honest inline snapshot small enough to review as a literal"
+      }
+    },
+    {
+      "name": "no-unit-context",
+      "level": "foundation",
+      "file": "tests/slugify.test.ts",
+      "content": "no-unit-context.txt",
+      "sha256": "2c4846fca5ff9bee1f0748e9b399e6ef1d209d241fbef2d9b29eafdd8b6b8ac3",
+      "units": [],
+      "snapshots": [],
+      "unavailable": [
+        "unit exports unavailable"
+      ],
+      "expect": {
+        "assessment": "honest",
+        "verdict": "pass"
+      },
+      "source": {
+        "kind": "synthetic",
+        "note": "authored for this repository (Apache-2.0): unit exports unavailable \u2014 the judge must not guess dishonesty it cannot see"
+      }
     }
-  },
-  {
-    "name": "no-meaningful-assertion",
-    "file": "tests/manifest.test.ts",
-    "content": "no-meaningful-assertion.txt",
-    "units": [
-      {
-        "path": "src/manifest.ts",
-        "exports": ["export function parseManifest(raw: string): Manifest | undefined {"]
-      }
-    ],
-    "snapshots": [],
-    "unavailable": [],
-    "expect": {
-      "assessment": "dishonest",
-      "verdict": "fail",
-      "criteriaAnyOf": ["no-meaningful-assertion"],
-      "testNameIncludes": "parseManifest extracts the dependency list"
-    }
-  },
-  {
-    "name": "unreviewable-snapshot",
-    "file": "tests/dashboard.test.ts",
-    "content": "unreviewable-snapshot.txt",
-    "units": [
-      {
-        "path": "src/dashboard.ts",
-        "exports": ["export function renderDashboard(state: DashboardState): RenderTree {"]
-      }
-    ],
-    "snapshots": [],
-    "unavailable": [],
-    "expect": {
-      "assessment": "dishonest",
-      "verdict": "fail",
-      "criteriaAnyOf": ["unreviewable-snapshot"],
-      "testNameIncludes": "renderDashboard matches snapshot"
-    }
-  },
-  {
-    "name": "interaction-mock",
-    "file": "tests/retry.test.ts",
-    "content": "interaction-mock.txt",
-    "units": [
-      {
-        "path": "src/retry.ts",
-        "exports": [
-          "export interface Transport {",
-          "export async function sendWithRetry(transport: Transport, message: { id: string }): Promise<void> {"
-        ]
-      }
-    ],
-    "snapshots": [],
-    "unavailable": [],
-    "expect": { "assessment": "honest", "verdict": "pass" }
-  },
-  {
-    "name": "focused-snapshot",
-    "file": "tests/error-banner.test.ts",
-    "content": "focused-snapshot.txt",
-    "units": [
-      {
-        "path": "src/error-banner.ts",
-        "exports": ["export function renderErrorBanner(reason: string): string {"]
-      }
-    ],
-    "snapshots": [],
-    "unavailable": [],
-    "expect": { "assessment": "honest", "verdict": "pass" }
-  },
-  {
-    "name": "no-unit-context",
-    "file": "tests/slugify.test.ts",
-    "content": "no-unit-context.txt",
-    "units": [],
-    "snapshots": [],
-    "unavailable": ["unit exports unavailable"],
-    "expect": { "assessment": "honest", "verdict": "pass" }
-  }
-]
+  ]
+}

@@ -161,15 +161,25 @@ of the key. A second identical run makes zero judge calls; changing any
 companion context misses. Transport, refusal, and schema degradations are
 never cached.
 
-## Calibration — the self-test
+## Calibration — the graded self-test (ACA-0004 D8, ACA-0012)
 
-`aca test-honesty --self-test` judges golden fixtures
+`aca test-honesty --self-test` runs the ACA-0012 graded exam: a
+`schemaVersion: 2` manifest declaring ordered qualification levels with
+per-fixture checksums and provenance, validated in full before any judge
+call (a malformed or tampered package is a configuration/integrity error,
+exit 2, never a judge miss). Levels grade cumulatively — one judgment per
+fixture, stop after a failed level — and `--json` emits the machine-readable
+qualification record (prompt version, deterministic fixture-suite identity,
+achieved/required level, per-level and per-fixture results; no fixture
+contents, no prompts). Always live, never cached, and run through the same
+bounded pool as production judging so calibration cannot exceed the check's
+own concurrency.
+
+The **`foundation`** level (also the required level) judges golden fixtures
 (`checks/test-honesty/fixtures/`, `.txt` payloads plus `manifest.json` so
-they can never match test globs, the Node runner, or dogfood scope) and
-asserts assessment, effective verdict, required criterion, test name, and
-meaningful-assertion presence. Always live, never cached, and run through the
-same bounded pool as production judging so calibration cannot exceed the
-check's own concurrency. The manifest:
+they can never match test globs, the Node runner, or dogfood scope),
+asserting assessment, effective verdict, required criterion, test name, and
+meaningful-assertion presence:
 
 - dependency mock configured to return a value; the test asserts that value →
   `fail` / `asserts-own-mock`;
@@ -183,6 +193,13 @@ check's own concurrency. The manifest:
 - focused, reviewable snapshot → `pass` (counterexample);
 - honest test judged with `unit exports unavailable` → `pass` (unavailable
   context must not manufacture a failure).
+
+A **`field`** level needs a production-derived case — per ACA-0012 policy
+the first production miss with agreed ground truth becomes an immutable
+field fixture, with provenance and permission recorded in the manifest.
+None exists yet; the gap is recorded in the manifest and `requiredLevel`
+stays `foundation` until one lands, so passing today's exam is screening
+evidence, not field authority.
 
 A stub judge that always passes must make the harness test fail — the
 negative control. **Prompt misses are fixed in the prompt, never by weakening

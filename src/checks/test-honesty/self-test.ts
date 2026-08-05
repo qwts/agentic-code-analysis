@@ -1,44 +1,64 @@
-// Calibration self-test (ACA-0004 D8 pattern): judge the golden fixture
-// test files, assert the manifest's expected assessment, effective verdict,
-// criterion, named test, and meaningful-assertion text. Always live — never
-// cached — so every run exercises the prompt as shipped. If an assertion
-// breaks, the prompt is wrong, not the fixture.
+// Calibration self-test (ACA-0004 D8 pattern, graded per ACA-0012): judge
+// the golden fixture test files level by level and grade cumulatively.
+// Always live — never cached — so every run exercises the prompt as shipped.
+// If an assertion breaks, the prompt is wrong, not the fixture. Levels run
+// in manifest order through the production pool; once a level fails, higher
+// levels are skipped — they cannot repair a lower miss and would only add
+// spend.
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
+import { ConfigError } from '../../core/config.ts';
 import type { JudgeClient } from '../../core/judge-client.ts';
 import type { SelfTestResult } from '../registry.ts';
+import {
+  achievedLevel,
+  matchExpectation,
+  qualifies,
+  suiteIdentity,
+  validateManifest,
+  type CalibrationFixture,
+  type Expectation,
+  type LevelStatus,
+} from './calibration.ts';
 import { judgeOutcome, MAX_TOKENS, PROMPT_VERSION, rubricText, systemPrompt, userPrompt, VERDICT_SCHEMA, type TestHonestyVerdict } from './judge-io.ts';
 import { CONCURRENCY, mapPool } from './pool.ts';
-import type { Evidence, SnapshotContext, UnitContext } from './unit-context.ts';
-
-interface Fixture {
-  name: string;
-  file: string;
-  content: string;
-  units: UnitContext[];
-  snapshots: SnapshotContext[];
-  unavailable: string[];
-  expect: {
-    assessment: string;
-    verdict: 'pass' | 'warn' | 'fail';
-    criteriaAnyOf?: string[];
-    testNameIncludes?: string;
-  };
-}
+import type { Evidence } from './unit-context.ts';
 
 const FIXTURES_DIR = new URL('./fixtures/', import.meta.url);
 
-function loadFixtures(): Fixture[] {
-  return JSON.parse(readFileSync(fileURLToPath(new URL('manifest.json', FIXTURES_DIR)), 'utf8')) as Fixture[];
+interface FixtureReport {
+  name: string;
+  level: string;
+  status: 'ok' | 'miss' | 'skipped';
+  expected: Expectation;
+  actual?: { assessment?: string; verdict: string; criteria: string[]; note?: string };
+}
+
+/** The machine-readable qualification record (ACA-0012). Carries no fixture
+ * contents and no prompts — identity, grades, and per-fixture outcomes only. */
+export interface SelfTestReport {
+  promptVersion: string;
+  fixtureSuite: string;
+  requiredLevel: string;
+  achievedLevel: string | null;
+  qualified: boolean;
+  levels: { id: string; status: LevelStatus }[];
+  fixtures: FixtureReport[];
+}
+
+/** Check-local structural subtype — the registry's SelfTestResult stays
+ * narrow; the dispatcher duck-types `report` for --json. */
+export interface GradedSelfTestResult extends SelfTestResult {
+  report: SelfTestReport;
 }
 
 // Fixtures live outside any repo, so companion context comes from the
 // manifest instead of unit-context resolution; the evidence shape is
 // identical to a live run's.
-function evidenceOf(fixture: Fixture): Evidence {
+function evidenceOf(fixture: CalibrationFixture, contentOf: (file: string) => string | undefined): Evidence {
   return {
     file: fixture.file,
-    content: readFileSync(fileURLToPath(new URL(fixture.content, FIXTURES_DIR)), 'utf8'),
+    content: contentOf(fixture.content)!,
     mode: fixture.units.length > 0 ? 'unit-exports' : 'test-only',
     units: fixture.units,
     snapshots: fixture.snapshots,
@@ -52,33 +72,98 @@ function describe(verdict: TestHonestyVerdict): string {
   return [`${verdict.assessment ?? 'degraded'}/${verdict.verdict}`, ...parts].join(' ');
 }
 
-export async function selfTest(client: JudgeClient): Promise<SelfTestResult> {
-  const system = systemPrompt(rubricText());
-  const lines: string[] = [`self-test (${PROMPT_VERSION}) via ${client.provider}/${client.model}`];
-  let passed = true;
-  // Calibration runs through the same bounded pool as production judging, so
-  // the self-test cannot exceed what the check itself is allowed to send.
-  const results = await mapPool(loadFixtures(), CONCURRENCY, async (fixture) => {
-    const evidence = evidenceOf(fixture);
-    const result = await client.judge({ system, user: userPrompt(evidence), schema: VERDICT_SCHEMA, maxTokens: MAX_TOKENS });
-    return { fixture, outcome: judgeOutcome(evidence, result) };
-  });
-  for (const { fixture, outcome } of results) {
-    const verdict = outcome.verdict;
-    const expect = fixture.expect;
-    const findings = verdict.findings ?? [];
-    const matching = expect.criteriaAnyOf ? findings.filter((finding) => expect.criteriaAnyOf!.includes(finding.criterion)) : findings;
-    const ok =
-      verdict.assessment === expect.assessment &&
-      verdict.verdict === expect.verdict &&
-      (!expect.criteriaAnyOf || matching.length > 0) &&
-      (!expect.testNameIncludes || matching.some((finding) => finding.test.includes(expect.testNameIncludes!))) &&
-      (expect.verdict !== 'fail' || matching.some((finding) => finding.meaningful_assertion.trim() !== ''));
-    if (!ok) passed = false;
-    const want = [`${expect.assessment}/${expect.verdict}`, expect.criteriaAnyOf ? `[any of: ${expect.criteriaAnyOf.join(', ')}]` : '']
-      .filter(Boolean)
-      .join(' ');
-    lines.push(`${ok ? 'ok' : 'MISS'} ${fixture.name}: got ${describe(verdict)}, expected ${want}`);
+function describeExpectation(expect: Expectation): string {
+  return [`${expect.assessment}/${expect.verdict}`, expect.criteriaAnyOf ? `[any of: ${expect.criteriaAnyOf.join(', ')}]` : '']
+    .filter(Boolean)
+    .join(' ');
+}
+
+export async function selfTest(client: JudgeClient): Promise<GradedSelfTestResult> {
+  const rubric = rubricText();
+  const system = systemPrompt(rubric);
+
+  const manifestText = readFileSync(fileURLToPath(new URL('manifest.json', FIXTURES_DIR)), 'utf8');
+  let raw: unknown;
+  try {
+    raw = JSON.parse(manifestText);
+  } catch (err) {
+    throw new ConfigError(`self-test manifest: invalid JSON — ${(err as Error).message}`);
   }
-  return { passed, lines };
+  const contents = new Map<string, string>();
+  const contentOf = (file: string): string | undefined => {
+    if (!contents.has(file)) {
+      try {
+        contents.set(file, readFileSync(fileURLToPath(new URL(file, FIXTURES_DIR)), 'utf8'));
+      } catch {
+        return undefined;
+      }
+    }
+    return contents.get(file);
+  };
+  const manifest = validateManifest(raw, contentOf);
+
+  const referenced = manifest.fixtures.map((fixture) => contentOf(fixture.content)!);
+  const fixtureSuite = suiteIdentity(PROMPT_VERSION, rubric, manifestText, referenced);
+
+  const levelIds = manifest.levels.map((level) => level.id);
+  const levelStatus = new Map<string, LevelStatus>();
+  const reports = new Map<string, FixtureReport>();
+  const lines: string[] = [`self-test (${PROMPT_VERSION}, suite ${fixtureSuite}) via ${client.provider}/${client.model}`];
+
+  let stopped = false;
+  for (const id of levelIds) {
+    const fixtures = manifest.fixtures.filter((fixture) => fixture.level === id);
+    if (stopped) {
+      levelStatus.set(id, 'skipped');
+      for (const fixture of fixtures) {
+        reports.set(fixture.name, { name: fixture.name, level: id, status: 'skipped', expected: fixture.expect });
+        lines.push(`skip [${id}] ${fixture.name}: a lower level missed`);
+      }
+      continue;
+    }
+    const verdicts = await mapPool(fixtures, CONCURRENCY, async (fixture) => {
+      const evidence = evidenceOf(fixture, contentOf);
+      const result = await client.judge({ system, user: userPrompt(evidence), schema: VERDICT_SCHEMA, maxTokens: MAX_TOKENS });
+      return judgeOutcome(evidence, result).verdict;
+    });
+    let passed = true;
+    fixtures.forEach((fixture, index) => {
+      const verdict = verdicts[index]!;
+      const ok = matchExpectation(fixture.expect, verdict);
+      if (!ok) passed = false;
+      reports.set(fixture.name, {
+        name: fixture.name,
+        level: id,
+        status: ok ? 'ok' : 'miss',
+        expected: fixture.expect,
+        actual: {
+          ...(verdict.assessment !== undefined ? { assessment: verdict.assessment } : {}),
+          verdict: verdict.verdict,
+          criteria: (verdict.findings ?? []).map((finding) => finding.criterion),
+          ...(verdict.note !== undefined ? { note: verdict.note } : {}),
+        },
+      });
+      lines.push(`${ok ? 'ok' : 'MISS'} [${id}] ${fixture.name}: got ${describe(verdict)}, expected ${describeExpectation(fixture.expect)}`);
+    });
+    levelStatus.set(id, passed ? 'passed' : 'failed');
+    if (!passed) stopped = true;
+  }
+
+  const achieved = achievedLevel(levelIds, levelStatus);
+  const qualified = qualifies(levelIds, achieved, manifest.requiredLevel);
+  lines.push(`qualification: achieved ${achieved ?? 'none'}, required ${manifest.requiredLevel}`);
+
+  return {
+    passed: qualified,
+    lines,
+    report: {
+      promptVersion: PROMPT_VERSION,
+      fixtureSuite,
+      requiredLevel: manifest.requiredLevel,
+      achievedLevel: achieved,
+      qualified,
+      levels: levelIds.map((id) => ({ id, status: levelStatus.get(id)! })),
+      fixtures: manifest.fixtures.map((fixture) => reports.get(fixture.name)!),
+    },
+  };
 }
