@@ -75,7 +75,7 @@ const BLOCKED = [
     what: 'direct Storybook test-runner invocation',
   },
   {
-    pattern: /(^|[\s;(&|])(npx\s+)?vitest(?:\s|$)/u,
+    pattern: /^(?:\w+=\S*\s+)*(?:\S*\/)?(?:npx(?:\s+-\S+)*\s+)?(?:\S*\/)?vitest(?:\s|$)/u,
     what: 'direct Vitest invocation',
   },
   {
@@ -86,6 +86,12 @@ const BLOCKED = [
     // Inner/unguarded npm scripts (test:dom:run, *:inner).
     pattern: /\bnpm\s+run\s+[\w:.-]*:(run|inner)(?![\w:-])/u,
     what: 'unguarded inner npm script',
+  },
+  {
+    // Node >=22 can execute package scripts without npm. It must not turn the
+    // same inner scripts into an unguarded alternate entrypoint.
+    pattern: /\bnode\b[^\n;&|]*\s--run(?:=|\s+)[\w:.-]*:(run|inner)(?![\w:-])/u,
+    what: 'unguarded inner package script',
   },
   {
     // Headed/interactive runs open GUI windows on the shared desktop.
@@ -214,11 +220,12 @@ function isExecutableQuotedWord(scanned, word) {
     const rest = tokens.slice(npmAt + 1);
     const aliasAt = rest.findIndex((token) => NPM_RUN_ALIASES.has(token));
     const candidates = aliasAt >= 0 ? rest.slice(aliasAt + 1) : rest;
-    if (!candidates.some((token) => !token.startsWith('-'))) return true;
+    if (firstNpmScriptToken(candidates) === undefined) return true;
   }
 
   const last = tokens.at(-1);
   if (last === 'npx' && /^(vitest|playwright|test-storybook)$/u.test(word)) return true;
+  if (last === '--run' && tokens.some((token) => /(?:^|\/)node$/u.test(token))) return true;
   return /(?:^|\/)(?:node|electron)$/u.test(last ?? '') && word === '--test';
 }
 
@@ -257,6 +264,21 @@ export function normalizeCommand(command) {
 // is the same run as `npm run test:e2e`, and a matcher that only knows `run`
 // blocks one and waves the other through.
 const NPM_RUN_ALIASES = new Set(['run', 'run-script', 'rum', 'urn']);
+const NPM_OPTIONS_WITH_OPERANDS = new Set(['-w', '--workspace', '--prefix', '--userconfig', '--cache', '--registry', '--scope', '--tag', '--otp']);
+
+function firstNpmScriptToken(tokens) {
+  for (let i = 0; i < tokens.length; i += 1) {
+    const token = tokens[i];
+    if (token === '--') continue;
+    if (NPM_OPTIONS_WITH_OPERANDS.has(token)) {
+      i += 1;
+      continue;
+    }
+    if (token.startsWith('-')) continue;
+    return token;
+  }
+  return undefined;
+}
 
 /**
  * The script names an npm invocation would run, per shell segment.
@@ -278,8 +300,33 @@ export function npmScriptNames(command) {
     const rest = tokens.slice(start + 1);
     const aliasAt = rest.findIndex((token) => NPM_RUN_ALIASES.has(token));
     const candidates = aliasAt >= 0 ? rest.slice(aliasAt + 1) : rest;
-    const script = candidates.find((token) => !token.startsWith('-'));
+    const script = firstNpmScriptToken(candidates);
     if (script !== undefined) names.push(script);
+  }
+  return names;
+}
+
+// Node >=22 exposes package.json scripts through `node --run <script>` and
+// `node --run=<script>`. Those spellings have the same admission policy as npm.
+export function nodeRunScriptNames(command) {
+  const names = [];
+  for (const segment of splitSegments(command)) {
+    const tokens = segment.split(/\s+/u).filter(Boolean);
+    const start = tokens.findIndex((token) => /(?:^|\/)node$/u.test(token));
+    if (start < 0) continue;
+    const rest = tokens.slice(start + 1);
+    for (let i = 0; i < rest.length; i += 1) {
+      const token = rest[i];
+      if (token.startsWith('--run=')) {
+        const script = token.slice('--run='.length);
+        if (script) names.push(script);
+        break;
+      }
+      if (token === '--run' && rest[i + 1] !== undefined) {
+        names.push(rest[i + 1]);
+        break;
+      }
+    }
   }
   return names;
 }
@@ -293,7 +340,7 @@ export function npmScriptNames(command) {
  * themselves count here.
  */
 export function heavyLaneFor(command) {
-  for (const script of npmScriptNames(command)) {
+  for (const script of [...npmScriptNames(command), ...nodeRunScriptNames(command)]) {
     const lane = HEAVY_LANES.find((entry) => entry.pattern.test(script));
     if (lane) return lane;
   }
