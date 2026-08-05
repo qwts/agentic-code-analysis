@@ -22,7 +22,9 @@ export function parseFrontmatter(content: string): Frontmatter {
   if (!OPEN.test(content)) return { present: false, body: content };
   const close = content.indexOf("\n---", 3);
   if (close === -1) {
-    return { present: true, error: 'unterminated frontmatter block', body: content, raw: '' };
+    // No closing fence: everything from the opening fence on is the raw
+    // (unterminated) block, so callers still see what was found.
+    return { present: true, error: 'unterminated frontmatter block', body: content, raw: content };
   }
   const fenceEnd = content.indexOf("\n", close + 1);
   const raw = content.slice(0, fenceEnd === -1 ? content.length : fenceEnd + 1);

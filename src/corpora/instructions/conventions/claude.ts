@@ -22,7 +22,7 @@ import type {
   SemanticsEvidence,
   SessionProfileId,
 } from '../model.ts';
-import { parseFrontmatter, stringField, stringListField } from '../frontmatter.ts';
+import { booleanField, parseFrontmatter, stringField, stringListField } from '../frontmatter.ts';
 import { dirDepth, makeLocator, posixBasename, posixDirname } from '../paths.ts';
 import {
   AGENT_SKILLS_SOURCE,
@@ -568,29 +568,36 @@ function emitSkill(
   const spec: SemanticsEvidence = parsed.valid
     ? { status: 'verified', source: AGENT_SKILLS_SOURCE, verifiedAt: AGENT_SKILLS_VERIFIED_AT }
     : { status: 'unverified', reason: 'SKILL.md fails spec validation', source: AGENT_SKILLS_SOURCE };
+  // Claude extension: `disable-model-invocation: true` keeps the
+  // description out of context entirely; the body loads only on explicit
+  // user invocation (PR #48 review).
+  const frontmatter = parseFrontmatter(content);
+  const userInvokedOnly = booleanField(frontmatter, 'disable-model-invocation') ?? false;
   for (const profile of profiles) {
-    bindings.push({
-      rootId,
-      path: skill.skillFile,
-      contentKind: 'skill',
-      binding: {
-        tool: 'claude-code',
-        profile,
-        convention: 'claude-code/skill-metadata',
-        scope,
-        activation: parsed.valid ? 'session-start' : 'unresolved',
-        cadence: 'per-session',
-        charged: {
-          kind: 'frontmatter-fields',
-          fields: ['name', 'description'],
-          text: parsed.metadataText,
-          tokens: ctx.estimate(parsed.metadataText),
+    if (!userInvokedOnly) {
+      bindings.push({
+        rootId,
+        path: skill.skillFile,
+        contentKind: 'skill',
+        binding: {
+          tool: 'claude-code',
+          profile,
+          convention: 'claude-code/skill-metadata',
+          scope,
+          activation: parsed.valid ? 'session-start' : 'unresolved',
+          cadence: 'per-session',
+          charged: {
+            kind: 'frontmatter-fields',
+            fields: ['name', 'description'],
+            text: parsed.metadataText,
+            tokens: ctx.estimate(parsed.metadataText),
+          },
+          order: { kind: 'unordered', rule: 'skill listing order is not documented' },
+          conflict: 'combined-no-precedence',
+          semantics: spec,
         },
-        order: { kind: 'unordered', rule: 'skill listing order is not documented' },
-        conflict: 'combined-no-precedence',
-        semantics: spec,
-      },
-    });
+      });
+    }
     bindings.push({
       rootId,
       path: skill.skillFile,
@@ -600,7 +607,7 @@ function emitSkill(
         profile,
         convention: 'claude-code/skill-body',
         scope,
-        activation: parsed.valid ? 'model-decision' : 'unresolved',
+        activation: parsed.valid ? (userInvokedOnly ? 'on-invocation' : 'model-decision') : 'unresolved',
         cadence: 'once-on-trigger',
         charged: { kind: 'body', text: parsed.body, tokens: ctx.estimate(parsed.body) },
         order: { kind: 'unordered', rule: 'loads at activation time' },

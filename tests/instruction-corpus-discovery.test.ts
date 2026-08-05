@@ -4,6 +4,7 @@ import { mkdtempSync, mkdirSync, readFileSync, readdirSync, symlinkSync, writeFi
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { discoverInstructionCorpus } from '../src/corpora/instructions/index.ts';
+import { parseFrontmatter } from '../src/corpora/instructions/frontmatter.ts';
 import {
   fakeEstimator,
   fixtureRoot,
@@ -145,6 +146,57 @@ test('integration: this repository\'s tracked AGENTS.md maps with multi-tool bin
   }
   assert.ok(agents!.fullFile.count > 0);
   assert.ok(agents!.bindings.every((binding) => binding.charged.tokens.estimator === 'fake-words@1'));
+});
+
+test('unterminated frontmatter keeps its raw block instead of an empty string', () => {
+  const content = '---\nname: broken\nnever closed';
+  const parsed = parseFrontmatter(content);
+  assert.ok(parsed.present && 'error' in parsed && /unterminated/.test(parsed.error));
+  assert.ok(parsed.present && 'raw' in parsed && parsed.raw === content);
+});
+
+test('containment accepts Windows-style realpaths for in-root files', async () => {
+  const trees = { 'C:\\repo': { 'AGENTS.md': 'Windows guidance.\n' } };
+  const fs = memoryFileSystem(trees);
+  const corpus = await discoverInstructionCorpus(
+    { repoRoot: 'C:\\repo' },
+    {
+      estimator: fakeEstimator,
+      fileSystem: {
+        ...fs,
+        // Mimic win32 realpath(): backslash-separated absolute paths.
+        realPath: async (rootPath, relPath) =>
+          relPath === '' ? rootPath : `${rootPath}\\${relPath.replaceAll('/', '\\')}`,
+      },
+    },
+  );
+  const agents = corpus.files.find((file) => file.locator === 'repo:AGENTS.md');
+  assert.ok(agents, 'an in-root file on a backslash filesystem must not read as escaping');
+  assert.equal(agents!.content, 'Windows guidance.\n');
+});
+
+test('diagnostics from merge-time reads (skill resources) are not dropped', async () => {
+  const fs = memoryFileSystem({
+    '/repo': {
+      '.claude/skills/tool/SKILL.md':
+        '---\nname: tool\ndescription: A tool skill for testing.\n---\nBody.\n',
+      '.claude/skills/tool/huge.bin': 'x',
+    },
+  });
+  const corpus = await discoverInstructionCorpus(
+    { repoRoot: '/repo' },
+    {
+      estimator: fakeEstimator,
+      fileSystem: {
+        ...fs,
+        fileSize: async (root, rel) =>
+          rel === '.claude/skills/tool/huge.bin' ? 5 * 1024 * 1024 : fs.fileSize(root, rel),
+      },
+    },
+  );
+  assert.ok(corpus.diagnostics.some(
+    (d) => d.locator === 'repo:.claude/skills/tool/huge.bin' && /exceeds/.test(d.message),
+  ), 'oversized resource read during the merge loop must surface');
 });
 
 test('the library imports no check, core, provider, cache, or CLI code', () => {

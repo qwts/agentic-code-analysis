@@ -493,5 +493,27 @@ function emitSkill(
         semantics: spec,
       },
     });
+    // Supporting files load on demand after invocation — without these
+    // bindings downstream checks undercount skill footprints (PR #48
+    // review).
+    for (const resource of skill.resources) {
+      bindings.push({
+        rootId,
+        path: resource,
+        contentKind: 'unknown',
+        binding: {
+          tool: 'windsurf-devin',
+          profile,
+          convention: 'windsurf/skill-resource',
+          scope: { kind: 'always' },
+          activation: 'on-demand-resource',
+          cadence: 'once-on-trigger',
+          charged: { kind: 'none', text: '', tokens: ctx.estimate('') },
+          order: { kind: 'unordered', rule: 'resources load on demand' },
+          conflict: 'combined-no-precedence',
+          semantics: spec,
+        },
+      });
+    }
   }
 }

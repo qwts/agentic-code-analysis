@@ -69,11 +69,18 @@ export const cursorAdapter: ConventionAdapter = {
       const name = posixBasename(path);
       const dir = posixDirname(path);
 
-      // .cursor/rules — .mdc rules, root or nested; identical in the CLI.
+      // .cursor/rules — .mdc rules plus .md files that carry frontmatter
+      // metadata (frontmatter-less .md is ignored); root or nested;
+      // identical in the CLI.
       const rulesMatch = /^(?:(.*)\/)?\.cursor\/rules\/[^/]+$/.exec(path);
       if (rulesMatch !== null) {
         const base = rulesMatch[1] ?? '';
-        if (name.endsWith('.md')) {
+        const isMd = name.endsWith('.md');
+        if (!isMd && !name.endsWith('.mdc')) continue;
+        const content = await ctx.read(repo.root.id, path);
+        if (content === null) continue;
+        const frontmatter = parseFrontmatter(content);
+        if (isMd && !frontmatter.present) {
           diagnostics.push({
             severity: 'info',
             message: '.md files in .cursor/rules are ignored unless they carry frontmatter metadata',
@@ -81,14 +88,10 @@ export const cursorAdapter: ConventionAdapter = {
           });
           continue;
         }
-        if (!name.endsWith('.mdc')) continue;
-        const content = await ctx.read(repo.root.id, path);
-        if (content === null) continue;
-        const frontmatter = parseFrontmatter(content);
         if (!frontmatter.present || 'error' in frontmatter) {
           const reason = !frontmatter.present
             ? 'missing .mdc frontmatter'
-            : `malformed .mdc frontmatter (${frontmatter.error})`;
+            : `malformed rule frontmatter (${frontmatter.error})`;
           diagnostics.push({
             severity: 'warn',
             message: `${reason}; activation unresolved`,

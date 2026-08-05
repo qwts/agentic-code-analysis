@@ -75,6 +75,29 @@ test('claude conditional loads: nested memory, path-scoped rules, skill bodies, 
   assert.ok(active.confirmedTokens.count > idle.confirmedTokens.count);
 });
 
+test('claude disable-model-invocation: no description in context, body only on explicit invocation', async () => {
+  const mapped = await corpus();
+  const skillFile = mapped.files.find(
+    (file) => file.locator === 'repo:.claude/skills/secret-tool/SKILL.md',
+  );
+  assert.ok(skillFile);
+  assert.ok(
+    !skillFile!.bindings.some((binding) => binding.convention === 'claude-code/skill-metadata'),
+    'description must not charge at session start',
+  );
+  const body = skillFile!.bindings.find((binding) => binding.convention === 'claude-code/skill-body');
+  assert.equal(body!.activation, 'on-invocation');
+
+  const idle = resolveInstructionSession(mapped, { profile: 'claude-local', cwd: '.' });
+  assert.ok(!locators(idle).includes('repo:.claude/skills/secret-tool/SKILL.md'));
+  const invoked = resolveInstructionSession(mapped, {
+    profile: 'claude-local',
+    cwd: '.',
+    invoked: ['repo:.claude/skills/secret-tool/SKILL.md'],
+  });
+  assert.ok(locators(invoked).includes('repo:.claude/skills/secret-tool/SKILL.md'));
+});
+
 test('claude-cloud sessions pay for repository files only', async () => {
   const mapped = await corpus();
   const cloud = resolveInstructionSession(mapped, { profile: 'claude-cloud', cwd: '.' });
