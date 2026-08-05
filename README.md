@@ -20,11 +20,12 @@ three checks — `aca context-footprint`, `aca failure-posture`, and
 - [First check: context-footprint](docs/design/check-context-footprint.md)
 - [Second check: failure-posture](docs/design/check-failure-posture.md) — behavior when dependencies misbehave; rubric: [file-failure-posture](docs/standards/file-failure-posture.md)
 - [Third check: test-honesty](docs/design/check-test-honesty.md)
+- [Fourth check: naming-truth](docs/design/check-naming-truth.md)
 - [Prior art and the bar being raised](docs/design/prior-art.md)
 - [Implementation plan](docs/plan/issues.md)
 - [Check backlog](docs/plan/backlog.md) — candidate checks awaiting design
 - [Decisions (ACA series)](docs/decisions/README.md)
-- [The enforced standard](docs/standards/file-context-footprint.md) (vendored; Agent Space copy is canonical)
+- [The enforced standards](docs/standards/) — [file-context-footprint](docs/standards/file-context-footprint.md) (vendored; Agent Space copy is canonical), [naming-truth](docs/standards/naming-truth.md) (authored here)
 
 Contribution workflow: [CONTRIBUTING.md](CONTRIBUTING.md). Agent context:
 [AGENTS.md](AGENTS.md).

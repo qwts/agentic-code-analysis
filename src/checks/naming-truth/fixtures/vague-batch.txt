@@ -1,0 +1,17 @@
+export interface RawEvent {
+  id: string;
+  payload: string;
+}
+
+/** Trim ids and drop duplicate events, first occurrence wins. */
+export function processEvents(events: RawEvent[]): RawEvent[] {
+  const seen = new Set<string>();
+  const out: RawEvent[] = [];
+  for (const event of events) {
+    const id = event.id.trim();
+    if (seen.has(id)) continue;
+    seen.add(id);
+    out.push({ id, payload: event.payload });
+  }
+  return out;
+}

@@ -1,0 +1,15 @@
+export interface Order {
+  id: string;
+  lines: { sku: string; quantity: number }[];
+  total: number;
+}
+
+/** True when the order can be submitted. */
+export function isValidOrder(order: Order): boolean {
+  if (order.lines.length === 0) throw new Error(`order ${order.id} has no lines`);
+  if (order.total < 0) throw new Error(`order ${order.id} has a negative total`);
+  for (const line of order.lines) {
+    if (line.quantity <= 0) throw new Error(`order ${order.id}: ${line.sku} quantity must be positive`);
+  }
+  return true;
+}
