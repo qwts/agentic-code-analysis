@@ -1,0 +1,67 @@
+{
+  "schemaVersion": 2,
+  "requiredLevel": "coverage",
+  "levels": [{ "id": "foundation" }, { "id": "coverage" }],
+  "fixtures": [
+    {
+      "name": "padded-restatement-fails",
+      "level": "foundation",
+      "file": "CLAUDE.md",
+      "content": "padded-restatement.md",
+      "sha256": "055a2ed54a736ed6f8e3d88100b21bad61c8e54cfc3788057df920f6272fbb9d",
+      "expect": {
+        "assessment": "padded",
+        "verdict": "fail",
+        "criteriaAnyOf": ["discoverable-restatement", "low-density-prose"]
+      },
+      "source": {
+        "note": "Synthetic: package.json restatement, directory-layout narration, hedged style prose. 1717 bytes — the same-length control for dense-tribal-passes."
+      }
+    },
+    {
+      "name": "dense-tribal-passes",
+      "level": "foundation",
+      "file": "CLAUDE.md",
+      "content": "dense-tribal.md",
+      "sha256": "6ee5ad6354e133488d41c8268993271186bb39e2f480e4aa0126efd85bafcefd",
+      "expect": {
+        "assessment": "dense",
+        "verdict": "pass"
+      },
+      "source": {
+        "note": "Synthetic: version pins with reasons, shared-infra timing, incident-derived footguns — nothing derivable from a repo listing. 1558 bytes, within 10% of the padded control: pins that length is not the signal."
+      }
+    },
+    {
+      "name": "enforceable-rules-move-to-hook",
+      "level": "coverage",
+      "file": "CLAUDE.md",
+      "content": "enforceable-rules.md",
+      "sha256": "c2249aa3ce5ad93b810d845bd29b6ea6b74f6e5a7a8bf9350f9df606c425c1ca",
+      "expect": {
+        "assessment": "padded",
+        "verdict": "fail",
+        "criteriaAnyOf": ["mechanically-enforceable"],
+        "actionsAnyOf": ["move-to-hook"]
+      },
+      "source": {
+        "note": "Synthetic: quote style, line length, indentation, lint-before-commit — every rule a formatter/linter/hook enforces at zero context cost."
+      }
+    },
+    {
+      "name": "oversized-example-fails",
+      "level": "coverage",
+      "file": "CLAUDE.md",
+      "content": "oversized-example.md",
+      "sha256": "2ee6f529b1c9474db1758b266fcfe62ee3197e97e3ad845cafbf820f075eeaf5",
+      "expect": {
+        "assessment": "padded",
+        "verdict": "fail",
+        "criteriaAnyOf": ["oversized-example"]
+      },
+      "source": {
+        "note": "Synthetic: a two-line Conventional Commits rule followed by three narrated worked examples."
+      }
+    }
+  ]
+}
