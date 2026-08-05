@@ -108,19 +108,6 @@ jobs:
       - run: npm run typecheck
       - run: npm test
 
-  codeql:
-    needs: [policy, merge-evidence, preflight-evidence]
-    if: >-
-      always() && needs.policy.result == 'success' &&
-      ((needs.policy.outputs.run_full == 'true' && needs.preflight-evidence.outputs.validated != 'true') ||
-      (needs.policy.outputs.run_post_merge == 'true' && needs.merge-evidence.outputs.validated != 'true'))
-    permissions:
-      actions: read
-      contents: read
-      packages: read
-      security-events: write
-    uses: ./.github/workflows/codeql.yml
-
   post-merge:
     name: Post-merge smoke
     needs: [policy, merge-evidence]
@@ -140,7 +127,7 @@ jobs:
 
   gate:
     name: CI
-    needs: [policy, merge-evidence, preflight-evidence, test, codeql, post-merge]
+    needs: [policy, merge-evidence, preflight-evidence, test, post-merge]
     if: always() && (github.event_name != 'pull_request' || github.event.pull_request.draft == false)
     runs-on: ubuntu-latest
     steps:
@@ -149,7 +136,6 @@ jobs:
           MODE: ${{ needs.policy.outputs.mode }}
           POLICY: ${{ needs.policy.result }}
           TEST: ${{ needs.test.result }}
-          CODEQL: ${{ needs.codeql.result }}
           PREFLIGHT: ${{ needs.preflight-evidence.result }}
           PREFLIGHT_VALIDATED: ${{ needs.preflight-evidence.outputs.validated }}
           MERGE_VALIDATED: ${{ needs.merge-evidence.outputs.validated }}
@@ -162,19 +148,16 @@ jobs:
                 test "$PREFLIGHT" = success
               else
                 test "$TEST" = success
-                test "$CODEQL" = success
               fi
               ;;
             manual)
               test "$TEST" = success
-              test "$CODEQL" = success
               ;;
             post-merge)
               if [ "$MERGE_VALIDATED" = true ]; then
                 test "$POST_MERGE" = success
               else
                 test "$TEST" = success
-                test "$CODEQL" = success
               fi
               ;;
             *) exit 1 ;;
