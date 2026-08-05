@@ -1,0 +1,5 @@
+---
+globs: src/**/*.tsx
+alwaysApply: false
+---
+Auto-attached rule body.
