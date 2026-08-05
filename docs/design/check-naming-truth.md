@@ -28,7 +28,9 @@ merely touched it. A rename stays legacy under its base path (the rename
 itself can improve or regress the module claim); a copy/extraction is new.
 
 The authoritative criteria are exactly three — `name-contradicts-behavior`,
-`name-omits-side-effect`, `name-drifted` — defined in the standard.
+`name-omits-side-effect`, `name-drifted` — defined in the standard. A side
+effect means *state-changing* I/O: read-only sourcing (loading a file,
+consulting configuration, a read-only query or subprocess) is not one.
 Incidental logging/metrics/memoization/internal mutation/async mechanics and
 programmer-error preconditions are not lies; a vague-but-not-false name is
 never promoted into a criterion. When behavior lives behind an import and is
@@ -115,7 +117,10 @@ behavior → suggested truthful name).
 
 One file per request; concurrency 3 through a stable-order worker pool
 shared by run and self-test; `max_tokens` 4096; pinned prompt version
-`naming-truth-v1` (any prompt change bumps it). Verdicts memoized with the
+`naming-truth-v2` (any prompt change bumps it; v1 → v2 sharpened
+`name-omits-side-effect` to state-changing I/O after a cross-model
+self-application run read "file I/O" literally and failed read-only
+sourcing like a rule-file load). Verdicts memoized with the
 **pair-addressed key** of ACA-0013: comparison kind (explicit absent-base
 marker), both snapshots' path/content/sorted import edges, rule text,
 prompt version, provider, model. Path is a semantic input here — the module

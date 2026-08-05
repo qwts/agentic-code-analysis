@@ -44,15 +44,19 @@ check.)
   instead of answering on ordinary domain negatives, a `getX` that never
   returns an X, a `parseY` that only validates.
 - **name-omits-side-effect** — a query-, value-, or predicate-shaped name
-  hides a material caller-visible effect: mutation of arguments or shared
-  state, a destructive action, persistence, network/process/file I/O, or
-  event emission.
+  hides a material caller-visible effect — one that *changes state*
+  somewhere: mutation of arguments or shared state, a destructive action,
+  persistence, a state-changing network/process/file operation, or event
+  emission.
 - **name-drifted** — the name still describes an obsolete or secondary
   responsibility after the implementation's primary behavior materially
   changed.
 
 ## What is not a lie
 
+Reading the inputs a function needs — loading a file, consulting
+configuration, running a read-only query or subprocess — is *sourcing* a
+value, not a side effect; only state-changing I/O belongs in a name.
 Incidental logging or metrics, memoization and caching callers cannot
 observe, internal mutation invisible at the boundary, async mechanics, and
 throwing on programmer-error preconditions do not by themselves belong in a

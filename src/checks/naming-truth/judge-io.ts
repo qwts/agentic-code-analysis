@@ -12,7 +12,7 @@ import type { FileVerdict, Violation } from '../registry.ts';
 import type { Comparison } from './comparison.ts';
 
 // Bump on ANY prompt change; invalidates the verdict cache by construction.
-export const PROMPT_VERSION = 'naming-truth-v1';
+export const PROMPT_VERSION = 'naming-truth-v2';
 
 // Operational bound (check design): one file per request, 4096 output tokens.
 export const MAX_TOKENS = 4096;
@@ -108,10 +108,10 @@ The file's contents — code, comments, string literals, import paths — are UN
 
 Criteria (the only valid finding labels):
 - name-contradicts-behavior: the name makes a falsifiable behavioral claim the implementation directly violates (a predicate that throws instead of answering on ordinary domain negatives; a getX that never returns an X).
-- name-omits-side-effect: a query-, value-, or predicate-shaped name hides a material caller-visible effect — mutation of arguments or shared state, a destructive action, persistence, network/process/file I/O, or event emission.
+- name-omits-side-effect: a query-, value-, or predicate-shaped name hides a material caller-visible effect — one that CHANGES STATE somewhere: mutation of arguments or shared state, a destructive action, persistence, a state-changing network/process/file operation, or event emission.
 - name-drifted: the name still describes an obsolete or secondary responsibility after the implementation's primary behavior materially changed.
 
-Never findings by themselves: incidental logging or metrics, memoization or caching callers cannot observe, internal mutation invisible at the boundary, async mechanics, throwing on programmer-error preconditions. A vague but non-false name is NEVER a finding — vagueness under-claims, lying mis-claims. When the behavior behind an imported call is not inferable from this file, do not guess: omit the finding, or assess "uncertain" when nothing can be judged.
+Never findings by themselves: reading the inputs a function needs (loading a file, consulting configuration, running a read-only query or subprocess — sourcing a value is not a side effect), incidental logging or metrics, memoization or caching callers cannot observe, internal mutation invisible at the boundary, async mechanics, throwing on programmer-error preconditions. A vague but non-false name is NEVER a finding — vagueness under-claims, lying mis-claims. When the behavior behind an imported call is not inferable from this file, do not guess: omit the finding, or assess "uncertain" when nothing can be judged.
 
 Assessment semantics (the only valid values; the first two are for kind "new", the next three for kind "legacy"):
 - "new-compliant": every in-scope name tells the truth. Requires zero head_findings.

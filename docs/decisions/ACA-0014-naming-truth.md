@@ -58,7 +58,9 @@ contracts structurally; rich fields survive `--json`, and the concise
 **Bounds and cache per ACA-0013**, with the pair-addressed key; the path is
 a semantic key component here because the module name is itself judged
 evidence. One file per request, stable-order pool of three shared by run
-and self-test, `max_tokens` 4096, pinned `naming-truth-v1`. Calibration is
+and self-test, `max_tokens` 4096, pinned prompt version (v2 at acceptance:
+a cross-model self-application run read v1's "file I/O" literally and
+failed read-only sourcing, so the criterion now says state-changing I/O). Calibration is
 five synthetic ACA-owned counterfactual fixtures (design doc) asserting
 assessment, verdict, criterion, and symbol; the truthfully-named twin of
 the lying fixture is the negative control proving the judge rejects the
