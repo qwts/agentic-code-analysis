@@ -1,0 +1,22 @@
+// Retry with exponential backoff.
+export const DEFAULT_RETRIES = 5;
+
+export interface RetryOptions {
+  retries?: number;
+  baseDelayMs?: number;
+}
+
+export async function withRetry<T>(fn: () => Promise<T>, options: RetryOptions = {}): Promise<T> {
+  const retries = options.retries ?? DEFAULT_RETRIES;
+  const baseDelayMs = options.baseDelayMs ?? 100;
+  let lastError: unknown;
+  for (let attempt = 0; attempt <= retries; attempt += 1) {
+    try {
+      return await fn();
+    } catch (err) {
+      lastError = err;
+      if (attempt < retries) await new Promise((resolve) => setTimeout(resolve, baseDelayMs * 2 ** attempt));
+    }
+  }
+  throw lastError;
+}
