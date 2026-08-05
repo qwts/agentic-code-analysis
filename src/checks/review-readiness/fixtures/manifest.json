@@ -1,0 +1,31 @@
+{
+  "schemaVersion": 1,
+  "requiredLevel": "discriminates",
+  "levels": [{ "id": "discriminates" }],
+  "fixtures": [
+    {
+      "name": "debris-multi-file",
+      "level": "discriminates",
+      "dir": "forgotten-debris",
+      "expect": {
+        "verdict": "fail",
+        "criteria": [
+          { "criterion": "leftover-debug", "file": "src/report.ts", "line": 8 },
+          { "criterion": "silenced-test", "file": "tests/report.test.ts", "line": 9 }
+        ]
+      },
+      "source": {
+        "note": "Synthetic pair (issue #21 requirement 4): a sorting feature swept in with a forgotten console.log and a test skipped with no reason."
+      }
+    },
+    {
+      "name": "clean-equivalent",
+      "level": "discriminates",
+      "dir": "clean-equivalent",
+      "expect": { "verdict": "pass", "criteria": [] },
+      "source": {
+        "note": "The same sorting feature done cleanly: documented behavior change, test updated instead of silenced. Discriminates sweep judgment from mere diff-pattern matching."
+      }
+    }
+  ]
+}
