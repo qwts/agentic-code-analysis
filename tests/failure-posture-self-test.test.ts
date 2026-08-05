@@ -73,7 +73,7 @@ test('all levels pass: achieved field, qualified, manifest-ordered report', asyn
     ['new-unsafe', 'new-resilient', 'legacy-hardened', 'legacy-softened', 'legacy-held-debt'],
   );
   assert.match(result.report.fixtureSuite, /^sha256:[0-9a-f]{16}$/);
-  assert.equal(result.report.promptVersion, 'failure-posture-v1');
+  assert.equal(result.report.promptVersion, 'failure-posture-v2');
 });
 
 test('naming only one of the required criteria misses the all-of oracle', async () => {
