@@ -119,7 +119,7 @@ ACA ships the [`run-aca` Agent Skill](../.agents/skills/run-aca/SKILL.md) for
 choosing a live check, qualifying its configured route, running advisory JSON,
 and interpreting findings without mistaking exit 0 for a clean result. Install
 or symlink that package into the host's skill directory while keeping a full
-ACA checkout with dependencies installed. A copied package sets
+ACA checkout with dependencies installed. After copying the package, set
 `ACA_REPO_ROOT` to that checkout; run its `scripts/run-aca --help` from the
 consuming repository. The launcher never clones, installs, or changes config.
 

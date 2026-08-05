@@ -13,7 +13,9 @@ canonical_dir() {
 }
 
 checkout_shape_is_valid() {
-  [ -f "$1/package.json" ] && [ -f "$1/src/cli.ts" ]
+  [ -f "$1/package.json" ] && [ -f "$1/src/cli.ts" ] || return 1
+  node -e "const p = require(process.argv[1]); process.exit(p.name === 'agentic-code-analysis' ? 0 : 1)" \
+    "$1/package.json" 2>/dev/null
 }
 
 check_runtime() {
@@ -31,7 +33,7 @@ run_checkout() {
   shift
   for dependency in yaml js-tiktoken @anthropic-ai/sdk openai; do
     [ -f "$root/node_modules/$dependency/package.json" ] ||
-      fail "ACA dependencies are missing in $root; run npm clean-install there"
+      fail "ACA dependency $dependency is missing in $root; run npm clean-install there"
   done
   exec node "$root/src/cli.ts" "$@"
 }

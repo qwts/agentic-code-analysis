@@ -130,6 +130,33 @@ test('a genuine aca executable is the final fallback', () => {
   }
 });
 
+test('an out-of-tree copy never mistakes the consuming repository for ACA', () => {
+  const item = fixture();
+  try {
+    const copied = join(item.consumer, '.agents', 'skills', 'run-aca', 'scripts', 'run-aca');
+    mkdirSync(dirname(copied), { recursive: true });
+    copyFileSync(SOURCE, copied);
+    chmodSync(copied, 0o755);
+    mkdirSync(join(item.consumer, 'src'));
+    writeFileSync(join(item.consumer, 'package.json'), '{"name":"consumer-repository"}\n');
+    writeFileSync(join(item.consumer, 'src', 'cli.ts'), "process.stdout.write('wrong CLI');\n");
+
+    const bin = join(item.root, 'bin');
+    mkdirSync(bin);
+    const aca = join(bin, 'aca');
+    writeFileSync(aca, '#!/bin/sh\nprintf genuine-aca\n');
+    chmodSync(aca, 0o755);
+    const result = run(item, ['--help'], {
+      ACA_REPO_ROOT: undefined,
+      PATH: `${bin}:${process.env['PATH'] ?? ''}`,
+    }, copied);
+    assert.equal(result.status, 0);
+    assert.equal(result.stdout, 'genuine-aca');
+  } finally {
+    rmSync(item.root, { recursive: true, force: true });
+  }
+});
+
 test('unresolved checkout reports one actionable error', () => {
   const item = fixture();
   try {
@@ -158,6 +185,7 @@ test('invalid explicit checkout, missing dependencies, and old Node fail without
     rmSync(join(item.checkout, 'node_modules', 'yaml'), { recursive: true, force: true });
     const missing = run(item, [], { ACA_REPO_ROOT: item.checkout });
     assert.equal(missing.status, 2);
+    assert.match(missing.stderr, /dependency yaml is missing/);
     assert.match(missing.stderr, /npm clean-install/);
 
     const bin = join(item.root, 'old-node-bin');
