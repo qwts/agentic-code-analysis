@@ -207,16 +207,128 @@ export function resolveExecutionDirs(cwd, command) {
   if (typeof command !== 'string') return [cwd];
   const directories = [cwd];
   let current = cwd;
+  const parentScopes = [];
+  const events = [];
+
+  // A subshell inherits its parent's cwd but cannot change it. Record both the
+  // child scopes and the restored parent scope so a later relative `cd` is
+  // resolved from the directory the shell will actually use.
+  const shellSyntax = new Uint8Array(command.length);
+  const contexts = [{ mode: 'shell', closesSubshell: false }];
+  for (let index = 0; index < command.length; index += 1) {
+    const character = command[index];
+    const context = contexts.at(-1);
+    if (context.mode === 'single-quote') {
+      if (character === "'") contexts.pop();
+      continue;
+    }
+    if (context.mode === 'double-quote') {
+      if (character === '\\') {
+        index += 1;
+        continue;
+      }
+      if (character === '"') {
+        contexts.pop();
+        continue;
+      }
+      if (character === '$' && command[index + 1] === '(') {
+        events.push({ index: index + 1, type: 'subshell-open' });
+        contexts.push({ mode: 'shell', closesSubshell: true });
+        index += 1;
+      }
+      continue;
+    }
+    shellSyntax[index] = 1;
+    if (character === '\\') {
+      index += 1;
+      continue;
+    }
+    if (character === "'") {
+      contexts.push({ mode: 'single-quote' });
+      continue;
+    }
+    if (character === '"') {
+      contexts.push({ mode: 'double-quote' });
+      continue;
+    }
+    if (character === '(') {
+      events.push({ index, type: 'subshell-open' });
+      contexts.push({ mode: 'shell', closesSubshell: true });
+      continue;
+    }
+    if (character === ')' && context.closesSubshell) {
+      events.push({ index, type: 'subshell-close' });
+      contexts.pop();
+    }
+  }
+
   const transitions = /(?:^|\|\||&&|[;\n|&(){}])\s*cd\s+(?:--\s+)?(?:"([^"]+)"|'([^']+)'|([^\s;&|(){}]+))/gu;
   for (const match of command.matchAll(transitions)) {
-    let target = match[1] ?? match[2] ?? match[3];
+    const index = match.index + match[0].indexOf('cd');
+    if (shellSyntax[index]) events.push({ index, target: match[1] ?? match[2] ?? match[3], type: 'cd' });
+  }
+
+  // GNU/POSIX-compatible env implementations may change directory for the
+  // child command with `-C` or `--chdir`. This scope does not persist in the
+  // parent shell, so record it without updating `current`.
+  const envCommands = /(?:^|\|\||&&|[;\n|&(){}])\s*(?:\S*\/)?env(?=\s|$)([^;\n|&(){}]*)/gu;
+  for (const match of command.matchAll(envCommands)) {
+    const envIndex = match.index + match[0].indexOf('env');
+    if (!shellSyntax[envIndex]) continue;
+    const words = [...match[1].matchAll(/"([^"]*)"|'([^']*)'|([^\s]+)/gu)].map((word) => word[1] ?? word[2] ?? word[3]);
+    let chdirTarget;
+    for (let index = 0; index < words.length; index += 1) {
+      const word = words[index];
+      if (word === '-C' || word === '--chdir') {
+        chdirTarget = words[index + 1];
+        index += 1;
+      } else if (word.startsWith('--chdir=')) {
+        chdirTarget = word.slice('--chdir='.length);
+      } else if (/^-C.+/u.test(word)) {
+        chdirTarget = word.slice(2);
+      } else if (/^(?:-u|--unset|-P|--path)$/u.test(word)) {
+        index += 1;
+      } else if (word === '-S' || word === '--split-string') {
+        const splitWords = [...(words[index + 1] ?? '').matchAll(/"([^"]*)"|'([^']*)'|([^\s]+)/gu)].map((part) => part[1] ?? part[2] ?? part[3]);
+        words.splice(index, 2, ...splitWords);
+        index -= 1;
+      } else if (/^(?:-S|--split-string)=/u.test(word)) {
+        const splitWords = [...word.slice(word.indexOf('=') + 1).matchAll(/"([^"]*)"|'([^']*)'|([^\s]+)/gu)].map((part) => part[1] ?? part[2] ?? part[3]);
+        words.splice(index, 1, ...splitWords);
+        index -= 1;
+      } else if (word === '--') {
+        break;
+      } else if (!word.startsWith('-') && !/^\w+=/u.test(word)) {
+        break;
+      }
+    }
+    if (chdirTarget) events.push({ index: envIndex, target: chdirTarget, type: 'env-chdir' });
+  }
+
+  const resolveTarget = (target, base) => {
     if (target.startsWith('~')) {
       const home = process.env.HOME;
-      if (!home) continue;
+      if (!home) return null;
       target = home + target.slice(1);
     }
-    current = isAbsolute(target) ? target : resolve(current, target);
-    directories.push(current);
+    return isAbsolute(target) ? target : resolve(base, target);
+  };
+
+  const order = { 'subshell-open': 0, cd: 1, 'env-chdir': 1, 'subshell-close': 2 };
+  events.sort((left, right) => left.index - right.index || order[left.type] - order[right.type]);
+  for (const event of events) {
+    if (event.type === 'subshell-open') {
+      parentScopes.push(current);
+      continue;
+    }
+    if (event.type === 'subshell-close') {
+      current = parentScopes.pop() ?? current;
+      continue;
+    }
+    const target = resolveTarget(event.target, current);
+    if (!target) continue;
+    directories.push(target);
+    if (event.type === 'cd') current = target;
   }
   return directories;
 }

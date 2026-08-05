@@ -19,7 +19,7 @@ import path from 'node:path';
 import { after, describe, test } from 'node:test';
 import { fileURLToPath } from 'node:url';
 
-import { evaluateCommand } from '../guard-agent-command.mjs';
+import { evaluateCommand, evaluateHookInput } from '../guard-agent-command.mjs';
 import { clampCeiling, deriveBudget } from '../lib/budget.mjs';
 import { isCi } from '../lib/policy.mjs';
 
@@ -110,6 +110,12 @@ describe('agent-guard conformance (ENG-0138)', () => {
     for (const command of ['npm run ci', 'npm run test:e2e', 'npm run test:stories:ci', 'npx playwright test', 'test-storybook --ci']) {
       assert.equal(evaluateCommand(command, { env }).allow, false, `expected the guard to deny: ${command}`);
     }
+  });
+
+  test('hook scoping follows child directories without leaking subshell cwd', () => {
+    assert.equal(evaluateHookInput({ cwd: '/outside', command: 'env -C /project npx vitest' }, '/project', { env }).allow, false);
+    assert.equal(evaluateHookInput({ cwd: '/outside', command: 'env --chdir=/project npm run ci' }, '/project', { env }).allow, false);
+    assert.equal(evaluateHookInput({ cwd: '/outside', command: '(cd /tmp); cd project && npm run ci' }, '/outside/project', { env }).allow, false);
   });
 
   test('the guard denies tampering with its own controls', () => {
