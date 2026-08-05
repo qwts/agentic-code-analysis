@@ -134,4 +134,29 @@ test('payload bound: an oversized file is omitted whole, named with head hunk ra
   assert.deepEqual(bounded.included, ['small.ts'], 'greedy skip-and-continue still includes later files that fit');
   assert.deepEqual(bounded.omitted, [{ path: 'huge.ts', hunks: ['+1,200'] }]);
   assert.ok(!bounded.text.includes('line number 42'), 'omitted content must not leak into the payload');
+
+  // The bound is exact: separators count too (Copilot, PR #36).
+  assert.ok(!full.text.includes('\n\n\n'), 'exactly one blank line between file sections');
+  assert.match(full.text, /\n\n=== /);
+  for (const bound of [10, 100, 500, full.text.length, full.text.length + 2]) {
+    assert.ok(renderPayload(artifact, bound).text.length <= bound, `rendered text must fit the ${bound}-char bound`);
+  }
+});
+
+test('binary diffs keep their identity from the diff header and render as binary, never silently vanish', () => {
+  const { root, git } = tempRepo();
+  writeFileSync(join(root, 'blob.bin'), Buffer.from([0, 1, 2, 3, 0, 255]));
+  writeFileSync(join(root, 'a.ts'), 'code\n');
+  git('add', '.');
+  git('commit', '-q', '-m', 'base');
+  writeFileSync(join(root, 'blob.bin'), Buffer.from([9, 8, 7, 0, 255, 0, 1]));
+
+  const artifact = diffArtifactFromGit(root, 'main', ['blob.bin']);
+  assert.deepEqual(
+    artifact.files.map((f) => [f.path, f.status, f.binary, f.hunks.length]),
+    [['blob.bin', 'modified', true, 0]],
+  );
+  const payload = renderPayload(artifact, 1_000_000);
+  assert.deepEqual(payload.included, ['blob.bin']);
+  assert.match(payload.text, /=== blob\.bin \(modified\)\n\(binary — content not shown\)/);
 });

@@ -135,7 +135,9 @@ export function renderPayload(artifact: DiffArtifact, maxChars: number): Rendere
   const omitted: OmittedFile[] = [];
   let used = 0;
   for (const file of artifact.files) {
-    const rendered = renderFile(file);
+    // The blank separator line is part of the rendering so the bound is
+    // exact — the joined text can never exceed maxChars (Copilot, PR #36).
+    const rendered = `${renderFile(file)}\n`;
     if (used + rendered.length > maxChars) {
       omitted.push({ path: file.path, hunks: file.hunks.map((hunk) => `+${hunk.newStart},${hunk.newLines}`) });
       continue;
@@ -144,7 +146,7 @@ export function renderPayload(artifact: DiffArtifact, maxChars: number): Rendere
     parts.push(rendered);
     included.push(file.path);
   }
-  return { text: parts.join('\n'), included, omitted };
+  return { text: parts.join('').trimEnd(), included, omitted };
 }
 
 function renderFile(file: FileDiff): string {
@@ -252,14 +254,20 @@ function parseGitDiff(raw: string): FileDiff[] {
 
   const push = (): void => {
     if (!current) return;
-    if (current.status === 'deleted') current.path = oldPath;
+    // Deleted files keep their base-side identity; a binary deletion with no
+    // --- header keeps the diff-header fallback.
+    if (current.status === 'deleted' && oldPath !== '') current.path = oldPath;
     files.push(current);
   };
 
   for (const line of raw.split('\n')) {
     if (line.startsWith('diff --git ')) {
       push();
-      current = { path: '', status: 'modified', hunks: [] };
+      // The header path is the fallback identity: binary-only diffs emit no
+      // ---/+++/rename headers, and a file with an empty path would vanish
+      // from scope filtering instead of rendering (Copilot, PR #36). Later
+      // headers refine it when present.
+      current = { path: headerPath(line), status: 'modified', hunks: [] };
       hunk = null;
       oldPath = '';
       newPath = '';
@@ -280,7 +288,7 @@ function parseGitDiff(raw: string): FileDiff[] {
       oldPath = stripPrefix(line.slice(4));
     } else if (line.startsWith('+++ ')) {
       newPath = stripPrefix(line.slice(4));
-      if (current.path === '') current.path = newPath;
+      if (newPath !== '') current.path = newPath;
     } else if (line.startsWith('@@ ')) {
       const match = /^@@ -(\d+)(?:,(\d+))? \+(\d+)(?:,(\d+))? @@/.exec(line);
       if (!match) continue;
@@ -310,4 +318,13 @@ function parseGitDiff(raw: string): FileDiff[] {
 function stripPrefix(path: string): string {
   if (path === '/dev/null') return '';
   return path.startsWith('a/') || path.startsWith('b/') ? path.slice(2) : path;
+}
+
+/** Head-side path from a `diff --git a/<old> b/<new>` header. Splits on the
+ * last ` b/` so old paths containing that byte sequence cannot shift the
+ * boundary; exotic quoted paths are refined by later headers when present. */
+function headerPath(line: string): string {
+  const rest = line.slice('diff --git '.length);
+  const boundary = rest.lastIndexOf(' b/');
+  return boundary >= 0 ? rest.slice(boundary + 3) : '';
 }
