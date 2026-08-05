@@ -45,6 +45,7 @@ export interface Check {
 export type CheckLoader = () => Promise<Check>;
 
 export const checks: ReadonlyMap<string, CheckLoader> = new Map([
+  ['commit-coherence', async () => (await import('./commit-coherence/index.ts')).check],
   ['context-footprint', async () => (await import('./context-footprint/index.ts')).check],
   ['failure-posture', async () => (await import('./failure-posture/index.ts')).check],
   ['seam-audit', async () => (await import('./seam-audit/index.ts')).check],

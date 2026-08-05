@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { execFileSync } from 'node:child_process';
-import { mkdtempSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import {
@@ -75,6 +75,31 @@ test('git artifact: scope filters by head path; unresolvable base is a config er
     ['a.ts'],
   );
   assert.throws(() => diffArtifactFromGit(root, 'no-such-ref', ['a.ts']), ConfigError);
+});
+
+test('git artifact: includeDeletions keeps deleted files scope cannot name; the default drops them', () => {
+  const { root, git } = tempRepo();
+  writeFileSync(join(root, 'a.ts'), 'one\n');
+  writeFileSync(join(root, 'gone.ts'), 'doomed\n');
+  git('add', '.');
+  git('commit', '-q', '-m', 'base');
+  writeFileSync(join(root, 'a.ts'), 'one changed\n');
+  rmSync(join(root, 'gone.ts'));
+
+  assert.deepEqual(
+    diffArtifactFromGit(root, 'main', ['a.ts']).files.map((f) => f.path),
+    ['a.ts'],
+    'per-file checks judge current files only',
+  );
+  const withDeletions = diffArtifactFromGit(root, 'main', ['a.ts'], { includeDeletions: true });
+  assert.deepEqual(
+    withDeletions.files.map((f) => [f.path, f.status]),
+    [
+      ['a.ts', 'modified'],
+      ['gone.ts', 'deleted'],
+    ],
+    'the deletion keeps its base-path identity',
+  );
 });
 
 test('tree artifact: added/deleted/modified with correct hunk numbering; identical files skipped', () => {

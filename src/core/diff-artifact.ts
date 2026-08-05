@@ -55,15 +55,24 @@ const CONTEXT_LINES = 3;
 // truncating a realistic diff.
 const GIT_DIFF_MAX_BUFFER = 256 * 1024 * 1024;
 
+export interface GitArtifactOptions {
+  /** Keep deleted files regardless of scope: change scope cannot name a file
+   * that no longer exists, but a whole-change judgment (commit-coherence)
+   * is incomplete evidence without them. Default false — per-file checks
+   * judge current files only. */
+  includeDeletions?: boolean;
+}
+
 /**
  * Build the artifact from git: the full merge-base-vs-working-tree diff with
  * rename detection, then filtered to the selected scope. Diffing the whole
  * tree before filtering keeps renames detectable (a pathspec naming only the
  * head side would present a rename as a bare creation); the scope filter
  * matches head paths, so deleted files — excluded from change scope anyway —
- * only appear when named explicitly by their old path.
+ * only appear when named explicitly by their old path or via
+ * `includeDeletions`.
  */
-export function diffArtifactFromGit(repoRoot: string, baseRef: string, files: readonly string[]): DiffArtifact {
+export function diffArtifactFromGit(repoRoot: string, baseRef: string, files: readonly string[], options: GitArtifactOptions = {}): DiffArtifact {
   let mergeBase: string;
   try {
     mergeBase = git(['merge-base', baseRef, 'HEAD'], repoRoot);
@@ -76,7 +85,7 @@ export function diffArtifactFromGit(repoRoot: string, baseRef: string, files: re
     maxBuffer: GIT_DIFF_MAX_BUFFER,
   });
   const scope = new Set(files);
-  const parsed = parseGitDiff(raw).filter((file) => scope.has(file.path));
+  const parsed = parseGitDiff(raw).filter((file) => scope.has(file.path) || (options.includeDeletions === true && file.status === 'deleted'));
   // `git diff` cannot see untracked files, but explicit CLI paths bypass
   // change-scope selection precisely so a not-yet-added file can be judged
   // during local iteration (ACA-0003 D5). Without this they would report
