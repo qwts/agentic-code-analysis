@@ -58,11 +58,14 @@ function cacheKey(artifact: DiffArtifact, payload: RenderedPayload, provider: st
 
 async function run(context: CheckContext): Promise<FileVerdict[]> {
   const scoped = [...new Set(context.files.map((file) => normalize(file)))].sort();
-  if (scoped.length === 0) return [];
+  // No early return on an empty scope: change scope excludes deletions by
+  // design, so a deletion-only change arrives as zero files and the
+  // deletions must still be judged (Codex, PR #47).
   const artifact = diffArtifactFromGit(context.repoRoot, context.baseRef, scoped, { includeDeletions: true });
   const payload = renderPayload(artifact, MAX_PAYLOAD_CHARS);
   // Rows: the scoped files plus deletion-only paths the artifact carries.
   const rows = [...new Set([...scoped, ...artifact.files.map((file) => file.path)])].sort();
+  if (rows.length === 0) return [];
   const meta: RunMeta = { judgeCalls: 0, cacheHit: false, judged: payload.included, omitted: payload.omitted };
 
   let outcome: ArtifactOutcome;

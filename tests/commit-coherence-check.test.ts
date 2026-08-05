@@ -135,6 +135,29 @@ test('a deletion enters the judged artifact and gets its own row, even though sc
   );
 });
 
+test('a deletion-only change is judged despite the empty change scope', async () => {
+  const { root } = tempRepo();
+  rmSync(join(root, 'c.ts'));
+  const { client, requests } = countingClient(() => ({ ok: true, verdict: COHERENT }));
+  const verdicts = (await check.run(context(root, client, []))) as CommitCoherenceVerdict[];
+  assert.equal(requests.length, 1, 'change scope drops deletions, so an empty scope must still reach the artifact');
+  assert.deepEqual(
+    verdicts.map((v) => [v.file, v.verdict, v.note]),
+    [['c.ts', 'pass', 'deleted vs merge-base']],
+  );
+
+  // A different selection over the identical artifact is a cache hit.
+  const reselected = await check.run(context(root, client, ['a.ts']));
+  assert.equal(requests.length, 1, 'the key is the artifact, not the selection');
+  assert.deepEqual(
+    reselected.map((v) => [v.file, v.verdict]),
+    [
+      ['a.ts', 'pass'],
+      ['c.ts', 'pass'],
+    ],
+  );
+});
+
 test('degraded judgments are not cached: the next run retries', async () => {
   const { root } = tempRepo();
   writeFileSync(join(root, 'a.ts'), 'export const a = 2;\n');

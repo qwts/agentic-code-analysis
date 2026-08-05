@@ -48,8 +48,8 @@ merge-base — a possible future flag); readiness findings (sibling
 `review-readiness` owns debris).
 
 Tier: **T1 (judgment)**. Routing per the consuming config's tier map
-(currently T1 → Anthropic `claude-opus-5`, provisional; no model name in
-source).
+(ACA-0003 D6 — provider/model selection is configuration, never code; see
+`aca.config.json` for the current T1 route).
 
 ## Judge input
 
@@ -137,8 +137,10 @@ duck-typed so `--json` exposes it without widening `FileVerdict`,
 ## Cache and bounds
 
 One cache lookup, then **exactly one judge call per run** on a complete,
-non-empty miss; empty scope, hunkless-and-fileless artifacts, and bounded
-payloads make zero calls. `max_tokens` 4096. The key holds every semantic
+non-empty miss; an empty artifact (no scoped changes and no deletions)
+and bounded payloads make zero calls. An empty *selection* alone does
+not short-circuit: change scope excludes deletions, so a deletion-only
+change arrives as zero selected files and is still judged. `max_tokens` 4096. The key holds every semantic
 input: prompt version (`commit-coherence-v1`), the full canonical
 artifact (deletions included), the rendered payload and omission
 manifest, provider, model — never branch name, SHA, or base-ref identity.
