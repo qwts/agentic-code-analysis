@@ -17,6 +17,10 @@ function tempRepo(): { root: string; git: (...args: string[]) => string } {
   git('init', '-b', 'main');
   git('config', 'user.email', 'test@test');
   git('config', 'user.name', 'test');
+  // The base-blob test deletes a loose object by path; background gc or
+  // maintenance packing it would turn the fixture into an ENOENT flake.
+  git('config', 'gc.auto', '0');
+  git('config', 'maintenance.auto', 'false');
   writeFileSync(join(root, 'target.ts'), 'export const t = 1;\n');
   writeFileSync(join(root, 'user.ts'), `import { t } from './target.ts';\nexport const u = t;\n`);
   git('add', '.');
