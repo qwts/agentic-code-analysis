@@ -47,4 +47,5 @@ export type CheckLoader = () => Promise<Check>;
 export const checks: ReadonlyMap<string, CheckLoader> = new Map([
   ['context-footprint', async () => (await import('./context-footprint/index.ts')).check],
   ['failure-posture', async () => (await import('./failure-posture/index.ts')).check],
+  ['test-honesty', async () => (await import('./test-honesty/index.ts')).check],
 ]);

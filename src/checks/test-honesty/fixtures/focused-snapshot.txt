@@ -1,0 +1,8 @@
+import { expect, test } from 'vitest';
+import { renderErrorBanner } from '../src/error-banner.ts';
+
+test('renderErrorBanner names the failure and offers retry', () => {
+  expect(renderErrorBanner('quota exceeded')).toMatchInlineSnapshot(
+    `"<div role=\\"alert\\">quota exceeded — <button>Retry</button></div>"`
+  );
+});

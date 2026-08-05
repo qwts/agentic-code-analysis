@@ -1,0 +1,11 @@
+import { test } from 'node:test';
+import assert from 'node:assert/strict';
+import { slugify } from 'shared-text-utils';
+
+test('slugify lowercases and hyphenates words', () => {
+  assert.equal(slugify('Hello World'), 'hello-world');
+});
+
+test('slugify strips characters that are unsafe in URLs', () => {
+  assert.equal(slugify('a/b?c=d'), 'a-b-c-d');
+});
