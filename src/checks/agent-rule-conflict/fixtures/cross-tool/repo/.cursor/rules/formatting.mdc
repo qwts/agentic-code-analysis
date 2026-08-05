@@ -1,0 +1,5 @@
+---
+description: Indentation policy
+alwaysApply: true
+---
+Indent every source file with tabs; spaces for indentation are forbidden in this codebase.
