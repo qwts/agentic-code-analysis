@@ -45,7 +45,8 @@ const EXTERNAL_SNAPSHOT = /\.toMatch(?:File)?Snapshot\s*\(/;
 /** Helper/fixture/mock modules are support code, not the unit under test. */
 function isSupportModule(path: string, testGlobs: readonly string[]): boolean {
   if (isTestFile(path, testGlobs)) return true;
-  if (path.split('/').some((segment) => segment === '__mocks__' || segment === 'fixtures')) return true;
+  // normalize() yields backslash separators on Windows (Copilot, PR #32).
+  if (path.split(/[\\/]/).some((segment) => segment === '__mocks__' || segment === 'fixtures')) return true;
   const name = basename(path).replace(CODE_EXT, '');
   return name === 'helper' || name.endsWith('helpers') || name.endsWith('-helper');
 }

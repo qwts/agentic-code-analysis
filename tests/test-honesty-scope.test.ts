@@ -39,6 +39,11 @@ test('scopeTestFiles normalizes, deduplicates, and preserves input order', () =>
   assert.deepEqual(scoped, ['tests/b.test.ts', 'tests/a.test.ts']);
 });
 
+test('absolute and repo-escaping explicit paths are dropped from the corpus', () => {
+  const scoped = scopeTestFiles(['../outside.test.ts', 'a/../../escape.test.ts', '/etc/abs.test.ts', 'tests/a.test.ts'], DEFAULT_TEST_GLOBS);
+  assert.deepEqual(scoped, ['tests/a.test.ts']);
+});
+
 function configDir(config?: unknown): string {
   const dir = mkdtempSync(join(tmpdir(), 'aca-scope-'));
   if (config !== undefined) writeFileSync(join(dir, 'aca.config.json'), typeof config === 'string' ? config : JSON.stringify(config));

@@ -7,11 +7,10 @@ import { join } from 'node:path';
 import type { Check, CheckContext, FileVerdict } from '../registry.ts';
 import { VerdictCache } from '../../core/verdict-cache.ts';
 import { judgeOutcome, MAX_TOKENS, PROMPT_VERSION, rubricText, systemPrompt, userPrompt, VERDICT_SCHEMA } from './judge-io.ts';
+import { CONCURRENCY, mapPool } from './pool.ts';
 import { scopeTestFiles, testFileGlobs } from './scope.ts';
 import { buildEvidence, type Evidence } from './unit-context.ts';
 import { selfTest } from './self-test.ts';
-
-const CONCURRENCY = 3;
 
 /**
  * Every semantic input to the judgment (ACA-0003 D7): prompt version, the
@@ -58,21 +57,6 @@ async function run(context: CheckContext): Promise<FileVerdict[]> {
     if (cacheable) context.cache.set(key, verdict);
     return verdict;
   });
-}
-
-/** Bounded worker pool preserving input order (own copy — checks never
- * import each other, ACA-0003 D1). */
-async function mapPool<T, R>(items: T[], limit: number, fn: (item: T) => Promise<R>): Promise<R[]> {
-  const results: R[] = new Array(items.length);
-  let next = 0;
-  const workers = Array.from({ length: Math.min(limit, items.length) }, async () => {
-    while (next < items.length) {
-      const index = next++;
-      results[index] = await fn(items[index]!);
-    }
-  });
-  await Promise.all(workers);
-  return results;
 }
 
 export const check: Check = {

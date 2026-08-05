@@ -2,11 +2,12 @@
 
 A suite of small, loosely coupled CLI checks (`aca <check>`) that use an LLM
 judge for structure/maintainability judgments mechanical linters cannot make.
-Checks: `context-footprint`, `test-honesty`. Designs are accepted — read them
-before changing anything:
+Checks: `context-footprint`, `failure-posture`, `test-honesty`. Designs are
+accepted — read them before changing anything:
 
 - [docs/design/suite.md](docs/design/suite.md) — architecture, CLI shape, exit codes (0/1/2/78), JudgeClient contract
 - [docs/design/check-context-footprint.md](docs/design/check-context-footprint.md) — judge I/O, verdict semantics, calibration
+- [docs/design/check-failure-posture.md](docs/design/check-failure-posture.md) — behavior when dependencies misbehave
 - [docs/design/check-test-honesty.md](docs/design/check-test-honesty.md) — test-file scope, evidence bounds, honesty rubric
 - [docs/decisions/](docs/decisions/README.md) — ACA records; supersede, never rewrite
 - [docs/plan/issues.md](docs/plan/issues.md) — implementation order (#3 → #4 → #5/#6)

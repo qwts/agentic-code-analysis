@@ -42,6 +42,7 @@ test('a judged uncertain is a cacheable warn; degradations are not cacheable', (
     { ok: true as const, verdict: { ...DISHONEST, findings: [{ ...FINDING, criterion: 'made-up' }] } },
     { ok: true as const, verdict: { ...DISHONEST, findings: [{ ...FINDING, test: '' }] } },
     { ok: true as const, verdict: { ...DISHONEST, findings: [{ ...FINDING, evidence: '' }] } },
+    { ok: true as const, verdict: { ...DISHONEST, findings: [{ ...FINDING, meaningful_assertion: ' ' }] } },
     { ok: true as const, verdict: { ...DISHONEST, findings: [] } },
     { ok: true as const, verdict: { ...HONEST, findings: [FINDING] } },
   ];

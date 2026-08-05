@@ -80,7 +80,9 @@ colocated under a test directory are not judged as tests:
 | Ruby | `**/*_spec.rb`, `**/*_test.rb` | `spec/scope_spec.rb` | `spec/spec_helper.rb` |
 | PHP | `**/*Test.php` | `tests/ScopeTest.php` | `tests/bootstrap.php` |
 
-Paths are normalized and deduplicated before filtering and before the pool.
+Paths are normalized and deduplicated before filtering and before the pool;
+absolute and repo-escaping paths are dropped — every later read is
+`join(repoRoot, file)` and must stay inside the repository.
 
 ## Judge input, per file
 
@@ -131,7 +133,7 @@ The judge describes; host code decides:
 | `dishonest` with ≥1 complete, named finding | `fail` |
 | well-formed `uncertain` | `warn`, cacheable |
 | `dishonest` where **all** findings are `unreviewable-snapshot` and no external snapshot content was resolvable | `warn`, cacheable — missing evidence cannot support that fail |
-| malformed output, unknown criterion, empty test/evidence, `dishonest` without findings, `honest` with findings | `warn`, **not** cacheable |
+| malformed output, unknown criterion, empty test/evidence/meaningful-assertion, `dishonest` without findings, `honest` with findings | `warn`, **not** cacheable |
 
 The rubric additionally instructs the judge that an external snapshot whose
 content is absent must yield `uncertain`, not `dishonest`; the host guard
@@ -165,7 +167,9 @@ never cached.
 (`checks/test-honesty/fixtures/`, `.txt` payloads plus `manifest.json` so
 they can never match test globs, the Node runner, or dogfood scope) and
 asserts assessment, effective verdict, required criterion, test name, and
-meaningful-assertion presence. Always live, never cached. The manifest:
+meaningful-assertion presence. Always live, never cached, and run through the
+same bounded pool as production judging so calibration cannot exceed the
+check's own concurrency. The manifest:
 
 - dependency mock configured to return a value; the test asserts that value →
   `fail` / `asserts-own-mock`;

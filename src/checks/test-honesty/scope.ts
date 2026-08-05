@@ -5,7 +5,7 @@
 // them. Out-of-corpus files are dropped, never judged — this check never
 // treats a production file as a test.
 import { readFileSync } from 'node:fs';
-import { join, matchesGlob, normalize } from 'node:path';
+import { isAbsolute, join, matchesGlob, normalize } from 'node:path';
 import { ConfigError } from '../../core/config.ts';
 
 export const DEFAULT_TEST_GLOBS: readonly string[] = [
@@ -56,7 +56,12 @@ export function isTestFile(file: string, globs: readonly string[]): boolean {
   return globs.some((glob) => matchesGlob(file, glob));
 }
 
-/** Normalize, deduplicate, and keep test files only, preserving input order. */
+/** Normalize, deduplicate, and keep repo-relative test files only, preserving
+ * input order. Absolute and repo-escaping explicit paths are dropped: every
+ * later read is join(repoRoot, file) and must stay inside the repository
+ * (Copilot, PR #32). */
 export function scopeTestFiles(files: string[], globs: readonly string[]): string[] {
-  return [...new Set(files.map((file) => normalize(file)))].filter((file) => isTestFile(file, globs));
+  return [...new Set(files.map((file) => normalize(file)))].filter(
+    (file) => !isAbsolute(file) && !file.startsWith('..') && isTestFile(file, globs),
+  );
 }

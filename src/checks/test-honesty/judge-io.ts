@@ -124,7 +124,10 @@ function isFinding(value: unknown): value is Finding {
     (CRITERIA as readonly string[]).includes(f.criterion) &&
     typeof f.evidence === 'string' &&
     f.evidence !== '' &&
-    typeof f.meaningful_assertion === 'string'
+    // The remediation text of a finding: a fail with no actionable fix is a
+    // malformed reply, not a verdict (Codex review, PR #32).
+    typeof f.meaningful_assertion === 'string' &&
+    f.meaningful_assertion.trim() !== ''
   );
 }
 

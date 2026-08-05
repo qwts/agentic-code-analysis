@@ -8,6 +8,7 @@ import { fileURLToPath } from 'node:url';
 import type { JudgeClient } from '../../core/judge-client.ts';
 import type { SelfTestResult } from '../registry.ts';
 import { judgeOutcome, MAX_TOKENS, PROMPT_VERSION, rubricText, systemPrompt, userPrompt, VERDICT_SCHEMA, type TestHonestyVerdict } from './judge-io.ts';
+import { CONCURRENCY, mapPool } from './pool.ts';
 import type { Evidence, SnapshotContext, UnitContext } from './unit-context.ts';
 
 interface Fixture {
@@ -55,13 +56,13 @@ export async function selfTest(client: JudgeClient): Promise<SelfTestResult> {
   const system = systemPrompt(rubricText());
   const lines: string[] = [`self-test (${PROMPT_VERSION}) via ${client.provider}/${client.model}`];
   let passed = true;
-  const results = await Promise.all(
-    loadFixtures().map(async (fixture) => {
-      const evidence = evidenceOf(fixture);
-      const result = await client.judge({ system, user: userPrompt(evidence), schema: VERDICT_SCHEMA, maxTokens: MAX_TOKENS });
-      return { fixture, outcome: judgeOutcome(evidence, result) };
-    }),
-  );
+  // Calibration runs through the same bounded pool as production judging, so
+  // the self-test cannot exceed what the check itself is allowed to send.
+  const results = await mapPool(loadFixtures(), CONCURRENCY, async (fixture) => {
+    const evidence = evidenceOf(fixture);
+    const result = await client.judge({ system, user: userPrompt(evidence), schema: VERDICT_SCHEMA, maxTokens: MAX_TOKENS });
+    return { fixture, outcome: judgeOutcome(evidence, result) };
+  });
   for (const { fixture, outcome } of results) {
     const verdict = outcome.verdict;
     const expect = fixture.expect;
