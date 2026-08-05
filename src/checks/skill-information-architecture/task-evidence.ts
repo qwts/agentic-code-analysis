@@ -8,7 +8,7 @@ import { SESSION_PROFILES, type SessionProfileId } from '../../corpora/instructi
 import type { SkillPackage, TaskEvidence, TaskScenario } from './model.ts';
 
 export const SIDECAR_PATH = '.aca/skill-information-architecture.json';
-export const TASK_EVIDENCE_VERSION = 'skill-task-evidence-v1';
+export const TASK_EVIDENCE_VERSION = 'skill-task-evidence-v2';
 
 interface RawScenario {
   id?: unknown;
@@ -33,11 +33,19 @@ const strings = (value: unknown, field: string): string[] => {
 };
 
 function resourcePaths(value: unknown, field: string, pkg: SkillPackage): string[] {
-  return strings(value, field).map((entry) => {
-    const path = posix.normalize(posix.join(pkg.packageDir, entry));
+  const members = new Set(pkg.resources.map((resource) => resource.path));
+  const paths = strings(value, field).map((entry) => {
+    const portable = entry.replaceAll('\\', '/');
+    if (/^[A-Za-z]:/u.test(portable) || portable.startsWith('/')) fail(`${field} must contain package-relative resource paths: ${entry}`);
+    const fragment = portable.indexOf('#');
+    const resource = fragment === -1 ? portable : portable.slice(0, fragment);
+    if (resource.trim() === '') fail(`${field} must name a resource before any fragment: ${entry}`);
+    const path = posix.normalize(posix.join(pkg.packageDir, resource));
     if (path !== pkg.packageDir && !path.startsWith(`${pkg.packageDir}/`)) fail(`${field} escapes package ${pkg.packageId}: ${entry}`);
+    if (!members.has(path)) fail(`${field} names an unknown package resource: ${entry}`);
     return path;
   });
+  return [...new Set(paths)];
 }
 
 function number(value: unknown, field: string): number | undefined {

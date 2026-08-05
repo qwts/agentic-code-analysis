@@ -106,7 +106,7 @@ test('resolved resource cycles make the topology incomplete', async () => {
 });
 
 test('sidecar grounding is strict, package-contained, and part of the bounded payload', async () => {
-  const root = repo({ '.agents/skills/git/SKILL.md': SKILL });
+  const root = repo({ '.agents/skills/git/SKILL.md': SKILL, '.agents/skills/git/references/rebase.md': '# Rebase\n' });
   try {
     const pkg = buildSkillPackages(await discoverInstructionCorpus({ repoRoot: root }))[0]!;
     const raw = {
@@ -120,6 +120,27 @@ test('sidecar grounding is strict, package-contained, and part of the bounded pa
     assert.ok(buildPayload(pkg, evidence).text.includes('"scenario'));
     assert.throws(
       () => parseTaskEvidence({ schemaVersion: 1, packages: { [pkg.packageId]: { scenarios: [{ id: 'bad', description: 'bad', expectedResources: ['../../escape'] }] } } }, pkg),
+      ConfigError,
+    );
+    const portable = parseTaskEvidence({
+      schemaVersion: 1,
+      packages: { [pkg.packageId]: { scenarios: [{
+        id: 'portable', description: 'Read the rebase section.',
+        expectedResources: ['references\\rebase.md#recovery'], observedReads: ['references/rebase.md'],
+      }] } },
+    }, pkg);
+    assert.deepEqual(portable.scenarios[0]!.expectedResources, [`${pkg.packageDir}/references/rebase.md`]);
+    assert.deepEqual(portable.scenarios[0]!.observedReads, [`${pkg.packageDir}/references/rebase.md`]);
+    assert.throws(
+      () => parseTaskEvidence({ schemaVersion: 1, packages: { [pkg.packageId]: { scenarios: [{ id: 'drive', description: 'bad', expectedResources: ['C:\\repo\\guide.md'] }] } } }, pkg),
+      ConfigError,
+    );
+    assert.throws(
+      () => parseTaskEvidence({ schemaVersion: 1, packages: { [pkg.packageId]: { scenarios: [{ id: 'fragment', description: 'bad', expectedResources: ['#only'] }] } } }, pkg),
+      ConfigError,
+    );
+    assert.throws(
+      () => parseTaskEvidence({ schemaVersion: 1, packages: { [pkg.packageId]: { scenarios: [{ id: 'unknown', description: 'bad', expectedResources: ['references/missing.md'] }] } } }, pkg),
       ConfigError,
     );
     assert.equal(loadTaskEvidence(root, [pkg]).get(pkg.packageId)!.basis, 'cohesion-only');

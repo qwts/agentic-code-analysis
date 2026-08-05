@@ -78,6 +78,19 @@ async function run(context: CheckContext): Promise<FileVerdict[]> {
         note: `root package frame exceeds ${INPUT_CHAR_LIMIT} character input bound — not judged`,
       };
     }
+    if (!payload.complete) {
+      return {
+        file: pkg.skillFile,
+        verdict: 'warn',
+        cached: false,
+        violations: [],
+        basis: tasks.basis,
+        packageId: pkg.packageId,
+        packageDir: pkg.packageDir,
+        omissions: payload.omissions,
+        note: 'package evidence is incomplete — not judged',
+      };
+    }
     const key = cacheKey(payload.text, context.client.provider, context.client.model);
     const hit = context.cache.get(key) as SkillInformationArchitectureVerdict | undefined;
     if (hit !== undefined) return { ...hit, file: pkg.skillFile, cached: true };

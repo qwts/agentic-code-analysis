@@ -150,8 +150,10 @@ critical scenarios, commit `.aca/skill-information-architecture.json`:
 }
 ```
 
-Paths in `expectedResources` and `observedReads` are package-relative and may
-not escape the package. A malformed sidecar is a configuration error. Rich
+Paths in `expectedResources` and `observedReads` must name package resources.
+They are package-relative; Windows separators normalize to `/`, and an optional
+heading fragment is ignored. Absolute, escaping, fragment-only, and unknown
+paths are configuration errors. Rich
 JSON includes verified edits, host-computed load deltas, and measurement seeds;
 apply placement edits first, then rerun this check and `agent-context-cost`
 before applying density changes.

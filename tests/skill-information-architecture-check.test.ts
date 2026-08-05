@@ -67,6 +67,21 @@ test('an explicitly targeted unsupported SKILL.md warns mechanically with no spe
   }
 });
 
+test('an incomplete package warns without judge spend', async () => {
+  const root = repo({ '.agents/skills/git/SKILL.md': SKILL, '.agents/skills/git/assets/logo.png': 'opaque by extension' });
+  try {
+    const judge = client();
+    const verdicts = await check.run(context(root, ['.agents/skills/git'], judge)) as SkillInformationArchitectureVerdict[];
+    assert.equal(judge.calls.length, 0);
+    assert.equal(verdicts[0]!.verdict, 'warn');
+    assert.equal(verdicts[0]!.cached, false);
+    assert.match(verdicts[0]!.note!, /incomplete.*not judged/);
+    assert.deepEqual(verdicts[0]!.omissions, [{ path: '.agents/skills/git/assets/logo.png', reason: 'opaque', chars: 19 }]);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
 test('degraded judge results never cache', async () => {
   const root = repo({ '.agents/skills/git/SKILL.md': SKILL });
   try {

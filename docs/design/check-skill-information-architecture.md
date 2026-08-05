@@ -56,7 +56,9 @@ required schema version and `ConfigError` for malformed or escaping data. This
 check reads `.aca/skill-information-architecture.json`, keyed by stable package
 id. Scenarios normalize an id, description, profile, optional frequency or
 value weight, criticality, required concepts, expected resources, and observed
-reads. Missing evidence yields `basis: cohesion-only`; frequency-dependent
+reads. Resource evidence normalizes portable separators and heading fragments,
+then must resolve to a package member. Missing evidence yields
+`basis: cohesion-only`; frequency-dependent
 placement claims must then be `uncertain`, never guessed. Normalized evidence
 and its schema version are semantic cache inputs.
 

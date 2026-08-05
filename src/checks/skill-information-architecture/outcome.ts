@@ -42,9 +42,9 @@ function compatible(criterion: Criterion, action: Action): boolean {
 }
 
 function destination(pkg: SkillPackage, raw: string): string | undefined {
-  if (raw.trim() === '' || raw.startsWith('/') || raw.includes('\\')) return undefined;
+  if (raw.trim() === '' || raw.startsWith('/') || raw.includes('\\') || raw.endsWith('/')) return undefined;
   const normalized = posix.normalize(raw.startsWith(pkg.packageDir) ? raw : posix.join(pkg.packageDir, raw));
-  return normalized === pkg.packageDir || normalized.startsWith(`${pkg.packageDir}/`) ? normalized : undefined;
+  return normalized.startsWith(`${pkg.packageDir}/`) ? normalized : undefined;
 }
 
 function placementGrounded(finding: JudgeFinding, evidence: TaskEvidence): boolean {
@@ -186,13 +186,13 @@ export function judgeOutcome(
   if (!result.ok) return degraded(result.note);
   if (!isReply(result.verdict)) return degraded('judge output failed schema parse');
   const reply = result.verdict;
+  if (!payload.complete) return degraded('incomplete package evidence cannot support a semantic assessment');
   if (reply.assessment === 'well-structured' && reply.findings.length > 0) return degraded('judge passed while naming findings');
   if (reply.assessment === 'uncertain' && reply.findings.length > 0) return degraded('judge returned uncertain with findings');
   if (reply.assessment === 'needs-restructure' && reply.findings.length === 0) return degraded('judge failed without a patchable finding');
   if (reply.findings.some((finding) => !placementGrounded(finding, evidence))) {
     return degraded('frequency-dependent placement claim has no workload evidence');
   }
-  if (!payload.complete && reply.assessment === 'well-structured') return degraded('incomplete package evidence cannot support a clean pass');
   if (reply.assessment === 'uncertain') {
     return { verdict: { ...base, verdict: 'warn', violations: [], assessment: 'uncertain', measurementSeed: seeds(evidence), note: reply.reasoning_summary }, cacheable: true };
   }

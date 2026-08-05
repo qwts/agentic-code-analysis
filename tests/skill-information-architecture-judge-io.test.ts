@@ -60,7 +60,7 @@ test('malformed, fabricated, incompatible, overlapping, and ungrounded replies w
   assert.match(outcome.verdict.note!, /frequency-dependent/);
 });
 
-test('complete pass and semantic uncertainty cache; incomplete evidence cannot clean-pass', () => {
+test('complete pass and semantic uncertainty cache; incomplete evidence cannot support any assessment', () => {
   const pass = judgeOutcome(pkg(), evidence, payload, reply({ assessment: 'well-structured', findings: [], reasoning_summary: 'rs' }), defaultEstimator);
   assert.equal(pass.verdict.verdict, 'pass');
   assert.equal(pass.cacheable, true);
@@ -69,6 +69,24 @@ test('complete pass and semantic uncertainty cache; incomplete evidence cannot c
   assert.equal(uncertain.cacheable, true);
   const incomplete = judgeOutcome(pkg(), evidence, { ...payload, complete: false }, reply({ assessment: 'well-structured', findings: [], reasoning_summary: 'rs' }), defaultEstimator);
   assert.equal(incomplete.cacheable, false);
+  assert.equal(incomplete.verdict.verdict, 'warn');
+  const incompleteFailure = judgeOutcome(pkg(), evidence, { ...payload, complete: false }, reply({ assessment: 'needs-restructure', findings: [finding()], reasoning_summary: 'rs' }), defaultEstimator);
+  assert.equal(incompleteFailure.cacheable, false);
+  assert.equal(incompleteFailure.verdict.verdict, 'warn');
+  assert.match(incompleteFailure.verdict.note!, /incomplete package evidence/);
+});
+
+test('extract-resource rejects the package directory as a destination', () => {
+  const extract = finding({
+    criterion: 'eager-specialist-detail',
+    action: 'extract-resource',
+    destination_path: '.',
+    proposal_text: 'For routine details, read [the extracted workflow](references/routine.md).',
+  });
+  const outcome = judgeOutcome(pkg(), evidence, payload, reply({ assessment: 'needs-restructure', findings: [extract], reasoning_summary: 'rs' }), defaultEstimator);
+  assert.equal(outcome.cacheable, false);
+  assert.equal(outcome.verdict.verdict, 'warn');
+  assert.match(outcome.verdict.note!, /destination escapes or omits package/);
 });
 
 test('prompt and schema pin the data boundary, closed rubric, and host arithmetic', () => {
