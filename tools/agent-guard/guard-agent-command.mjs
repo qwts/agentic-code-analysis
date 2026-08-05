@@ -148,11 +148,24 @@ const TAMPERING = [
 // these separators are structural rather than incidental text.
 export function splitSegments(command) {
   const REDIRECTION_AMPERSAND = '\0';
+  const ESCAPED_SEMICOLON = '\u0001';
+  const ESCAPED_AMPERSAND = '\u0002';
+  const ESCAPED_PIPE = '\u0003';
   return command
+    .replace(/\\;/gu, ESCAPED_SEMICOLON)
+    .replace(/\\&/gu, ESCAPED_AMPERSAND)
+    .replace(/\\\|/gu, ESCAPED_PIPE)
     .replace(/(\d*>)&(?=\d|-)/gu, `$1${REDIRECTION_AMPERSAND}`)
     .replace(/&(?=>>?)/gu, REDIRECTION_AMPERSAND)
     .split(/\|\||&&|[;\n|&]/u)
-    .map((segment) => segment.replaceAll(REDIRECTION_AMPERSAND, '&').trim())
+    .map((segment) =>
+      segment
+        .replaceAll(REDIRECTION_AMPERSAND, '&')
+        .replaceAll(ESCAPED_SEMICOLON, '\\;')
+        .replaceAll(ESCAPED_AMPERSAND, '\\&')
+        .replaceAll(ESCAPED_PIPE, '\\|')
+        .trim(),
+    )
     .filter(Boolean);
 }
 
@@ -192,7 +205,7 @@ export function resolveExecutionDir(cwd, command) {
   return isAbsolute(target) ? target : resolve(cwd, target);
 }
 
-const QUOTED = /'[^']*'|"(?:[^"\\]|\\.)*"/u;
+const QUOTED = /\$'(?:[^'\\]|\\.)*'|'[^']*'|"(?:[^"\\]|\\.)*"/u;
 
 function endsWithShellC(scanned) {
   const segment = scanned.split(/\|\||&&|[;\n|&]/u).at(-1).trim();
@@ -274,9 +287,87 @@ function commandSubstitutionBodies(text) {
   return bodies;
 }
 
+function decodeAnsiCWord(quoted) {
+  const text = quoted.slice(2, -1);
+  let decoded = '';
+  const simple = new Map([
+    ['a', '\x07'],
+    ['b', '\b'],
+    ['e', '\x1b'],
+    ['E', '\x1b'],
+    ['f', '\f'],
+    ['n', '\n'],
+    ['r', '\r'],
+    ['t', '\t'],
+    ['v', '\v'],
+    ['\\', '\\'],
+    ["'", "'"],
+    ['"', '"'],
+    ['?', '?'],
+  ]);
+  for (let i = 0; i < text.length; i += 1) {
+    if (text[i] !== '\\' || i + 1 >= text.length) {
+      decoded += text[i];
+      continue;
+    }
+    const escaped = text[++i];
+    if (simple.has(escaped)) {
+      decoded += simple.get(escaped);
+      continue;
+    }
+    if (/[0-7]/u.test(escaped)) {
+      let digits = escaped;
+      while (digits.length < 3 && /[0-7]/u.test(text[i + 1] ?? '')) digits += text[++i];
+      decoded += String.fromCodePoint(Number.parseInt(digits, 8));
+      continue;
+    }
+    const widths = { x: 2, u: 4, U: 8 };
+    const width = widths[escaped];
+    if (width !== undefined) {
+      let digits = '';
+      while (digits.length < width && /[0-9A-Fa-f]/u.test(text[i + 1] ?? '')) digits += text[++i];
+      const point = Number.parseInt(digits, 16);
+      decoded += digits.length > 0 && Number.isSafeInteger(point) && point <= 0x10ffff ? String.fromCodePoint(point) : escaped;
+      continue;
+    }
+    if (escaped === 'c' && i + 1 < text.length) {
+      decoded += String.fromCodePoint(text[++i].toUpperCase().codePointAt(0) & 0x1f);
+      continue;
+    }
+    if (escaped !== '\n') decoded += `\\${escaped}`;
+  }
+  return decoded;
+}
+
 function quotedWord(quoted) {
-  const inner = quoted.startsWith("'") ? quoted.slice(1, -1) : quoted.slice(1, -1).replace(/\\(["\\$`])/gu, '$1');
+  const inner = quoted.startsWith("$'")
+    ? decodeAnsiCWord(quoted)
+    : quoted.startsWith("'")
+      ? quoted.slice(1, -1)
+      : quoted.slice(1, -1).replace(/\\(["\\$`])/gu, '$1');
   return /\s|[;&|]/u.test(inner) ? null : inner;
+}
+
+function normalizeUnquotedEscapes(text) {
+  let normalized = '';
+  for (let i = 0; i < text.length; i += 1) {
+    if (text[i] !== '\\' || i + 1 >= text.length) {
+      normalized += text[i];
+      continue;
+    }
+    const next = text[i + 1];
+    if (next === '\n') {
+      i += 1;
+    } else if (/\s|[;&|$`]/u.test(next)) {
+      // Keep escaped shell structure visibly escaped; splitSegments masks it.
+      normalized += `\\${next}`;
+      i += 1;
+    } else {
+      normalized += next;
+      i += 1;
+    }
+  }
+  return normalized;
 }
 
 function isWordCharacter(character) {
@@ -338,15 +429,20 @@ export function stripInertText(command) {
     /<<-?\s*(["']?)([A-Za-z_][A-Za-z0-9_]*)\1[^\n]*\n([\s\S]*?)(?:\n\2(?=\n|$)|$)/gu,
     (match, quote, delimiter, body, offset) => shellHeredocBody(command, offset, body),
   );
-  for (let i = 0; i < 200; i += 1) {
+  for (;;) {
     const match = QUOTED.exec(rest);
     if (!match) break;
     const quoted = match[0];
     scanned += rest.slice(0, match.index);
     rest = rest.slice(match.index + quoted.length);
     if (endsWithShellC(scanned)) {
-      const inner = quoted.startsWith("'") ? quoted.slice(1, -1) : quoted.slice(1, -1).replace(/\\(["\\$`])/gu, '$1');
+      const inner = quoted.startsWith("$'")
+        ? decodeAnsiCWord(quoted)
+        : quoted.startsWith("'")
+          ? quoted.slice(1, -1)
+          : quoted.slice(1, -1).replace(/\\(["\\$`])/gu, '$1');
       rest = `${inner}${rest}`;
+      scanned += '\n';
     } else {
       const substitutions = quoted.startsWith('"') ? commandSubstitutionBodies(quoted.slice(1, -1)) : [];
       if (substitutions.length > 0) {
@@ -365,7 +461,7 @@ export function stripInertText(command) {
       }
     }
   }
-  const effective = scanned + rest;
+  const effective = normalizeUnquotedEscapes(scanned + rest);
   const substitutions = commandSubstitutionBodies(effective);
   return substitutions.length > 0 ? `${effective}\n${substitutions.join('\n')}` : effective;
 }
@@ -431,6 +527,7 @@ export function npmScriptNames(command) {
 const OTHER_PACKAGE_MANAGERS = new Set(['pnpm', 'yarn', 'bun']);
 const OTHER_PACKAGE_OPTIONS_WITH_OPERANDS = new Set([
   '-C',
+  '-F',
   '--cwd',
   '--dir',
   '--filter',
@@ -452,6 +549,32 @@ function firstOtherPackageScriptToken(tokens) {
   return undefined;
 }
 
+function otherPackageScriptToken(manager, tokens) {
+  let index = 0;
+  while (index < tokens.length) {
+    const token = tokens[index];
+    if (token === '--') {
+      index += 1;
+      break;
+    }
+    if (OTHER_PACKAGE_OPTIONS_WITH_OPERANDS.has(token)) {
+      index += 2;
+      continue;
+    }
+    if (token.startsWith('-')) {
+      index += 1;
+      continue;
+    }
+    break;
+  }
+  if (manager === 'yarn' && tokens[index] === 'workspace') {
+    index += 2; // selector plus workspace name
+    while (tokens[index]?.startsWith('-')) index += 1;
+  }
+  if (tokens[index] === 'run' || tokens[index] === 'run-script') index += 1;
+  return firstOtherPackageScriptToken(tokens.slice(index));
+}
+
 // pnpm, Yarn and Bun all expose package scripts as `run <script>` and also
 // accept a direct script spelling. They share the same heavy-lane policy as
 // npm; otherwise changing package manager would silently remove admission.
@@ -461,13 +584,48 @@ export function otherPackageScriptNames(command) {
     const tokens = segment.split(/\s+/u).filter(Boolean);
     const start = tokens.findIndex((token) => OTHER_PACKAGE_MANAGERS.has(token.split('/').at(-1)));
     if (start < 0) continue;
+    const manager = tokens[start].split('/').at(-1);
     const rest = tokens.slice(start + 1);
-    const runAt = rest.findIndex((token) => token === 'run' || token === 'run-script');
-    const candidates = runAt >= 0 ? rest.slice(runAt + 1) : rest;
-    const script = firstOtherPackageScriptToken(candidates);
+    const script = otherPackageScriptToken(manager, rest);
     if (script !== undefined) names.push(script);
   }
   return names;
+}
+
+const TEST_BINARIES = new Set(['vitest', 'c8', 'playwright', 'test-storybook']);
+const EXEC_OPTIONS_WITH_OPERANDS = new Set([...NPM_OPTIONS_WITH_OPERANDS, ...OTHER_PACKAGE_OPTIONS_WITH_OPERANDS, '--package', '-p']);
+
+function skipCliOptions(tokens, start, optionsWithOperands) {
+  let index = start;
+  while (index < tokens.length) {
+    const token = tokens[index];
+    if (token === '--') return index + 1;
+    if (optionsWithOperands.has(token)) {
+      index += 2;
+      continue;
+    }
+    if (token.startsWith('-')) {
+      index += 1;
+      continue;
+    }
+    break;
+  }
+  return index;
+}
+
+function directTestBinaryThroughExec(segment) {
+  const tokens = segment.split(/\s+/u).filter(Boolean);
+  const command = tokens[0]?.split('/').at(-1);
+  if (command === 'npx' || command === 'bunx') {
+    const binaryAt = skipCliOptions(tokens, 1, EXEC_OPTIONS_WITH_OPERANDS);
+    return TEST_BINARIES.has(tokens[binaryAt]?.split('/').at(-1));
+  }
+  if (!['npm', 'pnpm', 'yarn', 'bun'].includes(command)) return false;
+  const options = EXEC_OPTIONS_WITH_OPERANDS;
+  const verbAt = skipCliOptions(tokens, 1, options);
+  if (!['exec', 'x', 'dlx'].includes(tokens[verbAt])) return false;
+  const binaryAt = skipCliOptions(tokens, verbAt + 1, options);
+  return TEST_BINARIES.has(tokens[binaryAt]?.split('/').at(-1));
 }
 
 function packageScriptNames(command) {
@@ -591,6 +749,12 @@ export function evaluateCommand(command, { env = process.env, now = Date.now() }
       };
     }
     if (WRAPPER_SEGMENT.test(executableSegment)) continue;
+    if (directTestBinaryThroughExec(executableSegment)) {
+      return {
+        allow: false,
+        reason: `Blocked direct test-binary invocation through a package-manager exec shim: it bypasses the machine-scoped memory guard. ${USE_ENTRYPOINT}`,
+      };
+    }
     if (isUnguardedInnerScript(segment)) {
       return {
         allow: false,
