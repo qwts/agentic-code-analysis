@@ -31,7 +31,7 @@ export const GATE_DOWN_STATUSES: ReadonlySet<number> = new Set([401, 402, 403]);
 
 /** The judge rejected the account at judge time: MissingCredentialsError
  * arriving late (ACA-0011). Adapters throw this instead of degrading, so the
- * run stops — a per-file warn must always mean a judge looked. */
+ * run stops — a dead gate must never surface as per-file warns. */
 export class JudgeUnavailableError extends Error {
   constructor(provider: string, note: string) {
     super(`${provider} judge unavailable — ${note}`);

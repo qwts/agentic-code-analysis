@@ -41,8 +41,10 @@ stops the run with one line (`<check>: gate down — <provider> judge
 unavailable — <note>`): exit 78 under `--enforce` or `--self-test`, exit 0
 advisory. No per-file verdicts are emitted. Everything else — timeouts, 5xx,
 plain 429, refusals, truncation, parse failures — keeps the ACA-0003 D2
-degrade-to-`warn` behavior. A `warn` now always means a judge looked;
-"no judge looked" is never a `warn`.
+degrade-to-`warn` behavior. A `warn` therefore still covers transient
+faults where no judgment landed for that file (those are uncacheable and
+retry next run); the narrowed guarantee is about the gate: account
+rejection is never rendered as per-file warns that read as judgments.
 
 ## Why
 

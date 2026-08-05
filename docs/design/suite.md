@@ -90,8 +90,9 @@ Contract every adapter must meet:
   ([ACA-0011](../decisions/ACA-0011-gate-down-classification.md)): a
   transport error that rejects the *account* (auth/quota — 401/402/403 on
   any wire, plus each provider's named depleted-account shape) throws
-  `JudgeUnavailableError` and stops the run — a `warn` must always mean a
-  judge looked.
+  `JudgeUnavailableError` and stops the run. Per-file warns stay reserved
+  for per-request degradation — transient faults included, where no
+  judgment may have landed — but a dead gate must never surface as warns.
 - **Prompt-prefix caching is used where the provider offers it** and silently
   skipped where it does not. Cost, not behavior, varies by provider.
 - No sampling knobs in the interface. Determinism comes from the strict
