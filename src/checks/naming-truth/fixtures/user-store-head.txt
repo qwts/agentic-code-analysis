@@ -1,0 +1,17 @@
+import { db } from '../db.ts';
+import { clock } from '../clock.ts';
+
+export interface User {
+  id: string;
+  email: string;
+  lastSeenMs: number | null;
+}
+
+/** Read one user row by id. */
+export function getUser(id: string): User | undefined {
+  const user = db.selectUser(id);
+  if (user) {
+    db.updateLastSeen(id, clock.nowMs());
+  }
+  return user;
+}

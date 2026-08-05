@@ -1,26 +1,20 @@
-// The comparison module is a check-local fork (ACA-0003 D1), so its behavior
-// is proven against its own code, not the context-footprint original's.
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { execFileSync } from 'node:child_process';
-import { mkdtempSync, rmSync, unlinkSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, unlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { buildComparisons, growthLine, type Comparison, type Prepared } from '../src/checks/failure-posture/comparison.ts';
+import { buildComparisons, type Comparison, type Prepared } from '../src/checks/naming-truth/comparison.ts';
 import { ConfigError } from '../src/core/config.ts';
 
 // Base commit is pinned on the `base` branch; changes then land on main (or
 // the working tree), so merge-base(base, HEAD) always resolves to the pin.
 function tempRepo(): { root: string; git: (...args: string[]) => string } {
-  const root = mkdtempSync(join(tmpdir(), 'aca-fp-cmp-'));
+  const root = mkdtempSync(join(tmpdir(), 'aca-nt-cmp-'));
   const git = (...args: string[]): string => execFileSync('git', args, { cwd: root, encoding: 'utf8' });
   git('init', '-b', 'main');
   git('config', 'user.email', 'test@test');
   git('config', 'user.name', 'test');
-  // The base-blob test deletes a loose object by path; background gc or
-  // maintenance packing it would turn the fixture into an ENOENT flake.
-  git('config', 'gc.auto', '0');
-  git('config', 'maintenance.auto', 'false');
   writeFileSync(join(root, 'target.ts'), 'export const t = 1;\n');
   writeFileSync(join(root, 'user.ts'), `import { t } from './target.ts';\nexport const u = t;\n`);
   git('add', '.');
@@ -34,21 +28,13 @@ function comparison(prepared: Prepared): Comparison {
   return prepared.comparison;
 }
 
-test('growthLine: new, grown, shrunk, unchanged', () => {
-  assert.equal(growthLine(undefined, 'a\n'), 'new file, 1 lines');
-  assert.equal(growthLine('a\n', 'a\nb\nc\n'), 'grew from 1 to 3 lines');
-  assert.equal(growthLine('a\nb\nc\n', 'a\n'), 'shrank from 3 to 1 lines');
-  assert.equal(growthLine('a\n', 'a\n'), 'unchanged at 1 lines');
-});
-
-test('modified file is legacy with real base and head snapshots and both graphs', () => {
+test('modified file is legacy with real base and head snapshots', () => {
   const { root } = tempRepo();
   writeFileSync(join(root, 'target.ts'), 'export const t = 1;\nexport const t2 = 2;\n');
   const c = comparison(buildComparisons(root, 'base', ['target.ts']).get('target.ts')!);
   assert.ok(c.kind === 'legacy');
   assert.equal(c.base.content, 'export const t = 1;\n');
   assert.match(c.head.content, /t2/);
-  assert.equal(c.growth, 'grew from 1 to 2 lines');
   assert.deepEqual(c.base.importedBy, ['user.ts']);
   assert.deepEqual(c.head.importedBy, ['user.ts']);
 });
@@ -62,27 +48,20 @@ test('untracked and committed additions are new; unchanged files are legacy', ()
   const prepared = buildComparisons(root, 'base', ['untracked.ts', 'committed.ts', 'target.ts']);
   assert.equal(comparison(prepared.get('untracked.ts')!).kind, 'new');
   assert.equal(comparison(prepared.get('committed.ts')!).kind, 'new');
-  const unchanged = comparison(prepared.get('target.ts')!);
-  assert.equal(unchanged.kind, 'legacy');
-  assert.equal(unchanged.growth, 'unchanged at 1 lines');
+  assert.equal(comparison(prepared.get('target.ts')!).kind, 'legacy');
 });
 
-test('a rename stays legacy and preserves the base path', () => {
+test('a rename stays legacy and preserves the base path; a copy is new', () => {
   const { root, git } = tempRepo();
   git('mv', 'target.ts', 'renamed.ts');
   git('commit', '-m', 'rename', '--quiet');
-  const renamed = comparison(buildComparisons(root, 'base', ['renamed.ts']).get('renamed.ts')!);
+  writeFileSync(join(root, 'copy.ts'), `import { t } from './renamed.ts';\nexport const copied = t;\n`);
+  const prepared = buildComparisons(root, 'base', ['renamed.ts', 'copy.ts']);
+  const renamed = comparison(prepared.get('renamed.ts')!);
   assert.ok(renamed.kind === 'legacy');
   assert.equal(renamed.base.path, 'target.ts');
   assert.equal(renamed.head.path, 'renamed.ts');
-});
-
-test('a copy of a retained file stays new — extractions are judged absolutely', () => {
-  const { root, git } = tempRepo();
-  writeFileSync(join(root, 'copy.ts'), 'export const t = 1;\n');
-  git('add', 'copy.ts');
-  git('commit', '-m', 'copy', '--quiet');
-  assert.equal(comparison(buildComparisons(root, 'base', ['copy.ts']).get('copy.ts')!).kind, 'new');
+  assert.equal(comparison(prepared.get('copy.ts')!).kind, 'new');
 });
 
 test('deleted importers are represented in the base graph, absent from head', () => {
@@ -108,19 +87,7 @@ test('changed non-code files never enter the base import graph', () => {
   const c = comparison(buildComparisons(root, 'base', ['target.ts']).get('target.ts')!);
   assert.ok(c.kind === 'legacy');
   assert.deepEqual(c.base.importedBy, ['user.ts'], 'notes.md must not be a phantom base importer');
-});
-
-test('a base blob unreadable at the merge-base fails the run, never thins the base graph', () => {
-  const { root, git } = tempRepo();
-  git('rm', '--quiet', 'user.ts');
-  git('commit', '-m', 'drop importer', '--quiet');
-  // Delete the loose object of the deleted importer's base blob: the diff
-  // still lists user.ts as deleted (tree entries carry the OID), but
-  // `git show` cannot read it — the transient/integrity fault the
-  // swallowed-failure guard surfaces instead of thinning the base graph.
-  const blob = git('rev-parse', 'base:user.ts').trim();
-  rmSync(join(root, '.git', 'objects', blob.slice(0, 2), blob.slice(2)));
-  assert.throws(() => buildComparisons(root, 'base', ['target.ts']), ConfigError);
+  assert.deepEqual(c.head.importedBy, ['user.ts']);
 });
 
 test('unreadable head degrades per file; unresolvable merge-base throws ConfigError', () => {

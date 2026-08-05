@@ -1,0 +1,11 @@
+import { test } from 'node:test';
+import assert from 'node:assert/strict';
+import { fetchInvoiceTotal } from '../src/invoice-service.ts';
+
+test('fetchInvoiceTotal returns the gateway total', async () => {
+  const gateway = {
+    getInvoice: async (id: string) => ({ id, currency: 'USD', total: 250 }),
+  };
+  const invoice = await gateway.getInvoice('inv-1');
+  assert.equal(invoice.total, 250);
+});

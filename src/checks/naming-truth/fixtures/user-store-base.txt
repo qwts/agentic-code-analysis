@@ -1,0 +1,12 @@
+import { db } from '../db.ts';
+
+export interface User {
+  id: string;
+  email: string;
+  lastSeenMs: number | null;
+}
+
+/** Read one user row by id. */
+export function getUser(id: string): User | undefined {
+  return db.selectUser(id);
+}

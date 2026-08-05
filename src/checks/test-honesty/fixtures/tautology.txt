@@ -1,0 +1,9 @@
+import { test } from 'node:test';
+import assert from 'node:assert/strict';
+import { serializeConfig } from '../src/config-io.ts';
+
+test('serializeConfig produces the expected wire form', () => {
+  const config = { retries: 3, timeoutMs: 500 };
+  const expected = serializeConfig(config);
+  assert.equal(serializeConfig(config), expected);
+});

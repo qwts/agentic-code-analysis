@@ -15,7 +15,10 @@ import type { PrefilterHint } from './prefilter.ts';
 
 // Bump on ANY prompt, rubric, payload, or applicability-rule change that can
 // alter judgment routing; invalidates the verdict cache by construction.
-export const PROMPT_VERSION = 'failure-posture-v1';
+// v2: prefilter comment/string tokenizer + subpath import matching changed
+// applicability routing and hints (Codex/Copilot reviews, PR #35); prompt
+// text itself is unchanged.
+export const PROMPT_VERSION = 'failure-posture-v2';
 
 // Operational bound (check design): one file per request, 4096 output tokens.
 export const MAX_TOKENS = 4096;
