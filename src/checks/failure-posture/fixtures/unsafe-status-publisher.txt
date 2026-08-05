@@ -1,0 +1,25 @@
+// Publishes pipeline run status to the coordinator and waits for the ack.
+const COORDINATOR_URL = 'https://coordinator.internal/api/v1/status';
+
+export interface StatusUpdate {
+  runId: string;
+  state: 'running' | 'succeeded' | 'failed';
+  detail?: string;
+}
+
+export async function publishStatus(update: StatusUpdate): Promise<void> {
+  const body = JSON.stringify(update);
+  while (true) {
+    try {
+      const response = await fetch(COORDINATOR_URL, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body,
+      });
+      const ack = (await response.json()) as { accepted?: boolean };
+      if (ack.accepted) return;
+    } catch {
+      // transient — try again
+    }
+  }
+}

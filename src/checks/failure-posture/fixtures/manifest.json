@@ -1,0 +1,164 @@
+{
+  "schemaVersion": 2,
+  "requiredLevel": "field",
+  "levels": [
+    { "id": "foundation" },
+    { "id": "field" }
+  ],
+  "fixtures": [
+    {
+      "name": "new-unsafe",
+      "level": "foundation",
+      "kind": "new",
+      "file": "services/pipeline/status-publisher.ts",
+      "head": {
+        "content": "unsafe-status-publisher.txt",
+        "sha256": "8c8619f090fcd5c3f52e033954fc739bf96741d85ad824ea033db401b058f41f",
+        "importedBy": [
+          "services/pipeline/run-worker.ts",
+          "services/pipeline/shutdown-hook.ts"
+        ]
+      },
+      "growth": "new file, 25 lines",
+      "expect": {
+        "assessment": "new-violating",
+        "verdict": "fail",
+        "criteriaAllOf": [
+          "missing-timeout",
+          "retry-without-backoff",
+          "unbounded-retry"
+        ]
+      },
+      "source": {
+        "kind": "synthetic",
+        "note": "authored for this repository (Apache-2.0): direct network call in an uncapped hot retry loop with no deadline and catch/continue"
+      }
+    },
+    {
+      "name": "new-resilient",
+      "level": "foundation",
+      "kind": "new",
+      "file": "services/pipeline/status-publisher.ts",
+      "head": {
+        "content": "resilient-status-publisher.txt",
+        "sha256": "a3200a4d47662c7bff5a7bcdb1df6a4d4511e0a4c82b57bbda73ae9dd71725e4",
+        "importedBy": [
+          "services/pipeline/run-worker.ts",
+          "services/pipeline/shutdown-hook.ts"
+        ]
+      },
+      "growth": "new file, 43 lines",
+      "expect": {
+        "assessment": "new-compliant",
+        "verdict": "pass"
+      },
+      "source": {
+        "kind": "synthetic",
+        "note": "authored for this repository (Apache-2.0): per-attempt deadline, caller cancellation, bounded jittered retries, checked response, failure surfaced with cause"
+      }
+    },
+    {
+      "name": "legacy-hardened",
+      "level": "foundation",
+      "kind": "legacy",
+      "file": "services/pipeline/status-publisher.ts",
+      "base": {
+        "content": "unsafe-status-publisher.txt",
+        "sha256": "8c8619f090fcd5c3f52e033954fc739bf96741d85ad824ea033db401b058f41f",
+        "importedBy": [
+          "services/pipeline/run-worker.ts",
+          "services/pipeline/shutdown-hook.ts"
+        ]
+      },
+      "head": {
+        "content": "resilient-status-publisher.txt",
+        "sha256": "a3200a4d47662c7bff5a7bcdb1df6a4d4511e0a4c82b57bbda73ae9dd71725e4",
+        "importedBy": [
+          "services/pipeline/run-worker.ts",
+          "services/pipeline/shutdown-hook.ts"
+        ]
+      },
+      "growth": "grew from 25 to 43 lines",
+      "expect": {
+        "assessment": "improved",
+        "verdict": "pass"
+      },
+      "source": {
+        "kind": "synthetic",
+        "note": "authored for this repository (Apache-2.0)"
+      }
+    },
+    {
+      "name": "legacy-softened",
+      "level": "foundation",
+      "kind": "legacy",
+      "file": "services/pipeline/status-publisher.ts",
+      "base": {
+        "content": "resilient-status-publisher.txt",
+        "sha256": "a3200a4d47662c7bff5a7bcdb1df6a4d4511e0a4c82b57bbda73ae9dd71725e4",
+        "importedBy": [
+          "services/pipeline/run-worker.ts",
+          "services/pipeline/shutdown-hook.ts"
+        ]
+      },
+      "head": {
+        "content": "unsafe-status-publisher.txt",
+        "sha256": "8c8619f090fcd5c3f52e033954fc739bf96741d85ad824ea033db401b058f41f",
+        "importedBy": [
+          "services/pipeline/run-worker.ts",
+          "services/pipeline/shutdown-hook.ts"
+        ]
+      },
+      "growth": "shrank from 43 to 25 lines",
+      "expect": {
+        "assessment": "regressed",
+        "verdict": "fail",
+        "criteriaAllOf": [
+          "missing-timeout",
+          "retry-without-backoff",
+          "unbounded-retry"
+        ]
+      },
+      "source": {
+        "kind": "synthetic",
+        "note": "authored for this repository (Apache-2.0): the negative control — a shrinking diff that removes every resilience bound"
+      }
+    },
+    {
+      "name": "legacy-held-debt",
+      "level": "field",
+      "kind": "legacy",
+      "file": "services/pipeline/status-publisher.ts",
+      "base": {
+        "content": "unsafe-status-publisher.txt",
+        "sha256": "8c8619f090fcd5c3f52e033954fc739bf96741d85ad824ea033db401b058f41f",
+        "importedBy": [
+          "services/pipeline/run-worker.ts",
+          "services/pipeline/shutdown-hook.ts"
+        ]
+      },
+      "head": {
+        "content": "unsafe-status-publisher.txt",
+        "sha256": "8c8619f090fcd5c3f52e033954fc739bf96741d85ad824ea033db401b058f41f",
+        "importedBy": [
+          "services/pipeline/run-worker.ts",
+          "services/pipeline/shutdown-hook.ts",
+          "services/pipeline/retention-sweeper.ts"
+        ]
+      },
+      "growth": "unchanged at 25 lines",
+      "expect": {
+        "assessment": "held",
+        "verdict": "pass",
+        "residualCriteriaAllOf": [
+          "missing-timeout",
+          "retry-without-backoff"
+        ]
+      },
+      "source": {
+        "kind": "synthetic",
+        "note": "authored for this repository (Apache-2.0): pre-existing debt swept into a change must be named as residual findings, never block"
+      }
+    }
+  ]
+}
