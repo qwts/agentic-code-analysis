@@ -118,6 +118,7 @@ describe('agent-guard conformance (ENG-0138)', () => {
     assert.equal(evaluateHookInput({ cwd: '/outside', command: 'env --chdir=/project npm run ci' }, '/project', { env }).allow, false);
     assert.equal(evaluateHookInput({ cwd: '/outside', command: '(cd /tmp); cd project && npm run ci' }, '/outside/project', { env }).allow, false);
     assert.equal(evaluateHookInput({ cwd: '/outside', command: "bash -c 'cd /project && npx vitest'" }, '/project', { env }).allow, false);
+    assert.equal(evaluateHookInput({ cwd: '/outside', command: "bash -c $'cd /project && npm run ci'" }, '/project', { env }).allow, false);
     assert.equal(evaluateHookInput({ cwd: '/outside', command: 'command env -C /project npx vitest' }, '/project', { env }).allow, false);
     assert.equal(evaluateHookInput({ cwd: '/outside', command: 'npm --prefix /project run ci' }, '/project', { env }).allow, false);
     assert.equal(evaluateHookInput({ cwd: '/outside', command: 'pnpm --dir /project run ci' }, '/project', { env }).allow, false);
@@ -134,6 +135,12 @@ describe('agent-guard conformance (ENG-0138)', () => {
       'node node_modules/vitest/vitest.mjs run',
       'pnpm run "ci"',
       'env -i PATH=/usr/bin:/bin node tools/agent-guard/run-guarded.mjs --label test:e2e -- npm run test:e2e',
+      'env - PATH=/usr/bin:/bin node tools/agent-guard/run-guarded.mjs --label test:e2e -- npm run test:e2e',
+      "printf 'ci\\n' | xargs npm run",
+      'find . -maxdepth 0 -exec npm run ci \\;',
+      'AI_AGENT= node tools/agent-guard/run-guarded.mjs -- npm test',
+      'node --require node:path node_modules/vitest/vitest.mjs run',
+      "eval -- 'npx vitest'",
     ]) {
       assert.equal(evaluateCommand(command, { env }).allow, false, `expected the guard to deny: ${command}`);
     }

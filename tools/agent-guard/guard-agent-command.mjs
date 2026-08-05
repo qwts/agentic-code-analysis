@@ -70,10 +70,6 @@ const BLOCKED = [
     what: 'direct execution of compiled tests in .test-dist(-dom)',
   },
   {
-    pattern: /^(?:\S*\/)?node\s+(?:-\S+\s+)*\S*\/vitest(?:\/vitest)?\.mjs(?:\s|$)/u,
-    what: 'direct execution of the Vitest Node entry module',
-  },
-  {
     pattern: /\bplaywright\s+test\b/u,
     what: 'direct Playwright invocation',
   },
@@ -150,10 +146,17 @@ const TAMPERING = [
   },
   {
     pattern:
-      /(?:\benv\b[^\n;&|]*(?:\s(?:-i|--ignore-environment)(?=\s|$)|(?:-u|--unset)(?:=|\s+)(?:CLAUDECODE|CLAUDE_CODE_ENTRYPOINT|AI_AGENT|CODEX_\w+|CURSOR_\w+))|\b(?:unset|export\s+-n)\s+(?:CLAUDECODE|CLAUDE_CODE_ENTRYPOINT|AI_AGENT|CODEX_\w+|CURSOR_\w+))[\s\S]*run-guarded\.mjs/u,
+      /(?:\benv\b[^\n;&|]*(?:\s(?:-(?=\s|$)|-i|--ignore-environment)(?=\s|$)|(?:-u|--unset)(?:=|\s+)(?:CLAUDECODE|CLAUDE_CODE_ENTRYPOINT|AI_AGENT|CODEX_\w+|CURSOR_\w+))|\b(?:unset|export\s+-n)\s+(?:CLAUDECODE|CLAUDE_CODE_ENTRYPOINT|AI_AGENT|CODEX_\w+|CURSOR_\w+))[\s\S]*run-guarded\.mjs/u,
     reason:
       'Blocked removal of agent identity before run-guarded.mjs: the wrapper must inherit its harness markers so it ' +
       `cannot misclassify an agent as the human owner. ${GUIDANCE}`,
+  },
+  {
+    pattern:
+      /(?:^|[\s;&|])(?:CLAUDECODE|CLAUDE_CODE_ENTRYPOINT|AI_AGENT|CODEX_\w+|CURSOR_\w+)=[^\s;&|]*[\s\S]*run-guarded\.mjs/u,
+    reason:
+      'Blocked reassignment of agent identity before run-guarded.mjs: clearing or replacing a harness marker can make ' +
+      `the wrapper misclassify an agent as the human owner. ${GUIDANCE}`,
   },
 ];
 
@@ -207,6 +210,10 @@ function isWithin(child, parent) {
   const c = tryRealpath(child);
   const p = tryRealpath(parent);
   return c === p || c.startsWith(p + sep);
+}
+
+function maskHeredocBodies(text) {
+  return text.replace(/<<-?\s*(["']?)([A-Za-z_][A-Za-z0-9_]*)\1[^\n]*\n[\s\S]*?(?:\n\2(?=\n|$)|$)/gu, (match) => match.replace(/[^\n]/gu, ' '));
 }
 
 function scopeWords(text) {
@@ -280,6 +287,7 @@ function directoryOptionTargets(segment) {
 export function resolveExecutionDirs(cwd, command) {
   if (typeof cwd !== 'string' || cwd.length === 0) return [];
   if (typeof command !== 'string') return [cwd];
+  const scopedCommand = maskHeredocBodies(command);
   const directories = [cwd];
   let current = cwd;
   const parentScopes = [];
@@ -288,10 +296,10 @@ export function resolveExecutionDirs(cwd, command) {
   // A subshell inherits its parent's cwd but cannot change it. Record both the
   // child scopes and the restored parent scope so a later relative `cd` is
   // resolved from the directory the shell will actually use.
-  const shellSyntax = new Uint8Array(command.length);
+  const shellSyntax = new Uint8Array(scopedCommand.length);
   const contexts = [{ mode: 'shell', closesSubshell: false }];
-  for (let index = 0; index < command.length; index += 1) {
-    const character = command[index];
+  for (let index = 0; index < scopedCommand.length; index += 1) {
+    const character = scopedCommand[index];
     const context = contexts.at(-1);
     if (context.mode === 'single-quote') {
       if (character === "'") contexts.pop();
@@ -306,7 +314,7 @@ export function resolveExecutionDirs(cwd, command) {
         contexts.pop();
         continue;
       }
-      if (character === '$' && command[index + 1] === '(') {
+      if (character === '$' && scopedCommand[index + 1] === '(') {
         events.push({ index: index + 1, type: 'subshell-open' });
         contexts.push({ mode: 'shell', closesSubshell: true });
         index += 1;
@@ -337,8 +345,8 @@ export function resolveExecutionDirs(cwd, command) {
     }
   }
 
-  const transitions = /(?:^|\|\||&&|[;\n|&(){}])\s*cd\s+(?:--\s+)?(?:"([^"]+)"|'([^']+)'|([^\s;&|(){}]+))/gu;
-  for (const match of command.matchAll(transitions)) {
+  const transitions = /(?:^|\|\||&&|[;\n|&(){}])\s*cd\s+(?:(?:-[LPe@]+|--)\s+)*(?:"([^"]+)"|'([^']+)'|([^\s;&|(){}]+))/gu;
+  for (const match of scopedCommand.matchAll(transitions)) {
     const index = match.index + match[0].indexOf('cd');
     if (shellSyntax[index]) events.push({ index, target: match[1] ?? match[2] ?? match[3], type: 'cd' });
   }
@@ -347,7 +355,7 @@ export function resolveExecutionDirs(cwd, command) {
   // child command with `-C` or `--chdir`. This scope does not persist in the
   // parent shell, so record it without updating `current`.
   const envCommands = /(?:^|\|\||&&|[;\n|&(){}])\s*(?:\S*\/)?env(?=\s|$)([^;\n|&(){}]*)/gu;
-  for (const match of command.matchAll(envCommands)) {
+  for (const match of scopedCommand.matchAll(envCommands)) {
     const envIndex = match.index + match[0].indexOf('env');
     if (!shellSyntax[envIndex]) continue;
     const words = [...match[1].matchAll(/"([^"]*)"|'([^']*)'|([^\s]+)/gu)].map((word) => word[1] ?? word[2] ?? word[3]);
@@ -383,7 +391,7 @@ export function resolveExecutionDirs(cwd, command) {
   // Normalize supported execution prefixes before looking for directory
   // options, while retaining quoted path operands and their source offsets.
   const segments = /(?:^|[;\n|&(){}])([^;\n|&(){}]+)/gu;
-  for (const match of command.matchAll(segments)) {
+  for (const match of scopedCommand.matchAll(segments)) {
     const segmentOffset = match.index + match[0].indexOf(match[1]);
     const firstWord = scopeWords(match[1])[0];
     if (!firstWord || !shellSyntax[segmentOffset + firstWord.index]) continue;
@@ -419,7 +427,7 @@ export function resolveExecutionDirs(cwd, command) {
     if (event.type === 'cd') current = target;
   }
   const effective = stripInertText(command);
-  const hasShellCommandString = /(?:^|[;\n|&(){}])[^;\n|&(){}]*\b(?:ba|da|z)?sh\b[^;\n|&(){}]*\s-[A-Za-z]*c[A-Za-z]*\s+["']/u.test(command);
+  const hasShellCommandString = /(?:^|[;\n|&(){}])[^;\n|&(){}]*\b(?:ba|da|z)?sh\b[^;\n|&(){}]*\s-[A-Za-z]*c[A-Za-z]*\s+(?:\$)?["']/u.test(command);
   if (hasShellCommandString && effective !== command) {
     for (const nested of resolveExecutionDirs(cwd, effective).slice(1)) {
       if (!directories.includes(nested)) directories.push(nested);
@@ -618,7 +626,7 @@ function endsWithExecutableString(scanned) {
   const envAt = rawTokens.findLastIndex((token) => token.split('/').at(-1) === 'env');
   if (envAt >= 0 && /^(?:-S|--split-string)=?$/u.test(rawTokens.at(-1) ?? '')) return true;
   const tokens = commandAfterPrefixes(segment).split(/\s+/u).filter(Boolean);
-  if (tokens[0]?.split('/').at(-1) === 'eval' && tokens.length === 1) return true;
+  if (tokens[0]?.split('/').at(-1) === 'eval' && (tokens.length === 1 || (tokens.length === 2 && tokens[1] === '--'))) return true;
   const npmAt = tokens.findIndex((token) => token.split('/').at(-1) === 'npm');
   if (npmAt < 0) return false;
   const execAt = tokens.findIndex((token, index) => index > npmAt && (token === 'exec' || token === 'x'));
@@ -640,7 +648,10 @@ function commandStringPayloads(command) {
     const tokens = executable.split(/\s+/u).filter(Boolean);
     const rawTokens = segment.split(/\s+/u).filter(Boolean);
     const commandName = tokens[0]?.split('/').at(-1);
-    if (commandName === 'eval' && tokens.length > 1) payloads.push(restore(tokens.slice(1).join(' ')));
+    if (commandName === 'eval' && tokens.length > 1) {
+      const payloadAt = tokens[1] === '--' ? 2 : 1;
+      if (payloadAt < tokens.length) payloads.push(restore(tokens.slice(payloadAt).join(' ')));
+    }
     if (/(?:^|\/)(?:ba|da|z)?sh$/u.test(tokens[0] ?? '')) {
       for (let i = 1; i < tokens.length - 1; i += 1) {
         if (tokens[i] === '-c' || /^-[A-Za-z]*c[A-Za-z]*$/u.test(tokens[i])) {
@@ -683,6 +694,23 @@ function commandStringPayloads(command) {
     }
   }
   return payloads.filter(Boolean);
+}
+
+function dispatcherCommandPayloads(command) {
+  const payloads = [];
+  for (const segment of splitSegments(command)) {
+    const tokens = segment.split(/\s+/u).filter(Boolean);
+    if (tokens[0]?.split('/').at(-1) !== 'find') continue;
+    for (let index = 1; index < tokens.length; index += 1) {
+      if (!/^-exec(?:dir)?$|^-ok(?:dir)?$/u.test(tokens[index])) continue;
+      const start = index + 1;
+      let end = start;
+      while (end < tokens.length && !/^(?:\\;|;|\+)$/u.test(tokens[end])) end += 1;
+      if (end > start) payloads.push(tokens.slice(start, end).filter((token) => token !== '{}').join(' '));
+      index = end;
+    }
+  }
+  return payloads;
 }
 
 function isWordCharacter(character) {
@@ -791,7 +819,8 @@ export function stripInertText(command) {
   const effective = normalizeUnquotedEscapes(scanned + rest);
   const substitutions = commandSubstitutionBodies(effective, { processSubstitutions: true });
   const payloads = commandStringPayloads(effective);
-  const promoted = [...substitutions, ...payloads];
+  const dispatchers = dispatcherCommandPayloads(effective);
+  const promoted = [...substitutions, ...payloads, ...dispatchers];
   return promoted.length > 0 ? `${effective}\n${promoted.join('\n')}` : effective;
 }
 
@@ -935,6 +964,28 @@ export function otherPackageScriptNames(command) {
 
 const TEST_BINARIES = new Set(['vitest', 'c8', 'playwright', 'test-storybook']);
 const EXEC_OPTIONS_WITH_OPERANDS = new Set([...NPM_OPTIONS_WITH_OPERANDS, ...OTHER_PACKAGE_OPTIONS_WITH_OPERANDS, '--package', '-p']);
+const NODE_OPTIONS_WITH_OPERANDS = new Set([
+  '-r',
+  '--require',
+  '--import',
+  '--loader',
+  '--experimental-loader',
+  '--conditions',
+  '-C',
+  '--input-type',
+  '--inspect-port',
+  '--diagnostic-dir',
+  '--redirect-warnings',
+  '--report-directory',
+  '--report-filename',
+  '--openssl-config',
+  '--title',
+  '--icu-data-dir',
+  '--experimental-policy',
+  '--policy-integrity',
+  '--env-file',
+  '--env-file-if-exists',
+]);
 
 function skipCliOptions(tokens, start, optionsWithOperands) {
   let index = start;
@@ -967,6 +1018,39 @@ function directTestBinaryThroughExec(segment) {
   if (!['exec', 'x', 'dlx'].includes(tokens[verbAt])) return false;
   const binaryAt = skipCliOptions(tokens, verbAt + 1, options);
   return TEST_BINARIES.has(tokens[binaryAt]?.split('/').at(-1));
+}
+
+function directVitestNodeEntry(segment) {
+  const tokens = segment.split(/\s+/u).filter(Boolean);
+  if (tokens[0]?.split('/').at(-1) !== 'node') return false;
+  let moduleAt = 1;
+  while (moduleAt < tokens.length) {
+    const option = tokens[moduleAt];
+    if (option === '--') {
+      moduleAt += 1;
+      break;
+    }
+    if (NODE_OPTIONS_WITH_OPERANDS.has(option)) {
+      moduleAt += 2;
+      continue;
+    }
+    if (option.startsWith('-')) {
+      moduleAt += 1;
+      continue;
+    }
+    break;
+  }
+  return /(?:^|\/)vitest(?:\/vitest)?\.mjs$/u.test(tokens[moduleAt] ?? '');
+}
+
+function incompleteXargsCommand(segment, executableSegment) {
+  if (!/(?:^|\s)(?:\S*\/)?xargs(?:\s|$)/u.test(segment)) return false;
+  const tokens = executableSegment.split(/\s+/u).filter(Boolean);
+  const command = tokens[0]?.split('/').at(-1);
+  if (command === 'npx' || command === 'bunx') return skipCliOptions(tokens, 1, EXEC_OPTIONS_WITH_OPERANDS) >= tokens.length;
+  if (command === 'npm') return tokens.length === 1 || NPM_RUN_ALIASES.has(tokens.at(-1));
+  if (OTHER_PACKAGE_MANAGERS.has(command)) return tokens.length === 1 || /^(?:run|run-script|exec|x|dlx)$/u.test(tokens.at(-1));
+  return /^(?:node|electron|(?:ba|da|z)?sh)$/u.test(command ?? '') && tokens.length === 1;
 }
 
 function packageScriptNames(command) {
@@ -1185,6 +1269,18 @@ export function evaluateCommand(command) {
       };
     }
     if (WRAPPER_SEGMENT.test(executableSegment)) continue;
+    if (incompleteXargsCommand(segment, executableSegment)) {
+      return {
+        allow: false,
+        reason: `Blocked an incomplete package or test command dispatched by xargs: stdin could supply the guarded lane or binary. ${USE_ENTRYPOINT}`,
+      };
+    }
+    if (directVitestNodeEntry(executableSegment)) {
+      return {
+        allow: false,
+        reason: `Blocked direct execution of the Vitest Node entry module: it bypasses the machine-scoped memory guard. ${USE_ENTRYPOINT}`,
+      };
+    }
     if (directTestBinaryThroughExec(executableSegment)) {
       return {
         allow: false,

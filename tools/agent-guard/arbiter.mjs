@@ -11,11 +11,10 @@
 //   node tools/agent-guard/arbiter.mjs grant <lane> [--minutes N]
 //   node tools/agent-guard/arbiter.mjs revoke <lane>
 
-import os from 'node:os';
 import path from 'node:path';
 import process from 'node:process';
 
-import { clampCeiling, decideAdmission, deriveBudget } from './lib/budget.mjs';
+import { clampCeiling, decideAdmission, deriveBudgetForMemory } from './lib/budget.mjs';
 import { readLeases } from './lib/leases.mjs';
 import { HEAVY_LANES, isAgentSession, isCi, listGrants, revokeGrant } from './lib/policy.mjs';
 import { machineToken, stateDir } from './lib/protocol.mjs';
@@ -25,18 +24,14 @@ function out(line = '') {
   process.stdout.write(`${line}\n`);
 }
 
-function totalMb() {
-  return Math.round(os.totalmem() / (1024 * 1024));
-}
-
 function flag(argv, name) {
   const index = argv.indexOf(name);
   return index >= 0 && index + 1 < argv.length ? argv[index + 1] : null;
 }
 
 function status() {
-  const budget = deriveBudget(totalMb());
   const memory = readMemoryStatus();
+  const budget = deriveBudgetForMemory(memory);
   const leases = readLeases(process.env, { reap: false });
   const grants = listGrants();
 
@@ -65,12 +60,13 @@ function status() {
 }
 
 function check(argv) {
-  const budget = deriveBudget(totalMb());
+  const memory = readMemoryStatus();
+  const budget = deriveBudgetForMemory(memory);
   const requested = Number(flag(argv, '--rss-mb'));
   const ceiling = clampCeiling(Number.isFinite(requested) ? requested : budget.maxRunMb, budget);
   const decision = decideAdmission({
     budget,
-    memory: readMemoryStatus(),
+    memory,
     leases: readLeases(process.env, { reap: false }),
     requestMb: ceiling.ceilingMb,
   });

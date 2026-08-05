@@ -48,6 +48,39 @@ if [[ "$git_subcommand" == "push" ]]; then
   done
 fi
 
+if [[ "$git_subcommand" == "rebase" ]]; then
+  for argument in "${@:2}"; do
+    case "$argument" in
+      -x | -x* | --exec | --exec=*)
+        print -u2 -- "Git rebase command execution requires normal Codex approval: $argument"
+        exit 64
+        ;;
+    esac
+  done
+fi
+
+if [[ "$git_subcommand" == "clone" || "$git_subcommand" == "fetch" || "$git_subcommand" == "pull" ]]; then
+  for argument in "${@:2}"; do
+    case "$argument" in
+      --upload-pack | --upload-pack=*)
+        print -u2 -- "Git upload-pack override requires normal Codex approval: $argument"
+        exit 64
+        ;;
+    esac
+  done
+fi
+
+if [[ "$git_subcommand" == "clone" ]]; then
+  for argument in "${@:2}"; do
+    case "$argument" in
+      -u | -u*)
+        print -u2 -- "Git upload-pack override requires normal Codex approval: $argument"
+        exit 64
+        ;;
+    esac
+  done
+fi
+
 export NVM_DIR="${NVM_DIR:-$HOME/.nvm}"
 
 # Git is useful in every governed repository. Load a repository-pinned Node

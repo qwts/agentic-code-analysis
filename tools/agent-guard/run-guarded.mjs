@@ -6,7 +6,7 @@
 // What it does, in order:
 //   1. Gets out of the way in CI, and for nested guarded commands.
 //   2. Applies the agent-vs-human lane policy (lib/policy.mjs).
-//   3. Derives the ceiling from os.totalmem() and CLAMPS the request down to
+//   3. Derives the ceiling from the effective machine/cgroup total and CLAMPS the request down to
 //      it — an `--rss-mb 8192` inherited from an old npm script becomes 3072 on
 //      an 8 GB machine instead of a ceiling that can never trip.
 //   4. Asks the machine-wide arbiter for admission, counting every other repo's
@@ -25,11 +25,10 @@
 
 import { execFile, spawn } from 'node:child_process';
 import { appendFileSync, mkdirSync, writeFileSync } from 'node:fs';
-import os from 'node:os';
 import path from 'node:path';
 import process from 'node:process';
 
-import { clampCeiling, decideAdmission, deriveBudget } from './lib/budget.mjs';
+import { clampCeiling, decideAdmission, deriveBudgetForMemory } from './lib/budget.mjs';
 import { acquireLease, heartbeatLease, leaseExists, psExecutable, readLeases, releaseLease, retargetLease, withAdmissionLock } from './lib/leases.mjs';
 import { evaluateLanePolicy, harnessName, isAgentSession, isCi } from './lib/policy.mjs';
 import { readMemoryStatus, topConsumers } from './lib/system-memory.mjs';
@@ -227,8 +226,9 @@ async function main() {
   const policy = evaluateLanePolicy({ label: options.label, command: commandLine, env: process.env });
   if (!policy.allowed) fail(policy.message);
 
-  const totalMb = Math.round(os.totalmem() / (1024 * 1024));
-  const budget = deriveBudget(totalMb);
+  const initialMemory = readMemoryStatus();
+  const totalMb = initialMemory.totalMb;
+  const budget = deriveBudgetForMemory(initialMemory);
   const request = resolveRequest(options, process.env, budget);
   if (request.clamped) {
     note(`ceiling clamped: requested ${request.requestedMb} MB, machine cap is ${request.ceilingMb} MB (${totalMb} MB total RAM, ${budget.machineBudgetMb} MB machine budget). Tightening is allowed; loosening is not.`);

@@ -2,7 +2,8 @@
 // in, so the whole policy is testable at any machine size without owning that
 // machine.
 //
-// Everything derives from `os.totalmem()`. The rule that makes this safe under
+// Everything derives from the effective machine total (clamped to a container
+// cgroup limit when present). The rule that makes this safe under
 // a rollout is one-directional: a caller may always ask for LESS than the cap
 // and gets it; asking for more is clamped down, never honoured. So a stale
 // `--rss-mb 8192` in a consuming repo's npm script becomes 3072 on an 8 GB
@@ -42,6 +43,10 @@ export function deriveBudget(totalMb) {
     // which protects nothing at all.
     lightRunMb: Math.max(256, Math.round(Math.max(768, Math.round(totalMb * 0.125)) / 2)),
   };
+}
+
+export function deriveBudgetForMemory(memory) {
+  return deriveBudget(memory.totalMb);
 }
 
 /**
