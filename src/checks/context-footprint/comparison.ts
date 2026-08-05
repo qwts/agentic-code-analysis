@@ -6,7 +6,7 @@ import { execFileSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { ConfigError } from '../../core/config.ts';
-import { buildImporterIndex, importedBy, importsOf, readContents } from './derive.ts';
+import { buildImporterIndex, CODE_EXT, importedBy, importsOf, readContents } from './derive.ts';
 
 export interface Snapshot {
   path: string;
@@ -114,6 +114,10 @@ export function buildComparisons(repoRoot: string, baseRef: string, files: strin
   }
   for (const path of [...status.deleted, ...status.modified, ...status.renamedFrom.values()]) {
     baseFiles.add(path);
+    // The base graph indexes code files only, like the head graph — a changed
+    // doc with import-looking text must not become a phantom base importer
+    // (Codex review, PR #29).
+    if (!CODE_EXT.test(path)) continue;
     const content = showBase(path);
     if (content === undefined) baseContents.delete(path);
     else baseContents.set(path, content);

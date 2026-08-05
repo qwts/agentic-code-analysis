@@ -83,6 +83,21 @@ test('deleted importers are represented in the base graph, absent from head', ()
   assert.deepEqual(c.head.importedBy, []);
 });
 
+test('changed non-code files never enter the base import graph', () => {
+  const { root, git } = tempRepo();
+  writeFileSync(join(root, 'notes.md'), `import { t } from './target.ts';\n`);
+  git('add', 'notes.md');
+  git('commit', '-m', 'doc with import-looking text', '--quiet');
+  git('branch', '-f', 'base');
+  writeFileSync(join(root, 'notes.md'), 'rewritten\n');
+  git('commit', '-am', 'edit doc', '--quiet');
+  writeFileSync(join(root, 'target.ts'), 'export const t = 2;\n');
+  const c = comparison(buildComparisons(root, 'base', ['target.ts']).get('target.ts')!);
+  assert.ok(c.kind === 'legacy');
+  assert.deepEqual(c.base.importedBy, ['user.ts'], 'notes.md must not be a phantom base importer');
+  assert.deepEqual(c.head.importedBy, ['user.ts']);
+});
+
 test('unreadable head degrades per file; unresolvable merge-base throws ConfigError', () => {
   const { root } = tempRepo();
   unlinkSync(join(root, 'user.ts'));
