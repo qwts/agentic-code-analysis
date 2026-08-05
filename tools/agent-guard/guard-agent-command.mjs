@@ -186,10 +186,46 @@ export function resolveExecutionDir(cwd, command) {
 const QUOTED = /'[^']*'|"(?:[^"\\]|\\.)*"/u;
 const SHELL_C_TAIL = /(?:^|[\s;&|(`{])(?:env\s+(?:\w+=\S*\s+)*)?(?:ba|da|z)?sh\s+(?:-\S+\s+)*-\S*c\s+$/u;
 
+function quotedWord(quoted) {
+  const inner = quoted.startsWith("'") ? quoted.slice(1, -1) : quoted.slice(1, -1).replace(/\\(["\\$`])/gu, '$1');
+  return /\s|[;&|]/u.test(inner) ? null : inner;
+}
+
+// Quoting an argv word does not make it inert: `npm run "ci"` and
+// `npx "vitest"` execute exactly the same programs as their unquoted forms.
+// Preserve only words occupying a command or script slot; quoted prose passed
+// to `git commit -m` or `gh pr create --body` remains blanked below.
+function isExecutableQuotedWord(scanned, word) {
+  if (!word) return false;
+  const segment = scanned.split(/\|\||&&|[;\n|&]/u).at(-1).trim();
+  const tokens = segment.split(/\s+/u).filter(Boolean);
+  if (tokens.length === 0) {
+    return /^(npm|npx|node|electron|vitest|playwright|test-storybook)$/u.test(word);
+  }
+
+  let npmAt = -1;
+  for (let i = tokens.length - 1; i >= 0; i -= 1) {
+    if (/(?:^|\/)npm$/u.test(tokens[i])) {
+      npmAt = i;
+      break;
+    }
+  }
+  if (npmAt >= 0) {
+    const rest = tokens.slice(npmAt + 1);
+    const aliasAt = rest.findIndex((token) => NPM_RUN_ALIASES.has(token));
+    const candidates = aliasAt >= 0 ? rest.slice(aliasAt + 1) : rest;
+    if (!candidates.some((token) => !token.startsWith('-'))) return true;
+  }
+
+  const last = tokens.at(-1);
+  if (last === 'npx' && /^(vitest|playwright|test-storybook)$/u.test(word)) return true;
+  return /(?:^|\/)(?:node|electron)$/u.test(last ?? '') && word === '--test';
+}
+
 // Quotes are processed left to right: shell-wrapper payloads are unwrapped so
-// the patterns can see them, ordinary quoted text is blanked. Order matters — a
-// commit message that merely mentions `bash -c "npm run test:e2e"` is blanked
-// before its inner text is ever inspected.
+// the patterns can see them, executable argv words are preserved, and ordinary
+// quoted text is blanked. Order matters — a commit message that merely mentions
+// `bash -c "npm run test:e2e"` is blanked before its inner text is inspected.
 export function stripInertText(command) {
   let scanned = '';
   let rest = command.replace(/<<-?\s*(["']?)([A-Za-z_][A-Za-z0-9_]*)\1[\s\S]*?(\n\2(?=\n|$)|$)/gu, ' ');
@@ -202,6 +238,8 @@ export function stripInertText(command) {
     if (SHELL_C_TAIL.test(scanned)) {
       const inner = quoted.startsWith("'") ? quoted.slice(1, -1) : quoted.slice(1, -1).replace(/\\(["\\$`])/gu, '$1');
       rest = `${inner}${rest}`;
+    } else if (isExecutableQuotedWord(scanned, quotedWord(quoted))) {
+      scanned += quotedWord(quoted);
     } else {
       scanned += quoted.startsWith("'") ? "''" : '""';
     }
