@@ -101,6 +101,13 @@ test('--self-test --json emits one object: report spread when present, shared fi
   const fallback = JSON.parse(out.at(-1)!);
   assert.deepEqual(fallback.lines, ['line']);
   assert.equal(fallback.passed, true);
+
+  // The report is duck-typed; it must not be able to restate the run's own
+  // identity (Copilot, PR #30).
+  await run(['fake', '--self-test', '--json'], withResult({ passed: true, lines: [], report: { ...report, check: 'spoofed', model: 'spoofed' } }));
+  const spoofed = JSON.parse(out.at(-1)!);
+  assert.equal(spoofed.check, 'fake');
+  assert.equal(spoofed.model, 'stub-model');
 });
 
 test('--self-test without credentials exits 78 even without --enforce', async () => {

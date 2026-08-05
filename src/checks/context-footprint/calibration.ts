@@ -111,6 +111,11 @@ export function validateManifest(raw: unknown, contentOf: (file: string) => stri
     if (fixture.kind === 'legacy') {
       if (fixture.base === undefined) fail(`fixture "${name}": legacy comparisons require both snapshots`);
       checkSide(name, 'base', fixture.base, contentOf);
+    } else if (fixture.base !== undefined) {
+      // A base on a new fixture is silently dropped by the comparison but
+      // still counted as referenced content, so an unvalidated one would
+      // escape the checksum gate and break suite identity (Copilot, PR #30).
+      fail(`fixture "${name}": a new comparison must not carry a base snapshot`);
     }
     const expect = fixture.expect as Expectation;
     if (typeof expect !== 'object' || expect === null) fail(`fixture "${name}": expect must be an object`);

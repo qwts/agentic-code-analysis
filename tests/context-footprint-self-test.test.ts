@@ -187,6 +187,9 @@ test('validateManifest accepts the well-formed exam and rejects each corruption 
   rejects((raw) => ((fixtures(raw)[0]!['head'] as Record<string, unknown>)['content'] = 'missing.txt'), /is missing/);
   rejects((raw) => ((fixtures(raw)[0]!['head'] as Record<string, unknown>)['sha256'] = sha('tampered')), /checksum/);
   rejects((raw) => (fixtures(raw)[0]!['level'] = 'field'), /has no fixtures/);
+  // A base on a new fixture would escape the checksum gate yet still count as
+  // referenced content for suite identity (Copilot, PR #30).
+  rejects((raw) => (fixtures(raw)[0]!['base'] = { content: 'ghost.txt', sha256: sha('ghost'), importedBy: [] }), /must not carry a base/);
 });
 
 test('matchExpectation: residual oracle requires a residual finding, not a blocking one', () => {

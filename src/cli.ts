@@ -100,7 +100,9 @@ export async function run(argv: string[], deps?: Partial<RunDeps>): Promise<numb
         // report fall back to the shared contract's fields.
         const report = (result as { report?: unknown }).report;
         const body = typeof report === 'object' && report !== null ? report : { passed: result.passed, lines: result.lines };
-        d.stdout(JSON.stringify({ check: check.name, provider: client.provider, model: client.model, ...body }));
+        // Shared fields last: a check-local report is duck-typed, so it must
+        // not be able to overwrite the run's own identity (Copilot, PR #30).
+        d.stdout(JSON.stringify({ ...body, check: check.name, provider: client.provider, model: client.model }));
       } else {
         for (const line of result.lines) d.stdout(line);
       }
