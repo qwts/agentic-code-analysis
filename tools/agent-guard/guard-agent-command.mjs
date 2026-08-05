@@ -185,7 +185,30 @@ export function resolveExecutionDir(cwd, command) {
 }
 
 const QUOTED = /'[^']*'|"(?:[^"\\]|\\.)*"/u;
-const SHELL_C_TAIL = /(?:^|[\s;&|(`{])(?:env\s+(?:\w+=\S*\s+)*)?(?:\S*\/)?(?:ba|da|z)?sh\s+(?:(?:(?:-[A-Za-z]*[oO]|--(?:option|shopt))\s+\S+|-\S+)\s+)*-\S*c\s+$/u;
+
+function endsWithShellC(scanned) {
+  const segment = scanned.split(/\|\||&&|[;\n|&]/u).at(-1).trim();
+  const tokens = segment.split(/\s+/u).filter(Boolean);
+  let i = 0;
+  if (tokens[i] === 'env') {
+    i += 1;
+    while (/^\w+=\S*$/u.test(tokens[i] ?? '')) i += 1;
+  }
+  if (!/(?:^|\/)(?:ba|da|z)?sh$/u.test(tokens[i] ?? '')) return false;
+  i += 1;
+  while (i < tokens.length) {
+    const token = tokens[i];
+    if (/^-\S*c$/u.test(token)) return i === tokens.length - 1;
+    if (/^(?:-[A-Za-z]*[oO]|--(?:option|shopt))$/u.test(token)) {
+      if (i + 1 >= tokens.length) return false;
+      i += 2;
+      continue;
+    }
+    if (!token.startsWith('-')) return false;
+    i += 1;
+  }
+  return false;
+}
 
 function quotedWord(quoted) {
   const inner = quoted.startsWith("'") ? quoted.slice(1, -1) : quoted.slice(1, -1).replace(/\\(["\\$`])/gu, '$1');
@@ -237,7 +260,7 @@ export function stripInertText(command) {
     const quoted = match[0];
     scanned += rest.slice(0, match.index);
     rest = rest.slice(match.index + quoted.length);
-    if (SHELL_C_TAIL.test(scanned)) {
+    if (endsWithShellC(scanned)) {
       const inner = quoted.startsWith("'") ? quoted.slice(1, -1) : quoted.slice(1, -1).replace(/\\(["\\$`])/gu, '$1');
       rest = `${inner}${rest}`;
     } else if (isExecutableQuotedWord(scanned, quotedWord(quoted))) {
