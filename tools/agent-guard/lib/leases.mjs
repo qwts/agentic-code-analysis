@@ -20,7 +20,7 @@
 
 import { randomUUID } from 'node:crypto';
 import { execFileSync } from 'node:child_process';
-import { mkdirSync, readFileSync, readdirSync, renameSync, rmSync, statSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, readdirSync, renameSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 
 import { CORE_LEASE_FIELDS, PROTOCOL_VERSION, ensureStateDirs, leasesDir, machineToken, stateDir } from './protocol.mjs';
@@ -46,10 +46,16 @@ export function isProcessGroupAlive(processGroupId) {
   }
 }
 
+export function psExecutable() {
+  return ['/bin/ps', '/usr/bin/ps'].find((candidate) => existsSync(candidate)) ?? null;
+}
+
 export function processGroupIdFor(pid = process.pid) {
   if (!Number.isInteger(pid) || pid <= 0 || process.platform === 'win32') return null;
+  const executable = psExecutable();
+  if (executable === null) return null;
   try {
-    const raw = execFileSync('/bin/ps', ['-o', 'pgid=', '-p', String(pid)], {
+    const raw = execFileSync(executable, ['-o', 'pgid=', '-p', String(pid)], {
       encoding: 'utf8',
       timeout: 2000,
     }).trim();

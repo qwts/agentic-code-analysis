@@ -608,10 +608,9 @@ function firstNpmScriptToken(tokens) {
 export function npmScriptNames(command) {
   const names = [];
   for (const segment of splitSegments(command)) {
-    const tokens = segment.split(/\s+/u).filter(Boolean);
-    const start = tokens.findIndex((token) => /(?:^|\/)npm$/u.test(token));
-    if (start < 0) continue;
-    const rest = tokens.slice(start + 1);
+    const tokens = commandAfterPrefixes(segment).split(/\s+/u).filter(Boolean);
+    if (!/(?:^|\/)npm$/u.test(tokens[0] ?? '')) continue;
+    const rest = tokens.slice(1);
     const aliasAt = rest.findIndex((token) => NPM_RUN_ALIASES.has(token));
     const candidates = aliasAt >= 0 ? rest.slice(aliasAt + 1) : rest;
     const script = firstNpmScriptToken(candidates);
@@ -668,6 +667,14 @@ function otherPackageScriptToken(manager, tokens) {
     index += 2; // selector plus workspace name
     while (tokens[index]?.startsWith('-')) index += 1;
   }
+  if (manager === 'yarn' && tokens[index] === 'workspaces' && tokens[index + 1] === 'foreach') {
+    index += 2;
+    const optionsWithOperands = new Set(['--from', '--include', '--exclude', '--jobs', '-j']);
+    while (tokens[index]?.startsWith('-')) {
+      const option = tokens[index++];
+      if (optionsWithOperands.has(option) && index < tokens.length) index += 1;
+    }
+  }
   if (tokens[index] === 'run' || tokens[index] === 'run-script') index += 1;
   return firstOtherPackageScriptToken(tokens.slice(index));
 }
@@ -678,11 +685,10 @@ function otherPackageScriptToken(manager, tokens) {
 export function otherPackageScriptNames(command) {
   const names = [];
   for (const segment of splitSegments(command)) {
-    const tokens = segment.split(/\s+/u).filter(Boolean);
-    const start = tokens.findIndex((token) => OTHER_PACKAGE_MANAGERS.has(token.split('/').at(-1)));
-    if (start < 0) continue;
-    const manager = tokens[start].split('/').at(-1);
-    const rest = tokens.slice(start + 1);
+    const tokens = commandAfterPrefixes(segment).split(/\s+/u).filter(Boolean);
+    const manager = tokens[0]?.split('/').at(-1);
+    if (!OTHER_PACKAGE_MANAGERS.has(manager)) continue;
+    const rest = tokens.slice(1);
     const script = otherPackageScriptToken(manager, rest);
     if (script !== undefined) names.push(script);
   }
@@ -734,10 +740,9 @@ function packageScriptNames(command) {
 export function nodeRunScriptNames(command) {
   const names = [];
   for (const segment of splitSegments(command)) {
-    const tokens = segment.split(/\s+/u).filter(Boolean);
-    const start = tokens.findIndex((token) => /(?:^|\/)node$/u.test(token));
-    if (start < 0) continue;
-    const rest = tokens.slice(start + 1);
+    const tokens = commandAfterPrefixes(segment).split(/\s+/u).filter(Boolean);
+    if (!/(?:^|\/)node$/u.test(tokens[0] ?? '')) continue;
+    const rest = tokens.slice(1);
     for (let i = 0; i < rest.length; i += 1) {
       const token = rest[i];
       if (token.startsWith('--run=')) {
@@ -771,11 +776,17 @@ export function heavyLaneFor(command) {
     const lane = HEAVY_LANES.find((entry) => entry.pattern.test(script));
     if (lane) return lane;
   }
-  if (/\bplaywright\s+test\b/u.test(command)) {
-    return HEAVY_LANES.find((entry) => entry.id === 'e2e');
-  }
-  if (/\btest-storybook\b/u.test(command)) {
-    return HEAVY_LANES.find((entry) => entry.id === 'stories');
+  for (const segment of splitSegments(command)) {
+    const tokens = commandAfterPrefixes(segment).split(/\s+/u).filter(Boolean);
+    const executable = tokens[0]?.split('/').at(-1);
+    if (executable === 'playwright' && tokens[1] === 'test') return HEAVY_LANES.find((entry) => entry.id === 'e2e');
+    if (executable === 'test-storybook') return HEAVY_LANES.find((entry) => entry.id === 'stories');
+    if (executable === 'npx' || executable === 'bunx') {
+      const binaryAt = skipCliOptions(tokens, 1, EXEC_OPTIONS_WITH_OPERANDS);
+      const binary = tokens[binaryAt]?.split('/').at(-1);
+      if (binary === 'playwright' && tokens[binaryAt + 1] === 'test') return HEAVY_LANES.find((entry) => entry.id === 'e2e');
+      if (binary === 'test-storybook') return HEAVY_LANES.find((entry) => entry.id === 'stories');
+    }
   }
   return null;
 }
@@ -802,6 +813,36 @@ function commandAfterPrefixes(segment) {
       while (tokens[index]?.startsWith('-')) {
         const option = tokens[index++];
         if ((option === '-n' || option === '--adjustment') && index < tokens.length) index += 1;
+      }
+      continue;
+    }
+    if (command === 'timeout') {
+      index += 1;
+      while (tokens[index]?.startsWith('-')) {
+        const option = tokens[index++];
+        if (/^(?:-k|--kill-after|-s|--signal)$/u.test(option) && index < tokens.length) index += 1;
+      }
+      if (index < tokens.length) index += 1; // duration
+      continue;
+    }
+    if (command === 'watch') {
+      index += 1;
+      while (tokens[index]?.startsWith('-')) {
+        const option = tokens[index++];
+        if (/^(?:-n|--interval|--equexit)$/u.test(option) && index < tokens.length) index += 1;
+      }
+      continue;
+    }
+    if (command === 'setsid') {
+      index += 1;
+      while (tokens[index]?.startsWith('-')) index += 1;
+      continue;
+    }
+    if (command === 'stdbuf') {
+      index += 1;
+      while (tokens[index]?.startsWith('-')) {
+        const option = tokens[index++];
+        if (/^-[ioe]$/u.test(option) && index < tokens.length) index += 1;
       }
       continue;
     }

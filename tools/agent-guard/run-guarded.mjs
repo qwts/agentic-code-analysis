@@ -30,7 +30,7 @@ import path from 'node:path';
 import process from 'node:process';
 
 import { clampCeiling, decideAdmission, deriveBudget } from './lib/budget.mjs';
-import { acquireLease, heartbeatLease, leaseExists, readLeases, releaseLease, retargetLease, withAdmissionLock } from './lib/leases.mjs';
+import { acquireLease, heartbeatLease, leaseExists, psExecutable, readLeases, releaseLease, retargetLease, withAdmissionLock } from './lib/leases.mjs';
 import { evaluateLanePolicy, harnessName, isAgentSession, isCi } from './lib/policy.mjs';
 import { readMemoryStatus, topConsumers } from './lib/system-memory.mjs';
 
@@ -220,6 +220,8 @@ async function main() {
     note('WARNING: guard unsupported on win32; running unguarded.');
     return passthrough(command);
   }
+  const ps = psExecutable();
+  if (ps === null) fail('guard requires ps at /bin/ps or /usr/bin/ps to enforce process-group memory limits');
 
   const commandLine = command.join(' ');
   const policy = evaluateLanePolicy({ label: options.label, command: commandLine, env: process.env });
@@ -297,7 +299,7 @@ async function main() {
   const poll = setInterval(() => {
     if (state.polling) return;
     state.polling = true;
-    execFile('/bin/ps', ['-axo', 'pid=,ppid=,pgid=,rss='], { maxBuffer: 16 * 1024 * 1024 }, (error, stdout) => {
+    execFile(ps, ['-axo', 'pid=,ppid=,pgid=,rss='], { maxBuffer: 16 * 1024 * 1024 }, (error, stdout) => {
       state.polling = false;
       if (state.done || error) return;
       const { totalKb, processCount } = collectTreeRssKb(stdout, child.pid);
