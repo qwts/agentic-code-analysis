@@ -106,6 +106,13 @@ test('a residual pass renders as a finding and counts separately; clean passes s
   assert.match(out.at(-1)!, /2 file\(s\), 0 fail, 0 warn, 1 residual/);
 });
 
+test('a malformed residualViolations value renders as no residuals, never a crash', async () => {
+  const malformed = { ...PASS, residualViolations: { bogus: true } } as FileVerdict;
+  const out: string[] = [];
+  assert.equal(await run(['fake', 'a.ts'], deps([malformed], out)), EXIT.ok);
+  assert.match(out.at(-1)!, /1 file\(s\), 0 fail, 0 warn$/);
+});
+
 test('--json emits cache visibility per verdict', async () => {
   const out: string[] = [];
   await run(['fake', 'a.ts', '--json'], deps([PASS], out));

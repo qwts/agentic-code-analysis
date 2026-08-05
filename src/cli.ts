@@ -133,7 +133,9 @@ function render(
   }
   let residualFiles = 0;
   for (const v of verdicts as RenderedVerdict[]) {
-    const residuals = v.residualViolations ?? [];
+    // The field is duck-typed, not part of the shared contract — a check
+    // returning a malformed value must degrade to "no residuals", not crash.
+    const residuals = Array.isArray(v.residualViolations) ? v.residualViolations : [];
     if (residuals.length > 0) residualFiles += 1;
     // A residual pass is a finding; only clean passes stay silent.
     if (v.verdict === 'pass' && residuals.length === 0) continue;
