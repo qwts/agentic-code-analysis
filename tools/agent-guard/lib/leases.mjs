@@ -188,7 +188,13 @@ function breakStaleLock(dir) {
   // age as the backstop for a holder whose pid was recycled.
   try {
     const owner = JSON.parse(readFileSync(path.join(dir, 'owner.json'), 'utf8'));
-    if (Number.isFinite(owner.pid) && isProcessAlive(owner.pid) && Date.now() - Date.parse(owner.at) < LOCK_STALE_MS) return false;
+    if (Number.isFinite(owner.pid) && isProcessAlive(owner.pid)) {
+      const acquiredAt = Date.parse(owner.at);
+      // Malformed provenance is not evidence that a live holder is stale.
+      // Deleting here would admit a second contender concurrently; retain the
+      // lock and let the bounded wait fail closed instead.
+      if (!Number.isFinite(acquiredAt) || Date.now() - acquiredAt < LOCK_STALE_MS) return false;
+    }
   } catch {
     // Unreadable owner: judge by directory age below.
     try {
@@ -217,10 +223,7 @@ export async function withAdmissionLock(env, fn, { timeoutMs = 15_000, now = () 
       if (error.code !== 'EEXIST') throw error;
       breakStaleLock(dir);
       if (now() >= deadline) {
-        // Proceeding unserialized is strictly better than refusing a run
-        // because a lock is stuck: the worst case is the pre-existing race,
-        // not a machine that cannot run anything.
-        return fn();
+        throw new Error('timed out waiting for the admission lock; refusing to proceed without machine-wide serialization');
       }
       await new Promise((resolve) => {
         setTimeout(resolve, LOCK_POLL_MS);

@@ -359,4 +359,10 @@ async function main() {
 // module's own filename, which is true for every importer and would leave a
 // test awaiting a command that never comes).
 const entry = process.argv[1] ? path.resolve(process.argv[1]) : null;
-if (entry && import.meta.filename === entry) await main();
+if (entry && import.meta.filename === entry) {
+  try {
+    await main();
+  } catch (error) {
+    fail(error instanceof Error ? error.message : String(error));
+  }
+}
