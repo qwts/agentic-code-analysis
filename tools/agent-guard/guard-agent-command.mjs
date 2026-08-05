@@ -75,15 +75,15 @@ const BLOCKED = [
     what: 'direct Storybook test-runner invocation',
   },
   {
-    pattern: /^(?:\w+=\S*\s+)*(?:\S*\/)?(?:npx(?:\s+-\S+)*\s+)?(?:\S*\/)?vitest(?:\s|$)/u,
+    pattern: /^(?:(?:time|command)\s+|env\s+(?:\w+=\S*\s+)*)*(?:\w+=\S*\s+)*(?:\S*\/)?(?:npx(?:\s+-\S+)*\s+)?(?:\S*\/)?vitest(?:\s|$)/u,
     what: 'direct Vitest invocation',
   },
   {
-    pattern: /^(?:\w+=\S*\s+)*(?:\S*\/)?(?:npx(?:\s+-\S+)*\s+)?(?:\S*\/)?c8(?:\s|$)/u,
+    pattern: /^(?:(?:time|command)\s+|env\s+(?:\w+=\S*\s+)*)*(?:\w+=\S*\s+)*(?:\S*\/)?(?:npx(?:\s+-\S+)*\s+)?(?:\S*\/)?c8(?:\s|$)/u,
     what: 'direct c8 coverage invocation',
   },
   {
-    pattern: /^(?:\w+=\S*\s+)*(?:\S*\/)?npm\s+(?:exec|x)\s+(?:-\S+\s+)*(?:\S*\/)?(?:vitest|c8|playwright|test-storybook)(?:\s|$)/u,
+    pattern: /^(?:(?:time|command)\s+|env\s+(?:\w+=\S*\s+)*)*(?:\w+=\S*\s+)*(?:\S*\/)?npm\s+(?:exec|x)\s+(?:-\S+\s+)*(?:\S*\/)?(?:vitest|c8|playwright|test-storybook)(?:\s|$)/u,
     what: 'direct test-binary invocation through npm exec',
   },
   {
@@ -156,7 +156,8 @@ export function splitSegments(command) {
 // A segment that IS a wrapper invocation: optional env assignments, then node
 // (however it is pathed), then run-guarded.mjs as its script argument. Merely
 // mentioning the filename elsewhere in the segment does not qualify.
-const WRAPPER_SEGMENT = /^(?:\w+=\S*\s+)*(?:\S*\/)?node\s+(?:-\S+\s+)*\S*run-guarded\.mjs(?:\s|$)/u;
+const ANY_WRAPPER_SEGMENT = /^(?:\w+=\S*\s+)*(?:\S*\/)?node\s+(?:-\S+\s+)*\S*run-guarded\.mjs(?:\s|$)/u;
+const WRAPPER_SEGMENT = /^(?:\w+=\S*\s+)*(?:\S*\/)?node\s+(?:-\S+\s+)*(?:\.\/)?(?:tools\/agent-guard|scripts)\/run-guarded\.mjs(?:\s|$)/u;
 
 function tryRealpath(target) {
   try {
@@ -458,6 +459,12 @@ export function evaluateCommand(command, { env = process.env, now = Date.now() }
   // `node run-guarded.mjs -- npm run lint && node --test …`: the sanctioned
   // call is real, and the blocked binary rides along beside it.
   for (const segment of splitSegments(effective)) {
+    if (ANY_WRAPPER_SEGMENT.test(segment) && !WRAPPER_SEGMENT.test(segment)) {
+      return {
+        allow: false,
+        reason: `Blocked a non-canonical run-guarded.mjs path: only the repository guard may claim the wrapper exemption. ${USE_ENTRYPOINT}`,
+      };
+    }
     if (WRAPPER_SEGMENT.test(segment)) continue;
     if (isUnguardedInnerScript(segment)) {
       return {
