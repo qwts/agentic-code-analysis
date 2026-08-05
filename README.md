@@ -7,9 +7,10 @@ minimal context footprint? Runs as a CI gate (`--enforce`) and as advisory
 feedback inside an agent's dev loop, with interchangeable judge models
 (Anthropic / OpenAI / local).
 
-Status: core CLI, JudgeClient port, Anthropic/OpenAI/local adapters, and
-three checks — `aca context-footprint`, `aca failure-posture`, and
-`aca test-honesty`, each with a calibration self-test — are in (TypeScript 7 on Node ≥ 24, no build step —
+Status: core CLI, JudgeClient port, Anthropic/OpenAI/local adapters, and five
+checks — `aca context-footprint`, `aca failure-posture`, `aca naming-truth`,
+`aca seam-audit`, and `aca test-honesty`, each with a calibration self-test —
+are in (TypeScript 7 on Node ≥ 24, no build step —
 `node src/cli.ts <check>`). Remaining work:
 [open issues](https://github.com/qwts/agentic-code-analysis/issues).
 
@@ -21,6 +22,7 @@ three checks — `aca context-footprint`, `aca failure-posture`, and
 - [Second check: failure-posture](docs/design/check-failure-posture.md) — behavior when dependencies misbehave; rubric: [file-failure-posture](docs/standards/file-failure-posture.md)
 - [Third check: test-honesty](docs/design/check-test-honesty.md)
 - [Fourth check: naming-truth](docs/design/check-naming-truth.md)
+- [Fifth check: seam-audit](docs/design/check-seam-audit.md) — testability footprint of each file
 - [Prior art and the bar being raised](docs/design/prior-art.md)
 - [Implementation plan](docs/plan/issues.md)
 - [Check backlog](docs/plan/backlog.md) — candidate checks awaiting design

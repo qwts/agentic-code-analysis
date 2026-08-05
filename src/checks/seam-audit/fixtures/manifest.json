@@ -1,0 +1,126 @@
+{
+  "schemaVersion": 1,
+  "requiredLevel": "field",
+  "levels": [
+    { "id": "foundation" },
+    { "id": "field" }
+  ],
+  "fixtures": [
+    {
+      "name": "new-hardwired",
+      "level": "foundation",
+      "kind": "new",
+      "file": "src/net/submit-with-retry.ts",
+      "head": {
+        "content": "hardwired-clock-network.txt",
+        "sha256": "7bfe53e10d9df46b46777d95c088c40e06348ca7173f76709d3c0a7daae94c56"
+      },
+      "expect": {
+        "assessment": "new-violating",
+        "verdict": "fail",
+        "blockingAllOf": [
+          { "dependency": "Date.now", "criterion": "ambient-state" },
+          { "dependency": "fetch", "criterion": "ambient-io" }
+        ]
+      },
+      "source": {
+        "kind": "synthetic",
+        "note": "authored for this repository (Apache-2.0); retry client with hardwired clock, randomness, network, and timer"
+      }
+    },
+    {
+      "name": "new-injected",
+      "level": "foundation",
+      "kind": "new",
+      "file": "src/net/submit-with-retry.ts",
+      "head": {
+        "content": "injected-ports.txt",
+        "sha256": "cbe26cd458a1e7a56d8e0405597b5709c300c3a4bc70f63241807a30217f30dc"
+      },
+      "expect": {
+        "assessment": "new-compliant",
+        "verdict": "pass",
+        "emptyFootprint": true
+      },
+      "source": {
+        "kind": "synthetic",
+        "note": "authored for this repository (Apache-2.0); the same behavior behind injected clock/http/sleep/jitter ports"
+      }
+    },
+    {
+      "name": "legacy-improved",
+      "level": "field",
+      "kind": "legacy",
+      "file": "src/net/submit-with-retry.ts",
+      "base": {
+        "content": "hardwired-clock-network.txt",
+        "sha256": "7bfe53e10d9df46b46777d95c088c40e06348ca7173f76709d3c0a7daae94c56"
+      },
+      "head": {
+        "content": "injected-ports.txt",
+        "sha256": "cbe26cd458a1e7a56d8e0405597b5709c300c3a4bc70f63241807a30217f30dc"
+      },
+      "expect": {
+        "assessment": "improved",
+        "verdict": "pass",
+        "emptyFootprint": true
+      },
+      "source": {
+        "kind": "synthetic",
+        "note": "hardwired ambient access replaced by injected ports"
+      }
+    },
+    {
+      "name": "legacy-regressed",
+      "level": "field",
+      "kind": "legacy",
+      "file": "src/net/submit-with-retry.ts",
+      "base": {
+        "content": "injected-ports.txt",
+        "sha256": "cbe26cd458a1e7a56d8e0405597b5709c300c3a4bc70f63241807a30217f30dc"
+      },
+      "head": {
+        "content": "hardwired-clock-network.txt",
+        "sha256": "7bfe53e10d9df46b46777d95c088c40e06348ca7173f76709d3c0a7daae94c56"
+      },
+      "expect": {
+        "assessment": "regressed",
+        "verdict": "fail",
+        "blockingAllOf": [
+          { "dependency": "Date.now", "criterion": "ambient-state" },
+          { "dependency": "fetch", "criterion": "ambient-io" }
+        ]
+      },
+      "source": {
+        "kind": "synthetic",
+        "note": "injected ports replaced by hardwired ambient access"
+      }
+    },
+    {
+      "name": "legacy-held-residual",
+      "level": "field",
+      "kind": "legacy",
+      "file": "src/net/submit-with-retry.ts",
+      "base": {
+        "content": "hardwired-clock-network.txt",
+        "sha256": "7bfe53e10d9df46b46777d95c088c40e06348ca7173f76709d3c0a7daae94c56"
+      },
+      "head": {
+        "content": "hardwired-clock-network.txt",
+        "sha256": "7bfe53e10d9df46b46777d95c088c40e06348ca7173f76709d3c0a7daae94c56"
+      },
+      "expect": {
+        "assessment": "held",
+        "verdict": "pass",
+        "residualAllOf": [
+          { "dependency": "Date.now" },
+          { "dependency": "fetch" }
+        ]
+      },
+      "source": {
+        "kind": "synthetic",
+        "note": "identical hardwired content at both ends; pre-existing missing seams are residual debt, never a new gate failure"
+      }
+    }
+  ]
+}

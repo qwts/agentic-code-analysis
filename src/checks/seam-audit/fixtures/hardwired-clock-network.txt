@@ -1,0 +1,33 @@
+// Submission client with bounded retry and jittered exponential backoff.
+export interface SubmitResult {
+  ok: boolean;
+  attempts: number;
+  elapsedMs: number;
+}
+
+const MAX_ATTEMPTS = 5;
+const BASE_DELAY_MS = 250;
+
+function backoffDelay(attempt: number): number {
+  const jitter = Math.random() * 100;
+  return BASE_DELAY_MS * 2 ** attempt + jitter;
+}
+
+export async function submitWithRetry(url: string, payload: unknown): Promise<SubmitResult> {
+  const started = Date.now();
+  for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt += 1) {
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    if (response.ok) {
+      return { ok: true, attempts: attempt + 1, elapsedMs: Date.now() - started };
+    }
+    if (response.status < 500) {
+      return { ok: false, attempts: attempt + 1, elapsedMs: Date.now() - started };
+    }
+    await new Promise((resolve) => setTimeout(resolve, backoffDelay(attempt)));
+  }
+  return { ok: false, attempts: MAX_ATTEMPTS, elapsedMs: Date.now() - started };
+}
