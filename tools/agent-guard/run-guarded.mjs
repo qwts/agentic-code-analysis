@@ -297,7 +297,7 @@ async function main() {
   const poll = setInterval(() => {
     if (state.polling) return;
     state.polling = true;
-    execFile('ps', ['-axo', 'pid=,ppid=,pgid=,rss='], { maxBuffer: 16 * 1024 * 1024 }, (error, stdout) => {
+    execFile('/bin/ps', ['-axo', 'pid=,ppid=,pgid=,rss='], { maxBuffer: 16 * 1024 * 1024 }, (error, stdout) => {
       state.polling = false;
       if (state.done || error) return;
       const { totalKb, processCount } = collectTreeRssKb(stdout, child.pid);

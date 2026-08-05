@@ -198,43 +198,45 @@ function isWithin(child, parent) {
   return c === p || c.startsWith(p + sep);
 }
 
-// The directory a command will actually execute in: the tool cwd, adjusted for
-// a leading `cd <path> &&` prefix (how agents run commands against another
-// checkout from the same session).
-export function resolveExecutionDir(cwd, command) {
-  if (typeof cwd !== 'string' || cwd.length === 0) return null;
-  if (typeof command !== 'string') return cwd;
+// Every directory a command may execute in. Retaining the reported cwd is
+// deliberate: a `cd` inside `( ... )` does not change its parent shell, while
+// a later top-level transition does. For hook scoping, the safe answer is the
+// union of observed scopes rather than guessing one final directory.
+export function resolveExecutionDirs(cwd, command) {
+  if (typeof cwd !== 'string' || cwd.length === 0) return [];
+  if (typeof command !== 'string') return [cwd];
+  const directories = [cwd];
   let current = cwd;
-  let rest = command;
-  for (;;) {
-    const match = /^\s*[({]*\s*cd\s+(?:--\s+)?(?:"([^"]+)"|'([^']+)'|([^\s;&|]+))\s*(?:&&|;|\n)/u.exec(rest);
-    if (!match) return current;
+  const transitions = /(?:^|\|\||&&|[;\n|&(){}])\s*cd\s+(?:--\s+)?(?:"([^"]+)"|'([^']+)'|([^\s;&|(){}]+))/gu;
+  for (const match of command.matchAll(transitions)) {
     let target = match[1] ?? match[2] ?? match[3];
     if (target.startsWith('~')) {
       const home = process.env.HOME;
-      if (!home) return current;
+      if (!home) continue;
       target = home + target.slice(1);
     }
     current = isAbsolute(target) ? target : resolve(current, target);
-    rest = rest.slice(match[0].length);
+    directories.push(current);
   }
+  return directories;
+}
+
+export function resolveExecutionDir(cwd, command) {
+  return resolveExecutionDirs(cwd, command).at(-1) ?? null;
 }
 
 const QUOTED = /\$'(?:[^'\\]|\\.)*'|'[^']*'|"(?:[^"\\]|\\.)*"/u;
 
 function endsWithShellC(scanned) {
-  const segment = scanned.split(/\|\||&&|[;\n|&]/u).at(-1).trim();
+  const rawSegment = scanned.split(/\|\||&&|[;\n|&]/u).at(-1).trim();
+  const segment = commandAfterPrefixes(rawSegment);
   const tokens = segment.split(/\s+/u).filter(Boolean);
   let i = 0;
-  if (tokens[i] === 'env') {
-    i += 1;
-    while (/^\w+=\S*$/u.test(tokens[i] ?? '')) i += 1;
-  }
   if (!/(?:^|\/)(?:ba|da|z)?sh$/u.test(tokens[i] ?? '')) return false;
   i += 1;
   while (i < tokens.length) {
     const token = tokens[i];
-    if (/^-\S*c$/u.test(token)) return i === tokens.length - 1;
+    if (/^-[A-Za-z]*c[A-Za-z]*$/u.test(token)) return i === tokens.length - 1;
     if (/^(?:-[A-Za-z]*[oO]|--(?:option|shopt))$/u.test(token)) {
       if (i + 1 >= tokens.length) return false;
       i += 2;
@@ -425,7 +427,7 @@ function commandStringPayloads(command) {
     if (commandName === 'eval' && tokens.length > 1) payloads.push(restore(tokens.slice(1).join(' ')));
     if (/(?:^|\/)(?:ba|da|z)?sh$/u.test(tokens[0] ?? '')) {
       for (let i = 1; i < tokens.length - 1; i += 1) {
-        if (tokens[i] === '-c' || /^-[A-Za-z]*c$/u.test(tokens[i])) {
+        if (tokens[i] === '-c' || /^-[A-Za-z]*c[A-Za-z]*$/u.test(tokens[i])) {
           payloads.push(restore(tokens[i + 1]));
           break;
         }
@@ -903,9 +905,9 @@ function inGuardedCheckout(dir) {
 }
 
 export function evaluateHookInput({ command, cwd }, projectDir, options = {}) {
-  const executionDir = resolveExecutionDir(cwd, command);
-  if (executionDir && projectDir) {
-    const inScope = isWithin(executionDir, projectDir) || inGuardedCheckout(executionDir);
+  const executionDirs = resolveExecutionDirs(cwd, command);
+  if (executionDirs.length > 0 && projectDir) {
+    const inScope = executionDirs.some((executionDir) => isWithin(executionDir, projectDir) || inGuardedCheckout(executionDir));
     if (!inScope) return { allow: true };
   }
   return evaluateCommand(command, options);
