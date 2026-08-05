@@ -1,0 +1,78 @@
+[
+  {
+    "name": "new-lying-predicate",
+    "kind": "new",
+    "file": "src/orders/is-valid-order.ts",
+    "head": {
+      "content": "lying-predicate.txt",
+      "importedBy": ["src/orders/checkout.ts", "src/orders/order-form.ts"]
+    },
+    "expect": {
+      "assessment": "new-violating",
+      "verdict": "fail",
+      "blocking": [{ "criteriaAnyOf": ["name-contradicts-behavior"], "symbol": "isValidOrder" }]
+    }
+  },
+  {
+    "name": "new-truthful-assertion",
+    "kind": "new",
+    "file": "src/orders/assert-valid-order.ts",
+    "head": {
+      "content": "truthful-assertion.txt",
+      "importedBy": ["src/orders/checkout.ts", "src/orders/order-form.ts"]
+    },
+    "expect": {
+      "assessment": "new-compliant",
+      "verdict": "pass"
+    }
+  },
+  {
+    "name": "legacy-gains-hidden-write",
+    "kind": "legacy",
+    "file": "src/users/user-store.ts",
+    "base": {
+      "content": "user-store-base.txt",
+      "importedBy": ["src/users/profile.ts", "src/auth/login.ts"]
+    },
+    "head": {
+      "content": "user-store-head.txt",
+      "importedBy": ["src/users/profile.ts", "src/auth/login.ts"]
+    },
+    "expect": {
+      "assessment": "regressed",
+      "verdict": "fail",
+      "blocking": [{ "criteriaAnyOf": ["name-omits-side-effect"], "symbol": "getUser" }]
+    }
+  },
+  {
+    "name": "legacy-improved-with-residual",
+    "kind": "legacy",
+    "file": "src/sessions/session-store.ts",
+    "base": {
+      "content": "session-store-base.txt",
+      "importedBy": ["src/auth/login.ts", "src/auth/logout.ts", "src/admin/session-report.ts"]
+    },
+    "head": {
+      "content": "session-store-head.txt",
+      "importedBy": ["src/auth/login.ts", "src/auth/logout.ts", "src/admin/session-report.ts"]
+    },
+    "expect": {
+      "assessment": "improved",
+      "verdict": "pass",
+      "residual": [{ "criteriaAnyOf": ["name-omits-side-effect"], "symbol": "countSessions" }]
+    }
+  },
+  {
+    "name": "new-vague-but-true",
+    "kind": "new",
+    "file": "src/pipeline/process-events.ts",
+    "head": {
+      "content": "vague-batch.txt",
+      "importedBy": ["src/pipeline/ingest.ts"]
+    },
+    "expect": {
+      "assessment": "new-compliant",
+      "verdict": "pass"
+    }
+  }
+]
