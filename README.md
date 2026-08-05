@@ -14,6 +14,7 @@ work: [issues #5–#6](https://github.com/qwts/agentic-code-analysis/issues).
 
 ## Docs
 
+- [Adopting aca in your repo](docs/adoption.md) — config, advisory CI step, cost expectations
 - [Suite design](docs/design/suite.md) — scope, architecture, CLI and exit-code contracts
 - [First check: context-footprint](docs/design/check-context-footprint.md)
 - [Prior art and the bar being raised](docs/design/prior-art.md)
