@@ -1,0 +1,22 @@
+// Command-line entry: retry-cli [--attempts <n>] [--base-delay <ms>] [--jitter <mode>] -- <command…>
+export interface CliOptions {
+  attempts: number;
+  baseDelayMs: number;
+  jitter: 'none' | 'full';
+  command: string[];
+}
+
+export function parseCliArgs(argv: string[]): CliOptions {
+  const options: CliOptions = { attempts: 5, baseDelayMs: 100, jitter: 'none', command: [] };
+  for (let i = 0; i < argv.length; i += 1) {
+    const arg = argv[i]!;
+    if (arg === '--attempts') options.attempts = Number(argv[++i]);
+    else if (arg === '--base-delay') options.baseDelayMs = Number(argv[++i]);
+    else if (arg === '--jitter') options.jitter = argv[++i] === 'full' ? 'full' : 'none';
+    else if (arg === '--') {
+      options.command = argv.slice(i + 1);
+      break;
+    } else throw new Error(`unknown flag ${arg}`);
+  }
+  return options;
+}

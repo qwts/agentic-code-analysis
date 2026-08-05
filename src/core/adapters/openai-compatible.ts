@@ -2,10 +2,11 @@
 // with a strict json_schema response_format — the common denominator that
 // OpenAI and OpenAI-compatible local servers (LM Studio, Ollama) both speak.
 // Same contract as every adapter (ACA-0003 D2): degrade to {ok:false}, never
-// crash, never silently pass; no sampling knobs; prompt caching is OpenAI's
+// crash, never silently pass — except account rejection at judge time, which
+// throws (ACA-0011); no sampling knobs; prompt caching is OpenAI's
 // automatic prefix caching, nothing to send. No server-side fallbacks.
 import type OpenAI from 'openai';
-import type { JudgeClient, JudgeRequest, JudgeResult } from '../judge-client.ts';
+import { GATE_DOWN_STATUSES, JudgeUnavailableError, type JudgeClient, type JudgeRequest, type JudgeResult } from '../judge-client.ts';
 
 /**
  * OpenAI rejects `max_tokens` on current models; some local servers only
@@ -17,11 +18,11 @@ export function openAiWireJudge(provider: string, model: string, client: OpenAI,
   return {
     provider,
     model,
-    judge: (request) => judge(client, model, tokenParam, request),
+    judge: (request) => judge(provider, client, model, tokenParam, request),
   };
 }
 
-async function judge(client: OpenAI, model: string, tokenParam: TokenParam, request: JudgeRequest): Promise<JudgeResult> {
+async function judge(provider: string, client: OpenAI, model: string, tokenParam: TokenParam, request: JudgeRequest): Promise<JudgeResult> {
   let completion: OpenAI.Chat.Completions.ChatCompletion;
   try {
     completion = await client.chat.completions.create({
@@ -36,7 +37,16 @@ async function judge(client: OpenAI, model: string, tokenParam: TokenParam, requ
   } catch (err) {
     // Non-Error throws (strings, objects from proxies/local servers) must
     // still yield an informative note.
-    return { ok: false, note: `api error: ${err instanceof Error ? err.message : String(err)}` };
+    const message = err instanceof Error ? err.message : String(err);
+    // Duck-typed: SDK APIErrors and proxy throws both carry a numeric status.
+    // OpenAI reports a depleted account as 429 insufficient_quota, not 402;
+    // any other 429 is rate limiting and stays transient.
+    const status = (err as { status?: unknown } | null)?.status;
+    const code = (err as { code?: unknown } | null)?.code;
+    if (typeof status === 'number' && (GATE_DOWN_STATUSES.has(status) || (status === 429 && code === 'insufficient_quota'))) {
+      throw new JudgeUnavailableError(provider, message);
+    }
+    return { ok: false, note: `api error: ${message}` };
   }
   const choice = completion.choices[0];
   if (!choice) return { ok: false, note: 'no completion choice' };

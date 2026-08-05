@@ -24,6 +24,20 @@ export class MissingCredentialsError extends Error {
   }
 }
 
+/** Transport statuses that mean the judge rejected the account itself —
+ * auth or quota — on any wire (ACA-0011). Providers also hide account
+ * rejection behind other statuses; each adapter names its own shapes. */
+export const GATE_DOWN_STATUSES: ReadonlySet<number> = new Set([401, 402, 403]);
+
+/** The judge rejected the account at judge time: MissingCredentialsError
+ * arriving late (ACA-0011). Adapters throw this instead of degrading, so the
+ * run stops — a dead gate must never surface as per-file warns. */
+export class JudgeUnavailableError extends Error {
+  constructor(provider: string, note: string) {
+    super(`${provider} judge unavailable — ${note}`);
+  }
+}
+
 export async function createJudgeClient(route: TierRoute): Promise<JudgeClient> {
   switch (route.provider) {
     case 'anthropic': {

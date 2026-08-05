@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import type Anthropic from '@anthropic-ai/sdk';
 import { createAnthropicJudge } from '../src/core/adapters/anthropic.ts';
-import { MissingCredentialsError } from '../src/core/judge-client.ts';
+import { JudgeUnavailableError, MissingCredentialsError } from '../src/core/judge-client.ts';
 
 const REQUEST = { system: 'rule text', user: 'file payload', schema: { type: 'object' }, maxTokens: 64 };
 
@@ -66,4 +66,22 @@ test('unparseable output degrades to not-ok', async () => {
 test('api errors degrade to not-ok, never throw', async () => {
   const judge = createAnthropicJudge('model-x', stub(new Error('overloaded')));
   assert.deepEqual(await judge.judge(REQUEST), { ok: false, note: 'api error: overloaded' });
+});
+
+const apiError = (status: number, message: string): Error => Object.assign(new Error(message), { status });
+
+test('account rejection throws JudgeUnavailableError: 401/402/403, and the 400 depleted-credits shape', async () => {
+  for (const status of [401, 402, 403]) {
+    await assert.rejects(createAnthropicJudge('model-x', stub(apiError(status, 'rejected'))).judge(REQUEST), JudgeUnavailableError);
+  }
+  // Anthropic reports a depleted account as 400, not 402 (issue #11).
+  const depleted = apiError(400, 'Your credit balance is too low to access the Anthropic API.');
+  await assert.rejects(createAnthropicJudge('model-x', stub(depleted)).judge(REQUEST), /anthropic judge unavailable — Your credit balance is too low/);
+});
+
+test('transient statuses — rate limit, server error, other 400s — still degrade to not-ok', async () => {
+  for (const status of [400, 408, 429, 500, 529]) {
+    const result = await createAnthropicJudge('model-x', stub(apiError(status, 'transient'))).judge(REQUEST);
+    assert.deepEqual(result, { ok: false, note: 'api error: transient' });
+  }
 });

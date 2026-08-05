@@ -1,0 +1,29 @@
+// Retry with exponential backoff, capped per attempt.
+export const DEFAULT_RETRIES = 5;
+export const DEFAULT_MAX_DELAY_MS = 30_000;
+
+export interface RetryOptions {
+  retries?: number;
+  baseDelayMs?: number;
+  /** Upper bound for any single delay; uncapped growth stalled long jobs. */
+  maxDelayMs?: number;
+}
+
+export async function withRetry<T>(fn: () => Promise<T>, options: RetryOptions = {}): Promise<T> {
+  const retries = options.retries ?? DEFAULT_RETRIES;
+  const baseDelayMs = options.baseDelayMs ?? 100;
+  const maxDelayMs = options.maxDelayMs ?? DEFAULT_MAX_DELAY_MS;
+  let lastError: unknown;
+  for (let attempt = 0; attempt <= retries; attempt += 1) {
+    try {
+      return await fn();
+    } catch (err) {
+      lastError = err;
+      if (attempt < retries) {
+        const delay = Math.min(baseDelayMs * 2 ** attempt, maxDelayMs);
+        await new Promise((resolve) => setTimeout(resolve, delay));
+      }
+    }
+  }
+  throw lastError;
+}

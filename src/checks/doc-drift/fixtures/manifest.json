@@ -1,0 +1,162 @@
+{
+  "schemaVersion": 1,
+  "requiredLevel": "discrimination",
+  "levels": [
+    { "id": "foundation" },
+    { "id": "discrimination" }
+  ],
+  "fixtures": [
+    {
+      "name": "claim-contradicts-default",
+      "level": "foundation",
+      "doc": {
+        "path": "docs/retry.md",
+        "content": "retry-doc-drifted.md",
+        "sha256": "ffb52e14db9c8366efe0adabac2e5d161cacc8ccd3cb6fd4013568ca28995807"
+      },
+      "referents": [
+        {
+          "path": "src/retry/backoff.ts",
+          "status": "modified",
+          "head": { "content": "retry-code.txt", "sha256": "7c61c39c9454d8cbb33a39c8b4bb994e6ddc0bcd9ca4528f3904f79b056683e2" }
+        }
+      ],
+      "expect": {
+        "assessmentAnyOf": ["drifted"],
+        "verdictAnyOf": ["fail"],
+        "criteriaAnyOf": ["claim-contradicts-code"]
+      },
+      "source": { "kind": "synthetic", "note": "authored for this repository (Apache-2.0); issue #19 requirement 4" }
+    },
+    {
+      "name": "aligned",
+      "level": "foundation",
+      "doc": {
+        "path": "docs/retry.md",
+        "content": "retry-doc-aligned.md",
+        "sha256": "b957a2a71590103cc83ae3ff84a8529919f6d4e45a764db36b1b98af684169b2"
+      },
+      "referents": [
+        {
+          "path": "src/retry/backoff.ts",
+          "status": "modified",
+          "head": { "content": "retry-code.txt", "sha256": "7c61c39c9454d8cbb33a39c8b4bb994e6ddc0bcd9ca4528f3904f79b056683e2" }
+        }
+      ],
+      "expect": {
+        "assessmentAnyOf": ["aligned"],
+        "verdictAnyOf": ["pass"]
+      },
+      "source": { "kind": "synthetic", "note": "authored for this repository (Apache-2.0); issue #19 requirement 4" }
+    },
+    {
+      "name": "referent-gone",
+      "level": "discrimination",
+      "doc": {
+        "path": "docs/jitter.md",
+        "content": "gone-doc.md",
+        "sha256": "41ca1dd2850ef5c665c42fa1da22473d7bf068eb3626cca2d670e145c0f8d89a"
+      },
+      "referents": [
+        {
+          "path": "src/retry/jitter.ts",
+          "status": "deleted",
+          "base": { "content": "jitter-code-base.txt", "sha256": "6c522f4391c60ab3f02a4608eea9fa2770e78719999ca5779c1432d4d32fdd47" }
+        }
+      ],
+      "expect": {
+        "assessmentAnyOf": ["drifted"],
+        "verdictAnyOf": ["fail"],
+        "criteriaAnyOf": ["referent-gone"]
+      },
+      "source": { "kind": "synthetic", "note": "authored for this repository (Apache-2.0)" }
+    },
+    {
+      "name": "example-flag-removed",
+      "level": "discrimination",
+      "doc": {
+        "path": "docs/cli.md",
+        "content": "example-doc.md",
+        "sha256": "c5094412a0d8295692186979f38cb50387533b2d16be794ecec781f77f5fa560"
+      },
+      "referents": [
+        {
+          "path": "src/cli/retry-cli.ts",
+          "status": "modified",
+          "head": { "content": "cli-code-head.txt", "sha256": "2038fc7a4d4e6a55a6b55e974f183b1ba355185d9ab20e47e4e54fc206427710" },
+          "base": { "content": "cli-code-base.txt", "sha256": "005e987fa6622030d8d00c5785eeca830c9c8aeb04e85d557e1a3f889fe6dea2" }
+        }
+      ],
+      "expect": {
+        "assessmentAnyOf": ["drifted"],
+        "verdictAnyOf": ["fail"],
+        "criteriaAnyOf": ["example-no-longer-runs"]
+      },
+      "source": { "kind": "synthetic", "note": "authored for this repository (Apache-2.0)" }
+    },
+    {
+      "name": "incomplete-never-fails",
+      "level": "discrimination",
+      "doc": {
+        "path": "docs/retry-tuning.md",
+        "content": "incomplete-doc.md",
+        "sha256": "130415b50835206109bd7f5275c8be89fed7691927a89645bcc2c643aafd067b"
+      },
+      "referents": [
+        {
+          "path": "src/retry/backoff.ts",
+          "status": "modified",
+          "head": { "content": "retry-code-capped.txt", "sha256": "b0fae1bc35d5b207922bb5334fd66188e5c727d24936720676f6ff9fbdeb94d0" },
+          "base": { "content": "retry-code.txt", "sha256": "7c61c39c9454d8cbb33a39c8b4bb994e6ddc0bcd9ca4528f3904f79b056683e2" }
+        }
+      ],
+      "expect": {
+        "assessmentAnyOf": ["incomplete", "aligned"],
+        "verdictAnyOf": ["warn", "pass"]
+      },
+      "source": { "kind": "synthetic", "note": "authored for this repository (Apache-2.0); newly capped delay is undocumented but the doc stays truthful — never a fail" }
+    },
+    {
+      "name": "historical-adr-not-drift",
+      "level": "discrimination",
+      "doc": {
+        "path": "docs/decisions/ADR-0007-backoff.md",
+        "content": "adr-doc.md",
+        "sha256": "f67f7bacc293f95ab11fdc918110603929277de2f7cc8d613c4cdd1a4afd278e"
+      },
+      "referents": [
+        {
+          "path": "src/retry/backoff.ts",
+          "status": "modified",
+          "head": { "content": "retry-code.txt", "sha256": "7c61c39c9454d8cbb33a39c8b4bb994e6ddc0bcd9ca4528f3904f79b056683e2" }
+        }
+      ],
+      "expect": {
+        "assessmentAnyOf": ["aligned", "incomplete"],
+        "verdictAnyOf": ["pass", "warn"]
+      },
+      "source": { "kind": "synthetic", "note": "authored for this repository (Apache-2.0); historical narration of the abandoned fixed schedule must not read as a false current claim" }
+    },
+    {
+      "name": "cross-module-symbol-collision",
+      "level": "discrimination",
+      "doc": {
+        "path": "docs/http-client.md",
+        "content": "collision-doc.md",
+        "sha256": "73dc4869f85b2a8929f90d99fff7a097a6cf43d8d5fed2c2d217357bdca1c875"
+      },
+      "referents": [
+        {
+          "path": "src/queue/worker.ts",
+          "status": "modified",
+          "head": { "content": "collision-code.txt", "sha256": "baea59e7f8f894e3615d66ec91929d31cf5a7fd43d5d28765cb6816b3747a52d" }
+        }
+      ],
+      "expect": {
+        "assessmentAnyOf": ["aligned", "uncertain"],
+        "verdictAnyOf": ["pass", "warn"]
+      },
+      "source": { "kind": "synthetic", "note": "authored for this repository (Apache-2.0); encodes the 2026-08-05 field miss — a token coincidence bound a doc about one module to an unrelated changed module and a cheap judge fabricated a contradiction from it. The doc's claims are about src/http/client.ts (unchanged, not supplied); the supplied worker.ts sharing MAX_RETRIES must not fail it" }
+    }
+  ]
+}

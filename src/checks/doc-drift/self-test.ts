@@ -1,10 +1,11 @@
-// Calibration self-test (ACA-0004 D8 pattern, graded per ACA-0012): judge
-// the golden fixture test files level by level and grade cumulatively.
-// Always live — never cached — so every run exercises the prompt as shipped.
-// If an assertion breaks, the prompt is wrong, not the fixture. Levels run
-// in manifest order through the production pool; once a level fails, higher
-// levels are skipped — they cannot repair a lower miss and would only add
-// spend.
+// Calibration self-test for doc-drift (ACA-0012 exam shape, forked):
+// fixtures run through the REAL extraction, evidence assembly, judging, and
+// verdict mapping — the manifest supplies the changed-referent bundle a git
+// change index would (the index itself is unit-tested; fixtures live outside
+// any repo). Always live, never cached. A fixture whose doc yields no
+// candidate reference is an integrity error before any judge call — the
+// mechanical path is broken, not the judge. If an assertion breaks, the
+// prompt is wrong, not the fixture.
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { ConfigError } from '../../core/config.ts';
@@ -20,9 +21,21 @@ import {
   type Expectation,
   type LevelStatus,
 } from './calibration.ts';
-import { judgeOutcome, MAX_TOKENS, PROMPT_VERSION, rubricText, systemPrompt, userPrompt, VERDICT_SCHEMA, type TestHonestyVerdict } from './judge-io.ts';
+import type { ChangeIndex, Referent } from './change-index.ts';
+import { buildEvidence, type EvidenceBundle } from './evidence.ts';
+import {
+  EXTRACTION_VERSION,
+  judgeOutcome,
+  MAX_TOKENS,
+  PROMPT_VERSION,
+  rubricText,
+  systemPrompt,
+  userPrompt,
+  VERDICT_SCHEMA,
+  type DocDriftVerdict,
+} from './judge-io.ts';
 import { CONCURRENCY, mapPool } from './pool.ts';
-import type { Evidence } from './unit-context.ts';
+import { extractReferences } from './references.ts';
 
 const FIXTURES_DIR = new URL('./fixtures/', import.meta.url);
 
@@ -38,6 +51,7 @@ interface FixtureReport {
  * contents and no prompts — identity, grades, and per-fixture outcomes only. */
 export interface SelfTestReport {
   promptVersion: string;
+  extractionVersion: string;
   fixtureSuite: string;
   requiredLevel: string;
   achievedLevel: string | null;
@@ -46,34 +60,35 @@ export interface SelfTestReport {
   fixtures: FixtureReport[];
 }
 
-/** Check-local structural subtype — the registry's SelfTestResult stays
- * narrow; the dispatcher duck-types `report` for --json. */
 export interface GradedSelfTestResult extends SelfTestResult {
   report: SelfTestReport;
 }
 
-// Fixtures live outside any repo, so companion context comes from the
-// manifest instead of unit-context resolution; the evidence shape is
-// identical to a live run's.
-function evidenceOf(fixture: CalibrationFixture, contentOf: (file: string) => string | undefined): Evidence {
-  return {
-    file: fixture.file,
-    content: contentOf(fixture.content)!,
-    mode: fixture.units.length > 0 ? 'unit-exports' : 'test-only',
-    units: fixture.units,
-    snapshots: fixture.snapshots,
-    unavailable: fixture.unavailable,
-  };
+/** The manifest's referent bundle, shaped as the change index would shape
+ * it — same statuses, same head/base semantics. */
+function indexOf(fixture: CalibrationFixture, contentOf: (file: string) => string | undefined): ChangeIndex {
+  const index: ChangeIndex = new Map();
+  for (const referent of fixture.referents) {
+    const entry: Referent = { path: referent.path, status: referent.status };
+    if (referent.renamedTo !== undefined) entry.renamedTo = referent.renamedTo;
+    if (referent.head !== undefined) entry.head = contentOf(referent.head.content)!;
+    if (referent.base !== undefined) entry.base = contentOf(referent.base.content)!;
+    index.set(referent.path, entry);
+  }
+  return index;
 }
 
-function describe(verdict: TestHonestyVerdict): string {
+function describe(verdict: DocDriftVerdict): string {
   const criteria = (verdict.findings ?? []).map((finding) => finding.criterion);
   const parts = [criteria.length ? `[${criteria.join(', ')}]` : '', verdict.note ? `(${verdict.note})` : ''].filter(Boolean);
   return [`${verdict.assessment ?? 'degraded'}/${verdict.verdict}`, ...parts].join(' ');
 }
 
 function describeExpectation(expect: Expectation): string {
-  return [`${expect.assessment}/${expect.verdict}`, expect.criteriaAnyOf ? `[any of: ${expect.criteriaAnyOf.join(', ')}]` : '']
+  return [
+    `${expect.assessmentAnyOf.join('|')}/${expect.verdictAnyOf.join('|')}`,
+    expect.criteriaAnyOf ? `[any of: ${expect.criteriaAnyOf.join(', ')}]` : '',
+  ]
     .filter(Boolean)
     .join(' ');
 }
@@ -102,8 +117,22 @@ export async function selfTest(client: JudgeClient): Promise<GradedSelfTestResul
   };
   const manifest = validateManifest(raw, contentOf);
 
-  const referenced = manifest.fixtures.map((fixture) => contentOf(fixture.content)!);
-  const fixtureSuite = suiteIdentity(PROMPT_VERSION, rubric, manifestText, referenced);
+  // The extraction gate and the suite identity both come before any judge
+  // call: a fixture that no longer yields a candidate is a broken exam.
+  const prepared = new Map<string, { docContent: string; bundle: EvidenceBundle }>();
+  for (const fixture of manifest.fixtures) {
+    const docContent = contentOf(fixture.doc.content)!;
+    const bundle = buildEvidence(extractReferences(fixture.doc.path, docContent), indexOf(fixture, contentOf));
+    if (bundle.references.length === 0) {
+      throw new ConfigError(`self-test manifest: fixture "${fixture.name}" extracts no candidate reference — the mechanical prefilter or the fixture is broken`);
+    }
+    prepared.set(fixture.name, { docContent, bundle });
+  }
+  const referenced = manifest.fixtures.flatMap((fixture) => [
+    contentOf(fixture.doc.content)!,
+    ...fixture.referents.flatMap((referent) => [...(referent.head ? [contentOf(referent.head.content)!] : []), ...(referent.base ? [contentOf(referent.base.content)!] : [])]),
+  ]);
+  const fixtureSuite = suiteIdentity([PROMPT_VERSION, EXTRACTION_VERSION], rubric, manifestText, referenced);
 
   const levelIds = manifest.levels.map((level) => level.id);
   const levelStatus = new Map<string, LevelStatus>();
@@ -122,9 +151,9 @@ export async function selfTest(client: JudgeClient): Promise<GradedSelfTestResul
       continue;
     }
     const verdicts = await mapPool(fixtures, CONCURRENCY, async (fixture) => {
-      const evidence = evidenceOf(fixture, contentOf);
-      const result = await client.judge({ system, user: userPrompt(evidence), schema: VERDICT_SCHEMA, maxTokens: MAX_TOKENS });
-      return judgeOutcome(evidence, result).verdict;
+      const { docContent, bundle } = prepared.get(fixture.name)!;
+      const result = await client.judge({ system, user: userPrompt(fixture.doc.path, docContent, bundle), schema: VERDICT_SCHEMA, maxTokens: MAX_TOKENS });
+      return judgeOutcome(fixture.doc.path, bundle, result).verdict;
     });
     let passed = true;
     fixtures.forEach((fixture, index) => {
@@ -158,6 +187,7 @@ export async function selfTest(client: JudgeClient): Promise<GradedSelfTestResul
     lines,
     report: {
       promptVersion: PROMPT_VERSION,
+      extractionVersion: EXTRACTION_VERSION,
       fixtureSuite,
       requiredLevel: manifest.requiredLevel,
       achievedLevel: achieved,
