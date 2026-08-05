@@ -19,6 +19,7 @@ work: [issues #5–#6](https://github.com/qwts/agentic-code-analysis/issues).
 - [First check: context-footprint](docs/design/check-context-footprint.md)
 - [Prior art and the bar being raised](docs/design/prior-art.md)
 - [Implementation plan](docs/plan/issues.md)
+- [Check backlog](docs/plan/backlog.md) — candidate checks awaiting design
 - [Decisions (ACA series)](docs/decisions/README.md)
 - [The enforced standard](docs/standards/file-context-footprint.md) (vendored; Agent Space copy is canonical)
 
