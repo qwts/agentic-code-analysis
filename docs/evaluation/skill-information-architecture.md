@@ -44,7 +44,7 @@ Store a bounded JSON record with this shape:
   "schemaVersion": 1,
   "runId": "stable-id",
   "grader": {
-    "promptVersion": "skill-information-architecture-v1",
+    "promptVersion": "skill-information-architecture-v5",
     "fixtureSuite": "sha256:...",
     "provider": "resolved-from-config",
     "model": "resolved-from-config"

@@ -58,9 +58,41 @@ iteration was attributed to forward-test failures.
 
 The package also passed its static contract, live-corpus discovery, launcher
 resolution, argument-preservation, exit-status, and preflight tests. The real
-launcher returned the live check catalog from the checkout. A live
-`skill-information-architecture --self-test --json` attempt reached ACA's
-credential gate and emitted no JSON because the configured Anthropic
-credential was absent; that is an unqualified skip, not a semantic result.
-Record a qualification tuple and live package verdict only after an authorized
-provider route reaches the required calibration level.
+launcher returned the live check catalog from the checkout.
+
+## Live qualification and self-dogfood
+
+Authorized live qualification exposed a prompt/verifier contract gap rather
+than a fixture defect. Across the screened routes, valid semantic proposals
+were degraded when preservation spans were repeated, workload-grounded
+background preceded the routine path, or missing workload evidence was treated
+as a clean placement decision. The prompt was tightened without changing the
+fixtures, schema, verifier, rubric, or 4,096-token bound, and its pinned version
+was advanced to `skill-information-architecture-v5`.
+
+The final uncached qualification tuple was:
+
+- check: `skill-information-architecture`;
+- prompt: `skill-information-architecture-v5`;
+- fixture suite: `sha256:d6a4208ba137d2ef`;
+- provider/model: `anthropic` / `claude-opus-5`;
+- achieved/required level: `boundaries` / `boundaries`;
+- result: qualified, all nine fixtures passed;
+- elapsed time: 59.59 seconds.
+
+The subsequent advisory run targeted `.agents/skills/run-aca`, serialized all
+four package files with six workload scenarios and no omissions, and returned
+an uncached `well-structured` / `pass` verdict with zero findings. The package
+contained 883 activated-body tokens and three on-demand resources. Elapsed
+time was 24.22 seconds.
+
+Route screening stayed bounded and stopped higher-level spend after each miss.
+The notable completed attempts were: Qwen3.5-397B thinking output truncated at
+the 4,096-token cap (73.73s); Qwen3-235B Instruct missed host-verified routing
+or grounding (31.77s on v1, 43.35s on v2); Qwen2.5-72B Instruct missed a
+preservation or proposal invariant (61.17s on v1, 27.86s on v2); Llama 4 Scout
+returned non-patchable findings (17.82s); DeepSeek V4 Pro over-flagged the
+known-good fixture (44.10s); and Opus progressed from foundation on v1/v2/v3
+(62.05s, 61.38s, 52.51s) to coverage on v4 (55.91s) and boundaries on v5.
+One Kimi K2.6 attempt was terminated without a result after 218.77 seconds and
+is not qualification evidence.
