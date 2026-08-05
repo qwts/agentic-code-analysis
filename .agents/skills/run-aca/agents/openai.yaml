@@ -1,0 +1,4 @@
+interface:
+  display_name: "Run ACA"
+  short_description: "Run and interpret ACA semantic checks"
+  default_prompt: "Use $run-aca to choose and run the appropriate ACA check on this repository."
