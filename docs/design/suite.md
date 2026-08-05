@@ -131,6 +131,13 @@ construction; that re-billing spike is accepted.
 
 Advisory mode with no credentials prints one line and exits 0.
 
+`--self-test` shares the same table: 0 only when the check's calibration
+reaches its required qualification level, 1 on any fixture/level miss (even
+without `--enforce`), 2 for a missing self-test or an invalid calibration
+package, 78 when no credentials resolve. `--json` applies to `--self-test`
+and emits one qualification object from the check's structural report
+(ACA-0012); the shared `SelfTestResult` contract stays `{passed, lines}`.
+
 ## Decisions
 
 Accepted 2026-08-04 and extracted to repo-local records (numbering per

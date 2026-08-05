@@ -82,6 +82,27 @@ test('--self-test: exit 0 on pass, 1 on miss, 2 when the check has none', async 
   assert.equal(await run(['fake', '--self-test'], deps([])), EXIT.usage);
 });
 
+test('--self-test --json emits one object: report spread when present, shared fields otherwise', async () => {
+  const out: string[] = [];
+  const withResult = (result: object) => {
+    const base = deps([], out);
+    const check: Check = { name: 'fake', tier: 'T1', run: async () => [], selfTest: async () => result as never };
+    return { ...base, registry: new Map([['fake', async () => check]]) };
+  };
+  const report = { qualified: true, requiredLevel: 'field', achievedLevel: 'field', levels: [] };
+  await run(['fake', '--self-test', '--json'], withResult({ passed: true, lines: ['line'], report }));
+  const graded = JSON.parse(out.at(-1)!);
+  assert.equal(graded.check, 'fake');
+  assert.equal(graded.model, 'stub-model');
+  assert.equal(graded.qualified, true);
+  assert.equal(graded.lines, undefined, 'a structural report replaces the text lines');
+
+  await run(['fake', '--self-test', '--json'], withResult({ passed: true, lines: ['line'] }));
+  const fallback = JSON.parse(out.at(-1)!);
+  assert.deepEqual(fallback.lines, ['line']);
+  assert.equal(fallback.passed, true);
+});
+
 test('--self-test without credentials exits 78 even without --enforce', async () => {
   const noCreds = {
     ...deps([]),

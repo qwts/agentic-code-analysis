@@ -111,6 +111,25 @@ least-privilege workflow over the `--json` output, with this contract:
 The GitHub reconciler itself belongs in the consuming repo or its playbook,
 as a follow-up there.
 
+## Qualifying a judge (calibration levels)
+
+Before trusting a provider/model route with real verdicts — and always
+before `--enforce` — run the graded calibration on that exact route:
+
+```bash
+node path/to/agentic-code-analysis/src/cli.ts context-footprint --self-test --json
+```
+
+Exit 0 means the route reached the check's required qualification level
+(`field` for context-footprint); the JSON object records the evidence tuple —
+prompt version, fixture-suite identity, provider, model, achieved level. That
+qualification applies to that tuple only: requalify whenever you change the
+model, the provider, or update ACA past a prompt/fixture change (the
+fixture-suite identity moves with any of them). Passing `foundation` alone is
+screening evidence — useful for shortlisting a cheap local judge, not
+authority for enforcement or ratchet adjudication. Every self-test run bills
+live API calls by design; it never reads or writes the verdict cache.
+
 ## Promotion to `--enforce`
 
 Out of scope for adoption, deliberately. Run advisory, accumulate findings,

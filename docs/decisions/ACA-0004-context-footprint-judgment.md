@@ -1,7 +1,8 @@
 # ACA-0004: Context-footprint judgment — file-as-it-stands, load-set accounting, fixture-gated prompts
 
 **Status:** Accepted; D5's absolute-state semantics for legacy files
-superseded by [ACA-0013](ACA-0013-comparative-judgment.md) (D8 stands)
+superseded by [ACA-0013](ACA-0013-comparative-judgment.md) (D8 stands,
+graded by [ACA-0012](ACA-0012-graded-calibration.md))
 **Date:** 2026-08-04
 **Issue:** #4 (embodying issue; the why and review trail live in the design
 review, [PR #1](https://github.com/qwts/agentic-code-analysis/pull/1) / #2)

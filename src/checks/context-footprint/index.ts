@@ -6,9 +6,8 @@ import type { Check, CheckContext, FileVerdict } from '../registry.ts';
 import { VerdictCache } from '../../core/verdict-cache.ts';
 import { buildComparisons, type Comparison, type Snapshot } from './comparison.ts';
 import { judgeOutcome, MAX_TOKENS, PROMPT_VERSION, ruleText, systemPrompt, userPrompt, VERDICT_SCHEMA } from './judge-io.ts';
+import { CONCURRENCY, mapPool } from './pool.ts';
 import { selfTest } from './self-test.ts';
-
-const CONCURRENCY = 3;
 
 /**
  * Pair-addressed key (ACA-0013 extending ACA-0003 D7): every semantic input
@@ -45,19 +44,6 @@ async function run(context: CheckContext): Promise<FileVerdict[]> {
     if (cacheable) context.cache.set(key, verdict);
     return verdict;
   });
-}
-
-async function mapPool<T, R>(items: T[], limit: number, fn: (item: T) => Promise<R>): Promise<R[]> {
-  const results: R[] = new Array(items.length);
-  let next = 0;
-  const workers = Array.from({ length: Math.min(limit, items.length) }, async () => {
-    while (next < items.length) {
-      const index = next++;
-      results[index] = await fn(items[index]!);
-    }
-  });
-  await Promise.all(workers);
-  return results;
 }
 
 export const check: Check = {

@@ -18,5 +18,6 @@ the check issue — rather than one issue per decision.
 | ID | Title | Status |
 | --- | --- | --- |
 | [ACA-0003](ACA-0003-suite-contracts.md) | Suite contracts — CLI shape, JudgeClient, exit codes, output, model routing, verdict cache (D1–D4, D6, D7) | Accepted; D7 key extended by ACA-0013 |
-| [ACA-0004](ACA-0004-context-footprint-judgment.md) | Context-footprint judgment — file-as-it-stands, load-set accounting, fixture-gated prompts (D5, D8) | Accepted; D5 superseded for legacy files by ACA-0013 |
+| [ACA-0004](ACA-0004-context-footprint-judgment.md) | Context-footprint judgment — file-as-it-stands, load-set accounting, fixture-gated prompts (D5, D8) | Accepted; D5 superseded for legacy files by ACA-0013; D8 graded by ACA-0012 |
+| [ACA-0012](ACA-0012-graded-calibration.md) | Graded calibration — qualification levels, validated exam, machine-readable evidence | Accepted |
 | [ACA-0013](ACA-0013-comparative-judgment.md) | Comparative judgment — direction of change for legacy files, pair-addressed cache | Accepted |
