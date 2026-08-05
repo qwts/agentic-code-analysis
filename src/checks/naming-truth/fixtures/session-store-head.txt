@@ -1,0 +1,20 @@
+import { redis } from '../redis.ts';
+
+export interface Session {
+  token: string;
+  userId: string;
+  expiresAtMs: number;
+}
+
+const TTL_MS = 30 * 60 * 1000;
+
+/** Look up a session by token, extending its expiry by one TTL. */
+export function getSessionAndRefreshExpiry(token: string): Promise<Session | null> {
+  return redis.getAndRefreshExpiry(`session:${token}`, TTL_MS);
+}
+
+/** Number of sessions a user currently holds. */
+export function countSessions(userId: string): Promise<number> {
+  // drops every expired session from the store before counting
+  return redis.deleteExpiredAndCount(`sessions:${userId}`);
+}
