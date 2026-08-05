@@ -11,7 +11,7 @@ import type {
 } from './model.ts';
 import type { Action, Criterion } from './model.ts';
 
-export const PROMPT_VERSION = 'skill-information-architecture-v1';
+export const PROMPT_VERSION = 'skill-information-architecture-v5';
 export const SCHEMA_VERSION = 'skill-ia-schema-v1';
 export const VERIFIER_VERSION = 'skill-ia-verifier-v2';
 export const MAX_TOKENS = 4096;
@@ -98,12 +98,16 @@ Closed criteria and compatible actions:
 
 PROTECTED: length and file count alone never fail; long cohesive specialist skills pass. Keep concise rare-but-high-consequence safety/recovery cues in the activated body. Do not flag generic prose density or duplication. With basis cohesion-only, do not infer common/rare/value from stereotypes: any frequency-dependent placement claim requires assessment uncertain and zero findings. Cohesion and route clarity can still be judged without frequency.
 
+With basis cohesion-only, when choosing the order or load stage of distinct workflows would require knowing which workflow is common, rare, or more valuable, return uncertain with zero findings rather than well-structured. A pass requires that the placement judgment not depend on missing workload evidence.
+
+With workload-grounded evidence, unrelated background placed before the instructions for a supplied high-frequency or high-value scenario is buried-core-guidance even when the body is short and a reordered variant has the same token count.
+
 Assessment contract:
 - well-structured: zero findings.
 - needs-restructure: one or more exact, patchable findings.
 - uncertain: zero findings; evidence cannot ground a safe placement decision.
 
-For every finding, copy one unique contiguous excerpt character-for-character; name its exact source path and containing heading; use only supplied scenario ids; choose one compatible action; keep destination inside the package; provide the exact routing/insertion/outline text; list exact safety or behavior spans that the edit must preserve; and give a short task-performance rationale. Do not output token counts, percentages, severities, resource-open counts, or line numbers. Prefer one decisive proposal over overlapping edits.`;
+For every finding, copy one unique contiguous excerpt character-for-character; name its exact source path and containing heading; use only supplied scenario ids; choose one compatible action; keep destination inside the package; provide the exact routing/insertion/outline text; list exact safety or behavior spans that the edit must preserve; and give a short task-performance rationale. Set preserve to [] unless the proposed edit replaces or deletes exact safety or behavior text that must remain. Every preserve entry must be one nonempty, unique, contiguous character-for-character span in source_path; when it lies inside excerpt, copy it verbatim into proposal_text unless extract-resource moves the excerpt intact. Do not output token counts, percentages, severities, resource-open counts, or line numbers. Prefer one decisive proposal over overlapping edits.`;
 }
 
 export function userPrompt(payload: PackagePayload): string {
