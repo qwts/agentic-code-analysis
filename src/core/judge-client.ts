@@ -30,7 +30,15 @@ export async function createJudgeClient(route: TierRoute): Promise<JudgeClient> 
       const { createAnthropicJudge } = await import('./adapters/anthropic.ts');
       return createAnthropicJudge(route.model);
     }
+    case 'openai': {
+      const { createOpenAiJudge } = await import('./adapters/openai.ts');
+      return createOpenAiJudge(route.model);
+    }
+    case 'local': {
+      const { createLocalJudge } = await import('./adapters/local.ts');
+      return createLocalJudge(route.model);
+    }
     default:
-      throw new ConfigError(`unknown provider "${route.provider}" (supported: anthropic)`);
+      throw new ConfigError(`unknown provider "${route.provider}" (supported: anthropic, openai, local)`);
   }
 }

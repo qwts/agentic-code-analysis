@@ -11,16 +11,21 @@
     "typecheck": "tsc --noEmit"
   },
   "peerDependencies": {
-    "@anthropic-ai/sdk": "^0.115.0"
+    "@anthropic-ai/sdk": "^0.115.0",
+    "openai": "^7.0.0"
   },
   "peerDependenciesMeta": {
     "@anthropic-ai/sdk": {
+      "optional": true
+    },
+    "openai": {
       "optional": true
     }
   },
   "devDependencies": {
     "@anthropic-ai/sdk": "^0.115.0",
     "@types/node": "^24.0.0",
+    "openai": "^7.4.0",
     "typescript": "^7.0.0"
   }
 }
