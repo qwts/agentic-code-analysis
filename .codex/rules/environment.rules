@@ -20,7 +20,6 @@ prefix_rule(
             "format-patch",
             "help",
             "init",
-            "log",
             "merge",
             "merge-base",
             "mv",
@@ -105,11 +104,11 @@ prefix_rule(
 )
 
 prefix_rule(
-    pattern = ["gh", "codespace", ["code", "cp", "jupyter", "list", "logs", "ports", "ssh", "view"]],
+    pattern = ["gh", "codespace", ["code", "cp", "jupyter", "list", "logs", "ports", "view"]],
     decision = "allow",
     justification = "Non-destructive Codespaces development operations are trusted.",
-    match = ["gh codespace list", "gh codespace ssh -c example"],
-    not_match = ["gh codespace delete -c example"],
+    match = ["gh codespace list", "gh codespace view -c example"],
+    not_match = ["gh codespace ssh -c example", "gh codespace delete -c example"],
 )
 
 prefix_rule(

@@ -28,7 +28,7 @@
 //
 // Protocols: --protocol=claude | cursor | codex
 
-import { existsSync, realpathSync } from 'node:fs';
+import { existsSync, readFileSync, realpathSync } from 'node:fs';
 import { dirname, isAbsolute, resolve, sep } from 'node:path';
 import process from 'node:process';
 import { fileURLToPath } from 'node:url';
@@ -126,6 +126,12 @@ const TAMPERING = [
     reason:
       'Blocked AGENT_GUARD_STATE_DIR: redirecting the lease directory gives this session a private budget that no other ' +
       'repo or agent can see — which is exactly the per-worktree bug this guard replaced. It is for tests only.',
+  },
+  {
+    pattern: /\b(?:NODE_OPTIONS|BASH_ENV|ENV|ZDOTDIR|PERL5OPT|RUBYOPT|PYTHONPATH|PYTHONHOME|PHPRC|PHP_INI_SCAN_DIR|LD_PRELOAD|DYLD_INSERT_LIBRARIES|GIT_SSH_COMMAND|GIT_CONFIG_COUNT|PATH)=/u,
+    reason:
+      'Blocked an executable-loading environment override: preload, startup, loader, config, and command-resolution variables execute or select code before the requested command and ' +
+      `can dispatch a protected lane outside static classification. Remove the override. ${USE_ENTRYPOINT}`,
   },
   {
     pattern: /\barbiter\.mjs\s+grant\b/u,
@@ -1010,6 +1016,25 @@ function hasRuntimeScriptFile(command) {
   return false;
 }
 
+function hasDirectScriptDispatch(command, cwd = process.cwd()) {
+  for (const segment of splitSegments(command)) {
+    const tokens = commandAfterPrefixes(segment).split(/\s+/u).filter(Boolean);
+    if (tokens.length === 0) continue;
+    const command = tokens[0];
+    if (command === '.' || command === 'source') return tokens.length > 1;
+    const candidate = command.replaceAll('\u0004', ' ');
+    const file = resolve(cwd, candidate);
+    if (!existsSync(file)) continue;
+    try {
+      const prefix = readFileSync(file).subarray(0, 4096);
+      if (!prefix.includes(0)) return true;
+    } catch {
+      return true;
+    }
+  }
+  return false;
+}
+
 function isWordCharacter(character) {
   return character !== undefined && !/[\s;&|]/u.test(character);
 }
@@ -1036,8 +1061,7 @@ function isExecutableQuotedWord(scanned, word) {
   const tokens = commandAfterPrefixes(segment).split(/\s+/u).filter(Boolean);
   if (tokens.length === 0) {
     if (/^\w+=\S*$/u.test(word) && followsEnvCommand(scanned)) return true;
-    const executable = word.split('/').at(-1);
-    return /^(?:ba|da|z)?sh$|^(?:npm|npx|node|electron|vitest|playwright|test-storybook|pnpm|yarn|bun|bunx|corepack|watch|xargs|env|command|time|nice|nohup|timeout|setsid|stdbuf|exec)$/u.test(executable);
+    return true;
   }
   if (tokens[0]?.split('/').at(-1) === 'corepack' && /^(?:pnpm|yarn)(?:@.+)?$/u.test(word)) return true;
   if (tokens[0]?.split('/').at(-1) === 'find') {
@@ -1457,7 +1481,7 @@ function hasDynamicIdentityRemoval(command) {
 }
 
 function isProtectedEnvironmentName(name) {
-  return /^(?:CI|GITHUB_ACTIONS|CONTINUOUS_INTEGRATION|BUILDKITE|GITLAB_CI|JENKINS_URL|AGENT_GUARD_FORCE|AGENT_GUARD_ASSUME_HUMAN|AGENT_GUARD_STATE_DIR|AGENT_GUARDED|CLAUDECODE|CLAUDE_CODE_ENTRYPOINT|AI_AGENT|CODEX_\w+|CURSOR_\w+)$/u.test(name);
+  return /^(?:CI|GITHUB_ACTIONS|CONTINUOUS_INTEGRATION|BUILDKITE|GITLAB_CI|JENKINS_URL|NODE_OPTIONS|BASH_ENV|ENV|ZDOTDIR|PERL5OPT|RUBYOPT|PYTHONPATH|PYTHONHOME|PHPRC|PHP_INI_SCAN_DIR|LD_PRELOAD|DYLD_INSERT_LIBRARIES|GIT_SSH_COMMAND|GIT_CONFIG_COUNT|PATH|AGENT_GUARD_FORCE|AGENT_GUARD_ASSUME_HUMAN|AGENT_GUARD_STATE_DIR|AGENT_GUARDED|CLAUDECODE|CLAUDE_CODE_ENTRYPOINT|AI_AGENT|CODEX_\w+|CURSOR_\w+)$/u.test(name);
 }
 
 function hasProtectedEnvironmentMutation(command) {
@@ -1507,7 +1531,7 @@ function expandSimpleBraces(value, limit = 32) {
   return variants.slice(0, limit);
 }
 
-function shellPatternCanMatchAgentGuard(component) {
+function shellPatternCanMatch(component, target) {
   for (const variant of expandSimpleBraces(component.replace(/\\(.)/gu, '$1'))) {
     let source = '^';
     for (let index = 0; index < variant.length; index += 1) {
@@ -1535,7 +1559,7 @@ function shellPatternCanMatchAgentGuard(component) {
         source += character.replace(/[\\^$.*+?()[\]{}|]/gu, '\\$&');
       }
     }
-    if (new RegExp(`${source}$`, 'u').test('agent-guard')) return true;
+    if (new RegExp(`${source}$`, 'u').test(target)) return true;
   }
   return false;
 }
@@ -1544,7 +1568,7 @@ function referencesGuardState(command) {
   for (const rawWord of command.match(/[^\s<>;&|]+/gu) ?? []) {
     const word = rawWord.slice(rawWord.lastIndexOf('=') + 1).replace(/^['"]|['"]$/gu, '');
     const components = word.split('/');
-    const guardAt = components.findIndex(shellPatternCanMatchAgentGuard);
+    const guardAt = components.findIndex((component) => shellPatternCanMatch(component, 'agent-guard'));
     if (guardAt < 0) continue;
     const tail = [];
     for (const component of components.slice(guardAt + 1)) {
@@ -1553,7 +1577,11 @@ function referencesGuardState(command) {
       else tail.push(component);
     }
     const child = tail[0];
-    if (child === undefined || child === '' || child === 'leases' || child === 'admission.lock' || child === 'machine-token') return true;
+    if (
+      child === undefined ||
+      child === '' ||
+      ['leases', 'admission.lock', 'machine-token'].some((target) => shellPatternCanMatch(child, target))
+    ) return true;
   }
   return false;
 }
@@ -1674,6 +1702,26 @@ function commandAfterPrefixes(segment) {
       }
       continue;
     }
+    if (command === 'ionice') {
+      index += 1;
+      while (tokens[index]?.startsWith('-')) {
+        const option = tokens[index++];
+        if (/^(?:-c|--class|-n|--classdata)$/u.test(option) && index < tokens.length) index += 1;
+      }
+      continue;
+    }
+    if (command === 'parallel') {
+      index += 1;
+      const optionsWithOperands = new Set([
+        '-a', '--arg-file', '-j', '--jobs', '-S', '--sshlogin', '--sshloginfile', '--workdir', '--results', '--joblog', '--tmpdir',
+      ]);
+      while (tokens[index]?.startsWith('-')) {
+        const option = tokens[index++];
+        if (option === '--') break;
+        if (optionsWithOperands.has(option) && index < tokens.length) index += 1;
+      }
+      continue;
+    }
     if (command === 'timeout') {
       index += 1;
       while (tokens[index]?.startsWith('-')) {
@@ -1779,9 +1827,17 @@ function commandAfterPrefixes(segment) {
   return tokens.slice(index).join(' ');
 }
 
-export function evaluateCommand(command) {
+export function evaluateCommand(command, { cwd = process.cwd() } = {}) {
   if (typeof command !== 'string' || command.length === 0) return { allow: true };
   const dynamicCommand = maskNonShellHeredocs(command);
+  if (/\b(?:NODE_OPTIONS|BASH_ENV|ENV|ZDOTDIR|PERL5OPT|RUBYOPT|PYTHONPATH|PYTHONHOME|PHPRC|PHP_INI_SCAN_DIR|LD_PRELOAD|DYLD_INSERT_LIBRARIES|GIT_SSH_COMMAND|GIT_CONFIG_COUNT|PATH)=/u.test(dynamicCommand)) {
+    return {
+      allow: false,
+      reason:
+        'Blocked an executable-loading environment override: preload, startup, loader, config, and command-resolution variables execute or select code before the requested command and ' +
+        `can dispatch a protected lane outside static classification. Remove the override. ${USE_ENTRYPOINT}`,
+    };
+  }
   if (hasProtectedEnvironmentMutation(dynamicCommand)) {
     return {
       allow: false,
@@ -1821,6 +1877,13 @@ export function evaluateCommand(command) {
     return {
       allow: false,
       reason: `Blocked direct runtime script-file dispatch: a script can launch a protected lane after static shell checks. Run it through the repository's guarded entrypoint. ${USE_ENTRYPOINT}`,
+    };
+  }
+
+  if (hasDirectScriptDispatch(effective, cwd)) {
+    return {
+      allow: false,
+      reason: `Blocked direct script execution or shell sourcing: script contents can dispatch a protected lane after static command checks. ${USE_ENTRYPOINT}`,
     };
   }
 
@@ -1953,10 +2016,10 @@ export function evaluateHookInput({ command, cwd }, projectDir, options = {}) {
     // resolved against the pre-execution filesystem. In particular, `ln -s`
     // can make a later out-of-scope `cd` enter this checkout. Keep admission
     // enabled for such compound commands instead of trusting stale realpaths.
-    const mayCreateDirectoryAlias = /(?:^|\|\||&&|[;\n|&(){}])\s*(?:(?:command|builtin|env|time|nice|nohup|timeout|setsid|stdbuf|exec)\s+)*(?:\S*\/)?(?:ln|mv|cp|install|mkdir|rm)(?=\s|$)/u.test(scopedCommand);
+    const mayCreateDirectoryAlias = /(?:^|\|\||&&|[;\n|&(){}])\s*(?:(?:command|builtin|env|time|nice|nohup|timeout|setsid|stdbuf|exec)\s+)*(?:\S*\/)?(?:ln|mv|cp|install|mkdir|rm|tar|bsdtar|unzip|cpio)(?=\s|$)/u.test(scopedCommand);
     if (!inScope && !hasDynamicDirectoryTarget(scopedCommand) && !mayCreateDirectoryAlias) return { allow: true };
   }
-  return evaluateCommand(command, options);
+  return evaluateCommand(command, { ...options, cwd });
 }
 
 async function readStdin() {

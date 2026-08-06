@@ -14,7 +14,7 @@
 
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
-import { existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs';
+import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { after, describe, test } from 'node:test';
@@ -135,6 +135,7 @@ describe('agent-guard conformance (ENG-0138)', () => {
     assert.equal(evaluateHookInput({ cwd: '/outside', command: 'target=/project; cd "$target" && npm run ci' }, '/project', { env }).allow, false);
     assert.equal(evaluateHookInput({ cwd: '/outside', command: 'pushd /project && npm run ci' }, '/project', { env }).allow, false);
     assert.equal(evaluateHookInput({ cwd: '/outside', command: 'ln -s /project /tmp/guard-link; cd /tmp/guard-link && npm run ci' }, '/project', { env }).allow, false);
+    assert.equal(evaluateHookInput({ cwd: '/outside', command: 'tar -xf /tmp/link.tar -C /tmp; cd /tmp/link && npm run ci' }, '/project', { env }).allow, false);
   });
 
   test('executable indirection cannot bypass admission', () => {
@@ -205,6 +206,16 @@ describe('agent-guard conformance (ENG-0138)', () => {
       'printf x | python -X dev',
       'perl -MFile::Spec script.pl',
       'ruby -rbenchmark script.rb',
+      'NODE_OPTIONS=--require=/tmp/preload.cjs npm run lint',
+      'BASH_ENV=/tmp/preload.sh bash -c true',
+      'PATH=/tmp:$PATH npm run lint',
+      '. /tmp/lane',
+      '"python3" -c \'import os; os.system("npm run ci")\'',
+      'ionice npm run ci',
+      'parallel npm run ci -- x',
+      'rm -rf ~/.cache/agent-guard/lease?',
+      'rm -rf ~/.cache/agent-guard/[l]eases',
+      'rm -rf ~/.cache/agent-guard/lea{ses,se}',
     ]) {
       assert.equal(evaluateCommand(command, { env }).allow, false, `expected the guard to deny: ${command}`);
     }
@@ -224,6 +235,12 @@ describe('agent-guard conformance (ENG-0138)', () => {
     assert.equal(evaluateCommand('cat > /tmp/doc <<.\nnpm run "$lane"\n.', { env }).allow, true);
     assert.equal(evaluateCommand('cat <<FIRST <<SECOND\nnpm run ci\nFIRST\nnpx vitest\nSECOND', { env }).allow, true);
     assert.equal(evaluateCommand('cat agent-health-guard/leases/live.json', { env }).allow, true);
+  });
+
+  test('directly executed text scripts cannot hide protected commands', () => {
+    const lane = path.join(scratch, 'lane');
+    writeFileSync(lane, '#!/bin/sh\nnpx vitest\n');
+    assert.equal(evaluateCommand(lane, { env, cwd: scratch }).allow, false);
   });
 
   test('ceilings derive from the machine, so no repo can pin an unreachable one', () => {

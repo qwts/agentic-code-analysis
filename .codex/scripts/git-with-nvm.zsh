@@ -4,7 +4,7 @@ set -euo pipefail
 readonly git_subcommand="${1:-}"
 
 case "$git_subcommand" in
-  --help | --version | add | am | apply | blame | branch | checkout | cherry-pick | clean | clone | commit | describe | diff | fetch | format-patch | help | init | log | merge | merge-base | mv | notes | pull | push | range-diff | rebase | reflog | remote | reset | restore | revert | rev-list | rev-parse | rm | show | show-ref | sparse-checkout | stash | status | switch | tag | worktree) ;;
+  --help | --version | add | am | apply | blame | branch | checkout | cherry-pick | clean | commit | describe | diff | fetch | format-patch | help | init | log | merge | merge-base | mv | notes | pull | push | range-diff | rebase | reflog | remote | reset | restore | revert | rev-list | rev-parse | rm | show | show-ref | sparse-checkout | stash | status | switch | tag | worktree) ;;
   *)
     print -u2 -- "Git subcommand requires normal Codex approval: ${git_subcommand:-<missing>}"
     exit 64
@@ -74,16 +74,14 @@ if [[ "$git_subcommand" == "clone" || "$git_subcommand" == "fetch" || "$git_subc
   done
 fi
 
-if [[ "$git_subcommand" == "diff" ]]; then
-  for argument in "${@:2}"; do
-    case "$argument" in
-      --ext-diff | --textconv)
-        print -u2 -- "External Git diff execution requires normal Codex approval: $argument"
-        exit 64
-        ;;
-    esac
-  done
-fi
+for argument in "${@:2}"; do
+  case "$argument" in
+    --ext-diff | --textconv)
+      print -u2 -- "External Git diff execution requires normal Codex approval: $argument"
+      exit 64
+      ;;
+  esac
+done
 
 if [[ "$git_subcommand" == "clone" ]]; then
   for argument in "${@:2}"; do
