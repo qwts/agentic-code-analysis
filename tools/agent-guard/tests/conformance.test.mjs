@@ -273,17 +273,24 @@ describe('agent-guard conformance (ENG-0138)', () => {
 
   test('an inherited CI marker does not exempt an agent process', () => {
     const runner = path.join(root, 'tools/agent-guard/run-guarded.mjs');
+    const localProcessEnv = {
+      ...process.env,
+      GITHUB_ACTIONS: '',
+      RUNNER_ENVIRONMENT: '',
+      GITHUB_WORKSPACE: '',
+      RUNNER_TEMP: '',
+    };
     const result = spawnSync(process.execPath, [runner, '--label', 'test:e2e', '--', process.execPath, '-e', 'process.exit(0)'], {
       cwd: root,
       encoding: 'utf8',
-      env: { ...process.env, AGENT_GUARDED: '', AI_AGENT: 'codex', CI: '1' },
+      env: { ...localProcessEnv, AGENT_GUARDED: '', AI_AGENT: 'codex', CI: '1' },
     });
     assert.notEqual(result.status, 0);
     assert.match(result.stderr, /agents do not run it on this machine/u);
     const forgedHuman = spawnSync(process.execPath, [runner, '--label', 'test:e2e', '--', process.execPath, '-e', 'process.exit(0)'], {
       cwd: root,
       encoding: 'utf8',
-      env: { ...process.env, AGENT_GUARDED: '', AGENT_GUARD_ASSUME_HUMAN: '1', AI_AGENT: 'codex' },
+      env: { ...localProcessEnv, AGENT_GUARDED: '', AGENT_GUARD_ASSUME_HUMAN: '1', AI_AGENT: 'codex' },
     });
     assert.notEqual(forgedHuman.status, 0);
     const strippedIdentity = spawnSync(process.execPath, [runner, '--label', 'test:e2e', '--', process.execPath, '-e', 'process.exit(0)'], {
