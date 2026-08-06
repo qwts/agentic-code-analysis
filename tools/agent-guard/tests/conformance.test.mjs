@@ -172,7 +172,15 @@ describe('agent-guard conformance (ENG-0138)', () => {
       "eval -- 'npx vitest'",
       "command bash <<'EOF'\nnpx vitest\nEOF",
       "node -e \"require('node:child_process').execSync('npm run ci')\"",
+      "node -pe \"require('node:child_process').execSync('npx vitest')\"",
+      "node -e\"require('node:child_process').execSync('npm run ci')\"",
       'script -q /dev/null -c "npm run ci"',
+      "script -q /dev/null --command='npx vitest'",
+      'cat <<\\EOF\nharmless\nEOF\nnpm run ci',
+      "python3 -c \"import os; os.system('npm run ci')\"",
+      'rm -rf ~/.cache/agent{-,}-guard/leases',
+      'yarn workspace foo npm run ci',
+      'taskset -c 0 npm run ci',
     ]) {
       assert.equal(evaluateCommand(command, { env }).allow, false, `expected the guard to deny: ${command}`);
     }
