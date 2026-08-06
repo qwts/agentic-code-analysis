@@ -39,6 +39,7 @@ const SIGKILL_AFTER_MS = 2000;
 // A runaway can allocate faster than a SIGTERM shutdown completes; past this
 // factor of the ceiling, skip straight to SIGKILL.
 const HARD_KILL_FACTOR = 1.25;
+const MAX_MONITOR_FAILURES = 3;
 const DEFAULT_TIMEOUT_S = 900;
 const RETRY_MS = 5000;
 
@@ -275,7 +276,7 @@ async function main() {
     fail('failed to bind the admission lease to the guarded process group');
   }
 
-  const state = { peakRssMb: 0, peakProcessCount: 0, reason: null, termAt: null, done: false, polling: false, lastBeat: 0 };
+  const state = { peakRssMb: 0, peakProcessCount: 0, reason: null, termAt: null, done: false, polling: false, lastBeat: 0, monitorFailures: 0, killTimer: null };
 
   const killGroup = (signal) => {
     try {
@@ -294,14 +295,24 @@ async function main() {
         `(peak RSS ${state.peakRssMb} MB, ceiling ${request.ceilingMb} MB, ${Math.round((Date.now() - startedAt) / 1000)}s elapsed).`,
     );
     killGroup('SIGTERM');
+    state.killTimer = setTimeout(() => killGroup('SIGKILL'), SIGKILL_AFTER_MS);
   };
+
+  const timeoutTimer =
+    request.timeoutS > 0 ? setTimeout(() => terminate('timeout'), request.timeoutS * 1000) : null;
 
   const poll = setInterval(() => {
     if (state.polling) return;
     state.polling = true;
     execFile(ps, ['-axo', 'pid=,ppid=,pgid=,rss='], { maxBuffer: 16 * 1024 * 1024 }, (error, stdout) => {
       state.polling = false;
-      if (state.done || error) return;
+      if (state.done) return;
+      if (error) {
+        state.monitorFailures += 1;
+        if (state.monitorFailures >= MAX_MONITOR_FAILURES) terminate('monitor-unavailable');
+        return;
+      }
+      state.monitorFailures = 0;
       const { totalKb, processCount } = collectTreeRssKb(stdout, child.pid);
       const rssMb = Math.round(totalKb / 1024);
       state.peakRssMb = Math.max(state.peakRssMb, rssMb);
@@ -330,6 +341,8 @@ async function main() {
   child.on('exit', (code, signal) => {
     state.done = true;
     clearInterval(poll);
+    if (timeoutTimer !== null) clearTimeout(timeoutTimer);
+    if (state.killTimer !== null) clearTimeout(state.killTimer);
     killGroup('SIGKILL'); // sweep any stragglers left in the group
     releaseLease(lease);
     const record = {
@@ -364,6 +377,8 @@ async function main() {
 
   child.on('error', (error) => {
     clearInterval(poll);
+    if (timeoutTimer !== null) clearTimeout(timeoutTimer);
+    if (state.killTimer !== null) clearTimeout(state.killTimer);
     releaseLease(lease);
     fail(`failed to start command: ${error.message}`);
   });

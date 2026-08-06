@@ -62,7 +62,7 @@ fi
 if [[ "$git_subcommand" == "clone" || "$git_subcommand" == "fetch" || "$git_subcommand" == "pull" ]]; then
   for argument in "${@:2}"; do
     case "$argument" in
-      --upload-pack | --upload-pack=*)
+      --upl*)
         print -u2 -- "Git upload-pack override requires normal Codex approval: $argument"
         exit 64
         ;;

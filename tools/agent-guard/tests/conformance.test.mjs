@@ -55,6 +55,13 @@ describe('agent-guard conformance (ENG-0138)', () => {
     }
   });
 
+  test('monitor failures and timeouts terminate independently of RSS polling', () => {
+    const runner = readFileSync(path.join(root, 'tools/agent-guard/run-guarded.mjs'), 'utf8');
+    assert.match(runner, /monitorFailures >= MAX_MONITOR_FAILURES\) terminate\('monitor-unavailable'\)/u);
+    assert.match(runner, /setTimeout\(\(\) => terminate\('timeout'\), request\.timeoutS \* 1000\)/u);
+    assert.match(runner, /state\.killTimer = setTimeout\(\(\) => killGroup\('SIGKILL'\)/u);
+  });
+
   test('Claude Code registers the guard on Bash', () => {
     const settings = json('.claude/settings.json');
     const bash = (settings.hooks?.PreToolUse ?? []).find((entry) => entry.matcher === 'Bash');
@@ -146,11 +153,19 @@ describe('agent-guard conformance (ENG-0138)', () => {
       'runner=npm; $runner run ci',
       'name=vitest; npx $name',
       'if true; then npm run ci; fi',
+      'case x in x) npx vitest;; esac',
+      'coproc npx vitest',
       "printf 'npm run ci\\n' | sh",
       'find . -maxdepth 0 -exec bash -c npx\\ vitest \\;',
       'AI_AGENT= node tools/agent-guard/run-guarded.mjs -- npm test',
       'env -uCODEX_THREAD_ID node tools/agent-guard/run-guarded.mjs -- npm test',
       'key=AI_AGENT; env -u "$key" node tools/agent-guard/run-guarded.mjs -- npm test',
+      'unset -- AI_AGENT; node tools/agent-guard/run-guarded.mjs -- npm test',
+      'printf -v CI 1; export CI; node tools/agent-guard/run-guarded.mjs -- npm test',
+      "payload='npm run ci'; bash -c \"$payload\"",
+      'npx npm run ci',
+      "find . '-exec' npm run ci \\;",
+      'printf x | xargs --replace npm run ci',
       'node --require node:path node_modules/vitest/vitest.mjs run',
       "eval -- 'npx vitest'",
       "command bash <<'EOF'\nnpx vitest\nEOF",

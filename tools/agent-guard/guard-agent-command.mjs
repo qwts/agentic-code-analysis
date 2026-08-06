@@ -146,7 +146,7 @@ const TAMPERING = [
   },
   {
     pattern:
-      /(?:\benv\b[^\n;&|]*(?:\s(?:-(?=\s|$)|-i|--ignore-environment)(?=\s|$)|(?:-u(?:=|\s*)|--unset(?:=|\s+))(?:CLAUDECODE|CLAUDE_CODE_ENTRYPOINT|AI_AGENT|CODEX_\w+|CURSOR_\w+))|\b(?:unset|export\s+-n)\s+(?:CLAUDECODE|CLAUDE_CODE_ENTRYPOINT|AI_AGENT|CODEX_\w+|CURSOR_\w+))[\s\S]*run-guarded\.mjs/u,
+      /(?:\benv\b[^\n;&|]*(?:\s(?:-(?=\s|$)|-i|--ignore-environment)(?=\s|$)|(?:-u(?:=|\s*)|--unset(?:=|\s+))(?:CLAUDECODE|CLAUDE_CODE_ENTRYPOINT|AI_AGENT|CODEX_\w+|CURSOR_\w+))|\b(?:unset\s+(?:(?:--|-v|-f)\s+)*|export\s+-n\s+)(?:CLAUDECODE|CLAUDE_CODE_ENTRYPOINT|AI_AGENT|CODEX_\w+|CURSOR_\w+))[\s\S]*run-guarded\.mjs/u,
     reason:
       'Blocked removal of agent identity before run-guarded.mjs: the wrapper must inherit its harness markers so it ' +
       `cannot misclassify an agent as the human owner. ${GUIDANCE}`,
@@ -213,7 +213,7 @@ function isWithin(child, parent) {
 }
 
 function maskHeredocBodies(text) {
-  return text.replace(/<<-?\s*(["']?)([A-Za-z_][A-Za-z0-9_]*)\1[^\n]*\n[\s\S]*?(?:\n\2(?=\n|$)|$)/gu, (match) => match.replace(/[^\n]/gu, ' '));
+  return text.replace(/<<-?\s*(["']?)([A-Za-z0-9_][A-Za-z0-9_]*)\1[^\n]*\n[\s\S]*?(?:\n\2(?=\n|$)|$)/gu, (match) => match.replace(/[^\n]/gu, ' '));
 }
 
 function scopeWords(text) {
@@ -477,7 +477,7 @@ function shellHeredocBody(command, offset, body) {
 
 function maskNonShellHeredocs(command) {
   return command.replace(
-    /<<-?\s*(["']?)([A-Za-z_][A-Za-z0-9_]*)\1[^\n]*\n([\s\S]*?)(?:\n\2(?=\n|$)|$)/gu,
+    /<<-?\s*(["']?)([A-Za-z0-9_][A-Za-z0-9_]*)\1[^\n]*\n([\s\S]*?)(?:\n\2(?=\n|$)|$)/gu,
     (match, quote, delimiter, body, offset) =>
       shellHeredocBody(command, offset, body) === ' ' ? match.replace(/[^\n]/gu, ' ') : match,
   );
@@ -722,6 +722,36 @@ function dispatcherCommandPayloads(command) {
   return payloads;
 }
 
+function packageExecPayloads(command) {
+  const payloads = [];
+  for (const segment of splitSegments(command)) {
+    const tokens = commandAfterPrefixes(segment).split(/\s+/u).filter(Boolean);
+    const executable = tokens[0]?.split('/').at(-1);
+    if (executable === 'npx' || executable === 'bunx') {
+      const targetAt = skipCliOptions(tokens, 1, EXEC_OPTIONS_WITH_OPERANDS);
+      if (targetAt < tokens.length) payloads.push(tokens.slice(targetAt).join(' '));
+      continue;
+    }
+    if (executable === 'npm') {
+      const verbAt = skipCliOptions(tokens, 1, NPM_OPTIONS_WITH_OPERANDS);
+      if (tokens[verbAt] === 'exec' || tokens[verbAt] === 'x') {
+        const targetAt = skipCliOptions(tokens, verbAt + 1, EXEC_OPTIONS_WITH_OPERANDS);
+        if (targetAt < tokens.length) payloads.push(tokens.slice(targetAt).join(' '));
+      }
+      continue;
+    }
+    if (OTHER_PACKAGE_MANAGERS.has(executable)) {
+      const rest = tokens.slice(1);
+      const packageCommand = otherPackageCommandStart(executable, rest);
+      if (/^(?:exec|x|dlx)$/u.test(rest[packageCommand.index] ?? '')) {
+        const targetAt = skipCliOptions(rest, packageCommand.index + 1, EXEC_OPTIONS_WITH_OPERANDS);
+        if (targetAt < rest.length) payloads.push(rest.slice(targetAt).join(' '));
+      }
+    }
+  }
+  return payloads;
+}
+
 function hasShellStdinProgram(command) {
   const pipelineSegments = command.split(/(?<![\\|])\|(?!\|)/u);
   for (let index = 0; index < pipelineSegments.length; index += 1) {
@@ -763,6 +793,11 @@ function isExecutableQuotedWord(scanned, word) {
     return /^(?:ba|da|z)?sh$|^(?:npm|npx|node|electron|vitest|playwright|test-storybook|pnpm|yarn|bun|bunx|corepack|watch|xargs|env|command|time|nice|nohup|timeout|setsid|stdbuf|exec)$/u.test(executable);
   }
   if (tokens[0]?.split('/').at(-1) === 'corepack' && /^(?:pnpm|yarn)(?:@.+)?$/u.test(word)) return true;
+  if (tokens[0]?.split('/').at(-1) === 'find') {
+    if (/^-exec(?:dir)?$|^-ok(?:dir)?$/u.test(word)) return true;
+    const actionAt = tokens.findLastIndex((token) => /^-exec(?:dir)?$|^-ok(?:dir)?$/u.test(token));
+    if (actionAt >= 0 && !tokens.slice(actionAt + 1).some((token) => /^(?:\\;|;|\+)$/u.test(token))) return true;
+  }
 
   let npmAt = -1;
   for (let i = tokens.length - 1; i >= 0; i -= 1) {
@@ -801,7 +836,7 @@ function isExecutableQuotedWord(scanned, word) {
 export function stripInertText(command) {
   let scanned = '';
   let rest = command.replace(
-    /<<-?\s*(["']?)([A-Za-z_][A-Za-z0-9_]*)\1[^\n]*\n([\s\S]*?)(?:\n\2(?=\n|$)|$)/gu,
+    /<<-?\s*(["']?)([A-Za-z0-9_][A-Za-z0-9_]*)\1[^\n]*\n([\s\S]*?)(?:\n\2(?=\n|$)|$)/gu,
     (match, quote, delimiter, body, offset) => shellHeredocBody(command, offset, body),
   );
   for (;;) {
@@ -841,7 +876,8 @@ export function stripInertText(command) {
   const payloads = commandStringPayloads(effective);
   const dispatchers = dispatcherCommandPayloads(effective);
   const dispatcherStrings = dispatchers.flatMap((payload) => commandStringPayloads(payload));
-  const promoted = [...substitutions, ...payloads, ...dispatchers, ...dispatcherStrings];
+  const packageExecs = packageExecPayloads(effective);
+  const promoted = [...substitutions, ...payloads, ...dispatchers, ...dispatcherStrings, ...packageExecs];
   return promoted.length > 0 ? `${effective}\n${promoted.join('\n')}` : effective;
 }
 
@@ -1142,6 +1178,19 @@ function hasDynamicExecutionPosition(command) {
         if (tokens[index].startsWith('--run=') && hasRuntimeShellExpansion(tokens[index].slice('--run='.length))) return true;
       }
     }
+    if (/^(?:ba|da|z)?sh$/u.test(executable ?? '')) {
+      for (let index = 1; index < tokens.length - 1; index += 1) {
+        if (tokens[index] === '-c' || /^-[A-Za-z]*c[A-Za-z]*$/u.test(tokens[index])) {
+          if (hasRuntimeShellExpansion(tokens[index + 1])) return true;
+          break;
+        }
+        if (/^(?:-[A-Za-z]*[oO]|--(?:option|shopt))$/u.test(tokens[index])) index += 1;
+      }
+    }
+    if (executable === 'eval') {
+      const payloadAt = tokens[1] === '--' ? 2 : 1;
+      if (hasRuntimeShellExpansion(tokens[payloadAt] ?? '')) return true;
+    }
   }
   return false;
 }
@@ -1153,8 +1202,41 @@ function hasDynamicIdentityRemoval(command) {
   for (const match of prefix.matchAll(/(?:^|\s)(?:-u([^\s;&|]+)|(?:-u|--unset)(?:=|\s+)([^\s;&|]+))/gu)) {
     if (hasRuntimeShellExpansion(match[1] ?? match[2] ?? '')) return true;
   }
-  for (const match of prefix.matchAll(/\b(?:unset|export\s+-n)\s+([^\s;&|]+)/gu)) {
-    if (hasRuntimeShellExpansion(match[1])) return true;
+  for (const segment of splitSegments(prefix)) {
+    const tokens = segment.split(/\s+/u).filter(Boolean);
+    const executable = tokens[0]?.split('/').at(-1);
+    if (executable !== 'unset' && executable !== 'export') continue;
+    let operandAt = 1;
+    while (/^(?:--|-v|-f|-n)$/u.test(tokens[operandAt] ?? '')) operandAt += 1;
+    if (hasRuntimeShellExpansion(tokens[operandAt] ?? '')) return true;
+  }
+  return false;
+}
+
+function isProtectedEnvironmentName(name) {
+  return /^(?:CI|GITHUB_ACTIONS|CONTINUOUS_INTEGRATION|BUILDKITE|GITLAB_CI|JENKINS_URL|AGENT_GUARD_FORCE|AGENT_GUARD_ASSUME_HUMAN|AGENT_GUARD_STATE_DIR|AGENT_GUARDED|CLAUDECODE|CLAUDE_CODE_ENTRYPOINT|AI_AGENT|CODEX_\w+|CURSOR_\w+)$/u.test(name);
+}
+
+function hasProtectedEnvironmentMutation(command) {
+  const wrapperAt = command.indexOf('run-guarded.mjs');
+  if (wrapperAt < 0) return false;
+  for (const segment of splitSegments(command.slice(0, wrapperAt))) {
+    const tokens = segment.split(/\s+/u).filter(Boolean);
+    const executable = tokens[0]?.split('/').at(-1);
+    if (executable === 'printf') {
+      const variableAt = tokens.findIndex((token) => token === '-v');
+      if (variableAt >= 0) {
+        const target = tokens[variableAt + 1] ?? '';
+        if (hasRuntimeShellExpansion(target) || isProtectedEnvironmentName(target.replace(/^["']|["']$/gu, ''))) return true;
+      }
+    }
+    if (/^(?:export|declare|typeset|readonly|local|read)$/u.test(executable ?? '')) {
+      for (const token of tokens.slice(1)) {
+        if (token.startsWith('-')) continue;
+        const target = token.replace(/^["']|["']$/gu, '').split('=')[0];
+        if (hasRuntimeShellExpansion(token) || isProtectedEnvironmentName(target)) return true;
+      }
+    }
   }
   return false;
 }
@@ -1238,7 +1320,7 @@ function commandAfterPrefixes(segment) {
   let index = 0;
   while (index < tokens.length) {
     while (/^\w+=\S*$/u.test(tokens[index] ?? '')) index += 1;
-    if (/^(?:then|do|else|elif|if|while|until|!)$/u.test(tokens[index] ?? '')) {
+    if (/^(?:then|do|else|elif|if|while|until|coproc|!)$/u.test(tokens[index] ?? '')) {
       index += 1;
       continue;
     }
@@ -1249,6 +1331,17 @@ function commandAfterPrefixes(segment) {
     if (/^[A-Za-z_][A-Za-z0-9_]*\(\)$/u.test(tokens[index] ?? '') && tokens[index + 1] === '{') {
       index += 2;
       continue;
+    }
+    if (/^[A-Za-z_][A-Za-z0-9_]*$/u.test(tokens[index] ?? '') && tokens[index + 1] === '()' && tokens[index + 2] === '{') {
+      index += 3;
+      continue;
+    }
+    if (tokens[index] === 'case') {
+      const patternAt = tokens.findIndex((token, tokenAt) => tokenAt > index && token.endsWith(')'));
+      if (patternAt >= 0) {
+        index = patternAt + 1;
+        continue;
+      }
     }
     if (tokens[index] === 'function' && tokens[index + 1]) {
       index += 2;
@@ -1307,9 +1400,7 @@ function commandAfterPrefixes(segment) {
         '-d',
         '--delimiter',
         '-E',
-        '--eof',
         '-I',
-        '--replace',
         '-J',
         '-L',
         '--max-lines',
@@ -1376,6 +1467,12 @@ function commandAfterPrefixes(segment) {
 export function evaluateCommand(command) {
   if (typeof command !== 'string' || command.length === 0) return { allow: true };
   const dynamicCommand = maskNonShellHeredocs(command);
+  if (hasProtectedEnvironmentMutation(dynamicCommand)) {
+    return {
+      allow: false,
+      reason: `Blocked a protected environment mutation before run-guarded.mjs: shell builtins cannot manufacture a CI exemption or alter guard identity. ${GUIDANCE}`,
+    };
+  }
   if (hasDynamicIdentityRemoval(dynamicCommand)) {
     return {
       allow: false,
