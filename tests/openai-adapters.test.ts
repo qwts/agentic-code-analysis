@@ -34,6 +34,7 @@ test('openai adapter: strict json_schema params, max_completion_tokens, no sampl
   assert.equal(params['model'], 'model-x');
   assert.equal(params['max_completion_tokens'], 64);
   assert.equal('max_tokens' in params, false);
+  assert.equal('enable_thinking' in params || 'thinking_budget' in params, false);
   assert.deepEqual(params['response_format'], { type: 'json_schema', json_schema: { name: 'verdict', strict: true, schema: { type: 'object' } } });
   assert.deepEqual(params['messages'], [
     { role: 'system', content: 'rule text' },
@@ -50,6 +51,7 @@ test('local adapter: max_tokens for wide server compatibility', async () => {
   const params = capture.params as Record<string, unknown>;
   assert.equal(params['max_tokens'], 64);
   assert.equal('max_completion_tokens' in params, false);
+  assert.equal('enable_thinking' in params || 'thinking_budget' in params, false);
 });
 
 test('degrade paths: refusal, truncation, empty, unparseable, api error', async () => {

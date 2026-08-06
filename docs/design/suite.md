@@ -50,9 +50,9 @@ verdicts; how a repo surfaces them is the consumer's business.
    independently usable and replaceable. Adding a check touches no existing
    check.
 5. **Model-interchangeable judging.** Checks talk to a `JudgeClient`
-   interface, never to a vendor SDK. Adapters: Anthropic, OpenAI, local
-   (OpenAI-compatible endpoint, e.g. LM Studio / Ollama). Provider and model
-   are configuration.
+   interface, never to a vendor SDK. Adapters: Anthropic, OpenAI, Qwen, and
+   local (OpenAI-compatible endpoint, e.g. LM Studio / Ollama). Provider and
+   model are configuration.
 
 ## Architecture
 
@@ -80,11 +80,15 @@ runner; type-aware linting waits for the TS 7.1 programmatic API.
 ### The JudgeClient interface (decision D2)
 
 One method: `judge({system, user, schema, maxTokens}) → {ok, verdict} | {ok:false, note}`.
+`maxTokens` is the maximum visible structured answer. Hidden provider
+reasoning does not consume that answer allowance: an adapter whose wire
+combines them must fork and translate the request behind this frozen port
+([ACA-0064](../decisions/ACA-0064-qwen-reasoning-budgets.md)).
 Contract every adapter must meet:
 
 - **Structured output against a strict JSON schema** (`additionalProperties:
-  false`, all fields required). All three target providers support this
-  natively; a provider that cannot is not an eligible adapter.
+  false`, all fields required). A provider that cannot supply this natively is
+  not an eligible adapter.
 - **Refusal or schema-parse failure degrades to a `warn` verdict with a
   note — never a crash, never a silent pass.** One exception
   ([ACA-0011](../decisions/ACA-0011-gate-down-classification.md)): a
@@ -95,13 +99,17 @@ Contract every adapter must meet:
   judgment may have landed — but a dead gate must never surface as warns.
 - **Prompt-prefix caching is used where the provider offers it** and silently
   skipped where it does not. Cost, not behavior, varies by provider.
-- No sampling knobs in the interface. Determinism comes from the strict
-  schema, a pinned prompt version, and calibration fixtures — not temperature.
+- No sampling or reasoning knobs in the interface. Determinism comes from the
+  strict schema, a pinned prompt version, calibration fixtures, and any
+  adapter-local inference policy fixed in source — not runtime tuning. Qwen
+  sends `max_tokens` and a `thinking_budget` both derived from `maxTokens`;
+  neither is configurable independently.
 
 Selection: `aca.config.json` maps a check's declared tier (T1 judgment / T2
 build / T3 mechanical, the ENG-0151 vocabulary) to `{provider, model}`;
 `ACA_PROVIDER` / `ACA_MODEL` env override for one-off runs. Credentials use
-each provider SDK's standard env resolution — the suite never handles keys.
+the provider's named environment variable; Qwen additionally requires its
+explicit `QWEN_BASE_URL`. The suite never stores or logs keys.
 
 ### Change scope (decision D5)
 
@@ -177,6 +185,10 @@ not in the ENG series):
   diff judge I/O convention — head-line-numbered unified payload, a
   120k-char bound all diff checks inherit, whole-file omission that always
   surfaces as `warn`, findings anchored to added head lines only.
+- **[ACA-0064](../decisions/ACA-0064-qwen-reasoning-budgets.md)** — Qwen
+  reasoning budgets (2026-08-05): preserve the frozen JudgeClient, define
+  `maxTokens` as visible answer capacity, and bound provider reasoning
+  deterministically inside the dedicated adapter.
 
 ## Security posture (ENG-0012 priority 1)
 

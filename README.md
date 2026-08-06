@@ -41,7 +41,16 @@ Supported routes:
 | --- | --- |
 | `anthropic` | Export `ANTHROPIC_API_KEY`. |
 | `openai` | Export `OPENAI_API_KEY`. |
+| `qwen` | Export `QWEN_API_KEY` and the matching `QWEN_BASE_URL`; its dedicated adapter separates the visible answer from bounded reasoning. |
 | `local` | Start an OpenAI-compatible server; set `ACA_LOCAL_BASE_URL` if it is not at `http://localhost:1234/v1`. No credential is required. |
+
+For Qwen, `maxTokens` remains the check-owned visible-answer allowance. The
+adapter sends the same numeric bound separately as Qwen's `thinking_budget`;
+there is no reasoning-effort environment override. This follows Qwen's
+[OpenAI-compatible token semantics](https://docs.qwencloud.com/api-reference/chat/openai-chat)
+but does not qualify a model: the measured `qwen3.8-max-preview` route reached
+only `foundation` where `skill-information-architecture` requires
+`boundaries`.
 
 `ACA_PROVIDER` and `ACA_MODEL` together override the configured tier route for
 a one-off run. Before trusting any route, qualify that exact provider/model and
