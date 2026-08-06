@@ -13,6 +13,7 @@
 // needed memory to run would be self-defeating.
 
 import assert from 'node:assert/strict';
+import { spawnSync } from 'node:child_process';
 import { existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
@@ -131,6 +132,7 @@ describe('agent-guard conformance (ENG-0138)', () => {
     assert.equal(evaluateHookInput({ cwd: '/outside', command: 'pnpm --dir /project run ci' }, '/project', { env }).allow, false);
     assert.equal(evaluateHookInput({ cwd: '/outside', command: 'target=/project; cd "$target" && npm run ci' }, '/project', { env }).allow, false);
     assert.equal(evaluateHookInput({ cwd: '/outside', command: 'pushd /project && npm run ci' }, '/project', { env }).allow, false);
+    assert.equal(evaluateHookInput({ cwd: '/outside', command: 'ln -s /project /tmp/guard-link; cd /tmp/guard-link && npm run ci' }, '/project', { env }).allow, false);
   });
 
   test('executable indirection cannot bypass admission', () => {
@@ -169,6 +171,8 @@ describe('agent-guard conformance (ENG-0138)', () => {
       'node --require node:path node_modules/vitest/vitest.mjs run',
       "eval -- 'npx vitest'",
       "command bash <<'EOF'\nnpx vitest\nEOF",
+      "node -e \"require('node:child_process').execSync('npm run ci')\"",
+      'script -q /dev/null -c "npm run ci"',
     ]) {
       assert.equal(evaluateCommand(command, { env }).allow, false, `expected the guard to deny: ${command}`);
     }
@@ -184,6 +188,8 @@ describe('agent-guard conformance (ENG-0138)', () => {
     for (const command of ['npm run lint', 'npm run typecheck', 'git status --short', 'node tools/agent-guard/arbiter.mjs status']) {
       assert.equal(evaluateCommand(command, { env }).allow, true, `expected the guard to allow: ${command}`);
     }
+    assert.equal(evaluateCommand("cat > /tmp/doc <<'END-OF-FILE'\nnpm run \"$lane\"\nEND-OF-FILE", { env }).allow, true);
+    assert.equal(evaluateCommand('cat > /tmp/doc <<.\nnpm run "$lane"\n.', { env }).allow, true);
   });
 
   test('ceilings derive from the machine, so no repo can pin an unreachable one', () => {
@@ -220,5 +226,16 @@ describe('agent-guard conformance (ENG-0138)', () => {
     assert.equal(isCi({ GITHUB_ACTIONS: 'true' }), true);
     assert.equal(isCi({ CI: 'true' }), true);
     assert.equal(isCi({}), false);
+  });
+
+  test('an inherited CI marker does not exempt an agent process', () => {
+    const runner = path.join(root, 'tools/agent-guard/run-guarded.mjs');
+    const result = spawnSync(process.execPath, [runner, '--label', 'test:e2e', '--', process.execPath, '-e', 'process.exit(0)'], {
+      cwd: root,
+      encoding: 'utf8',
+      env: { ...process.env, AI_AGENT: 'codex', CI: '1' },
+    });
+    assert.notEqual(result.status, 0);
+    assert.match(result.stderr, /agents do not run it on this machine/u);
   });
 });

@@ -213,7 +213,7 @@ function isWithin(child, parent) {
 }
 
 function maskHeredocBodies(text) {
-  return text.replace(/<<-?\s*(["']?)([A-Za-z0-9_][A-Za-z0-9_]*)\1[^\n]*\n[\s\S]*?(?:\n\2(?=\n|$)|$)/gu, (match) => match.replace(/[^\n]/gu, ' '));
+  return text.replace(/<<-?\s*(["']?)([^\s;&|()<>"']+)\1[^\n]*\n[\s\S]*?(?:\n\2(?=\n|$)|$)/gu, (match) => match.replace(/[^\n]/gu, ' '));
 }
 
 function scopeWords(text) {
@@ -477,7 +477,7 @@ function shellHeredocBody(command, offset, body) {
 
 function maskNonShellHeredocs(command) {
   return command.replace(
-    /<<-?\s*(["']?)([A-Za-z0-9_][A-Za-z0-9_]*)\1[^\n]*\n([\s\S]*?)(?:\n\2(?=\n|$)|$)/gu,
+    /<<-?\s*(["']?)([^\s;&|()<>"']+)\1[^\n]*\n([\s\S]*?)(?:\n\2(?=\n|$)|$)/gu,
     (match, quote, delimiter, body, offset) =>
       shellHeredocBody(command, offset, body) === ' ' ? match.replace(/[^\n]/gu, ' ') : match,
   );
@@ -635,6 +635,9 @@ function endsWithExecutableString(scanned) {
   const envAt = rawTokens.findLastIndex((token) => token.split('/').at(-1) === 'env');
   if (envAt >= 0 && /^(?:-S|--split-string)=?$/u.test(rawTokens.at(-1) ?? '')) return true;
   const tokens = commandAfterPrefixes(segment).split(/\s+/u).filter(Boolean);
+  const command = tokens[0]?.split('/').at(-1);
+  if (command === 'node' && /^(?:-e|-p|--eval|--print)$/u.test(tokens.at(-1) ?? '')) return true;
+  if (command === 'script' && /^(?:-c|--command)$/u.test(tokens.at(-1) ?? '')) return true;
   if (tokens[0]?.split('/').at(-1) === 'eval' && (tokens.length === 1 || (tokens.length === 2 && tokens[1] === '--'))) return true;
   const npmAt = tokens.findIndex((token) => token.split('/').at(-1) === 'npm');
   if (npmAt < 0) return false;
@@ -660,6 +663,18 @@ function commandStringPayloads(command) {
     if (commandName === 'eval' && tokens.length > 1) {
       const payloadAt = tokens[1] === '--' ? 2 : 1;
       if (payloadAt < tokens.length) payloads.push(restore(tokens.slice(payloadAt).join(' ')));
+    }
+    if (commandName === 'script') {
+      for (let i = 1; i < tokens.length; i += 1) {
+        if (tokens[i] === '-c' || tokens[i] === '--command') {
+          if (tokens[i + 1] !== undefined) payloads.push(restore(tokens.slice(i + 1).join(' ')));
+          break;
+        }
+        if (/^(?:-c|--command)=/u.test(tokens[i])) {
+          payloads.push(restore(tokens[i].slice(tokens[i].indexOf('=') + 1)));
+          break;
+        }
+      }
     }
     if (/(?:^|\/)(?:ba|da|z)?sh$/u.test(tokens[0] ?? '')) {
       for (let i = 1; i < tokens.length - 1; i += 1) {
@@ -836,7 +851,7 @@ function isExecutableQuotedWord(scanned, word) {
 export function stripInertText(command) {
   let scanned = '';
   let rest = command.replace(
-    /<<-?\s*(["']?)([A-Za-z0-9_][A-Za-z0-9_]*)\1[^\n]*\n([\s\S]*?)(?:\n\2(?=\n|$)|$)/gu,
+    /<<-?\s*(["']?)([^\s;&|()<>"']+)\1[^\n]*\n([\s\S]*?)(?:\n\2(?=\n|$)|$)/gu,
     (match, quote, delimiter, body, offset) => shellHeredocBody(command, offset, body),
   );
   for (;;) {
@@ -1489,6 +1504,21 @@ export function evaluateCommand(command) {
   }
   const effective = stripInertText(command);
 
+  // JavaScript eval/print programs can synchronously dispatch arbitrary child
+  // commands whose strings are not shell syntax. Static shell classification
+  // cannot authenticate their contents, so agent commands must use a checked-in
+  // script instead of Node's executable-program options.
+  if (splitSegments(effective).some((segment) => {
+    const tokens = commandAfterPrefixes(segment).split(/\s+/u).filter(Boolean);
+    if (tokens[0]?.split('/').at(-1) !== 'node') return false;
+    return tokens.slice(1).some((token) => /^(?:-e|-p|--eval|--print)(?:=|$)/u.test(token));
+  })) {
+    return {
+      allow: false,
+      reason: `Blocked a Node eval/print program: it can dispatch a protected lane after static admission checks. Use a checked-in script through the guarded entrypoint. ${USE_ENTRYPOINT}`,
+    };
+  }
+
   if (referencesGuardState(effective)) {
     return {
       allow: false,
@@ -1586,7 +1616,13 @@ export function evaluateHookInput({ command, cwd }, projectDir, options = {}) {
   const executionDirs = resolveExecutionDirs(cwd, command);
   if (executionDirs.length > 0 && projectDir) {
     const inScope = executionDirs.some((executionDir) => isWithin(executionDir, projectDir) || inGuardedCheckout(executionDir));
-    if (!inScope && !hasDynamicDirectoryTarget(maskNonShellHeredocs(command))) return { allow: true };
+    const scopedCommand = maskNonShellHeredocs(command);
+    // A path created or replaced earlier in the same shell line cannot be
+    // resolved against the pre-execution filesystem. In particular, `ln -s`
+    // can make a later out-of-scope `cd` enter this checkout. Keep admission
+    // enabled for such compound commands instead of trusting stale realpaths.
+    const mayCreateDirectoryAlias = /(?:^|\|\||&&|[;\n|&(){}])\s*(?:(?:command|builtin|env|time|nice|nohup|timeout|setsid|stdbuf|exec)\s+)*(?:\S*\/)?(?:ln|mv|cp|install|mkdir|rm)(?=\s|$)/u.test(scopedCommand);
+    if (!inScope && !hasDynamicDirectoryTarget(scopedCommand) && !mayCreateDirectoryAlias) return { allow: true };
   }
   return evaluateCommand(command, options);
 }

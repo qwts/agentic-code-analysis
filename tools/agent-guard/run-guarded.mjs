@@ -208,8 +208,10 @@ async function main() {
   const { options, command } = parsed;
   if (command.length === 0) fail('no command given');
 
-  // CI is exempt, entirely and deliberately (see lib/policy.mjs).
-  if (isCi(process.env)) return passthrough(command);
+  // Hosted CI is exempt, but an agent marker takes precedence. CI variables
+  // are ordinary process environment and can be inherited from a script the
+  // agent created, so they are not sufficient proof of an isolated runner.
+  if (isCi(process.env) && !isAgentSession(process.env)) return passthrough(command);
   // Nested guarded scripts pass through — but only when the marker names a
   // live lease bound to this caller's process group. Lease ids are visible to
   // same-user processes, so id knowledge alone cannot prove nesting. A copied
