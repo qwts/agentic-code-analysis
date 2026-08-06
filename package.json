@@ -1,36 +1,54 @@
 {
   "name": "agentic-code-analysis",
-  "version": "0.0.0",
+  "version": "0.1.0",
   "description": "Semantic, agent-powered checks for code structure and maintainability.",
   "type": "module",
+  "license": "Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/qwts/agentic-code-analysis.git"
+  },
+  "bugs": {
+    "url": "https://github.com/qwts/agentic-code-analysis/issues"
+  },
+  "homepage": "https://github.com/qwts/agentic-code-analysis#readme",
+  "keywords": [
+    "agentic",
+    "code-analysis",
+    "maintainability",
+    "llm",
+    "cli"
+  ],
+  "bin": {
+    "aca": "dist/cli.js"
+  },
+  "files": [
+    "dist/",
+    "docs/standards/"
+  ],
+  "publishConfig": {
+    "access": "public",
+    "registry": "https://registry.npmjs.org/"
+  },
   "engines": {
     "node": ">=24"
   },
   "scripts": {
+    "build:package": "node scripts/build-package.ts",
+    "prepack": "npm run build:package",
     "test": "node tools/agent-guard/run-guarded.mjs --label test -- npm run test:inner",
-    "test:inner": "node --test 'tests/*.test.ts' tools/agent-guard/tests/conformance.test.mjs",
+    "test:inner": "node scripts/run-tests.ts",
+    "test:package": "node scripts/test-package.ts",
     "typecheck": "tsc --noEmit"
   },
-  "peerDependencies": {
-    "@anthropic-ai/sdk": "^0.115.0",
-    "openai": "^7.0.0"
-  },
-  "peerDependenciesMeta": {
-    "@anthropic-ai/sdk": {
-      "optional": true
-    },
-    "openai": {
-      "optional": true
-    }
-  },
   "devDependencies": {
-    "@anthropic-ai/sdk": "^0.115.0",
     "@types/node": "^24.0.0",
-    "openai": "^7.4.0",
     "typescript": "^7.0.0"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^0.115.0",
     "js-tiktoken": "1.0.21",
+    "openai": "^7.4.0",
     "yaml": "2.9.0"
   }
 }

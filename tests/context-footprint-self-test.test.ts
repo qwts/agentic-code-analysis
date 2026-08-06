@@ -70,7 +70,7 @@ test('all levels pass: achieved field, qualified, manifest-ordered report', asyn
     ['new-enumerated', 'new-composed', 'legacy-composed', 'legacy-enumerated-back', 'legacy-improved-residual'],
   );
   assert.match(result.report.fixtureSuite, /^sha256:[0-9a-f]{16}$/);
-  assert.equal(result.report.promptVersion, 'context-footprint-v2');
+  assert.equal(result.report.promptVersion, 'context-footprint-v3');
 });
 
 test('a clean improved on the field fixture is a miss: achieved foundation, not qualified', async () => {

@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { EXIT, run } from '../src/cli.ts';
+import { EXIT, run, VERSION } from '../src/cli.ts';
 import type { Check, CheckLoader, FileVerdict } from '../src/checks/registry.ts';
 import { JudgeUnavailableError, MissingCredentialsError, type JudgeClient } from '../src/core/judge-client.ts';
 
@@ -32,6 +32,13 @@ test('--help exits 0; missing and unknown checks exit 2', async () => {
   assert.equal(await run(['--help'], deps([])), EXIT.ok);
   assert.equal(await run([], deps([])), EXIT.usage);
   assert.equal(await run(['nonexistent'], deps([])), EXIT.usage);
+});
+
+test('--version prints the package version without requiring a check', async () => {
+  const out: string[] = [];
+  assert.equal(await run(['--version'], deps([], out)), EXIT.ok);
+  assert.deepEqual(out, [VERSION]);
+  assert.equal(VERSION, '0.1.0');
 });
 
 test('usage lists the checks of the injected registry, not the built-in one', async () => {

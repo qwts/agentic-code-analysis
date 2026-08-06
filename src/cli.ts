@@ -4,8 +4,9 @@
 // 78 gate down: no credentials, or the judge rejected the account at judge
 // time (ACA-0011). Output is findings only (ACA-0003 D4).
 import { parseArgs } from 'node:util';
+import { readFileSync, realpathSync } from 'node:fs';
 import { join } from 'node:path';
-import { pathToFileURL } from 'node:url';
+import { fileURLToPath } from 'node:url';
 import { checks, type CheckLoader, type FileVerdict, type Violation } from './checks/registry.ts';
 import { changedFiles, filterScope, repoRoot } from './core/change-scope.ts';
 import { ConfigError, loadConfig, resolveTier } from './core/config.ts';
@@ -13,6 +14,7 @@ import { createJudgeClient, JudgeUnavailableError, MissingCredentialsError, type
 import { VerdictCache } from './core/verdict-cache.ts';
 
 export const EXIT = { ok: 0, fail: 1, usage: 2, gateDown: 78 } as const;
+export const VERSION = (JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8')) as { version: string }).version;
 
 export interface RunDeps {
   registry: ReadonlyMap<string, CheckLoader>;
@@ -28,6 +30,7 @@ checks: ${[...registry.keys()].join(', ') || '(none registered yet)'}
   --enforce    exit 1 on any fail verdict (default: advisory, always exit 0)
   --json       machine-readable output
   --base       diff base ref (default: origin/main)
+  --version    print the installed package version
   --self-test  run the check's calibration fixtures (exit 1 on miss, 78 when the judge is unavailable; honors --json)`;
 
 export async function run(argv: string[], deps?: Partial<RunDeps>): Promise<number> {
@@ -50,6 +53,7 @@ export async function run(argv: string[], deps?: Partial<RunDeps>): Promise<numb
         base: { type: 'string', default: 'origin/main' },
         'self-test': { type: 'boolean', default: false },
         help: { type: 'boolean', short: 'h', default: false },
+        version: { type: 'boolean', short: 'v', default: false },
       },
     });
   } catch (err) {
@@ -58,6 +62,10 @@ export async function run(argv: string[], deps?: Partial<RunDeps>): Promise<numb
   }
   if (args.values.help) {
     d.stdout(usage(d.registry));
+    return EXIT.ok;
+  }
+  if (args.values.version) {
+    d.stdout(VERSION);
     return EXIT.ok;
   }
   const [checkName, ...paths] = args.positionals;
@@ -173,7 +181,7 @@ function render(
   d.stdout(`${meta.check}: ${verdicts.length} file(s), ${fails} fail, ${warns} warn${residual}`);
 }
 
-const invokedDirectly = process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href;
+const invokedDirectly = process.argv[1] && realpathSync(process.argv[1]) === fileURLToPath(import.meta.url);
 if (invokedDirectly) {
   process.exit(await run(process.argv.slice(2)));
 }

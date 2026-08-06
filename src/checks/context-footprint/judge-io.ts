@@ -12,7 +12,7 @@ import type { FileVerdict, Violation } from '../registry.ts';
 import type { Comparison, Snapshot } from './comparison.ts';
 
 // Bump on ANY prompt change; invalidates the verdict cache by construction.
-export const PROMPT_VERSION = 'context-footprint-v2';
+export const PROMPT_VERSION = 'context-footprint-v3';
 
 // Operational bound (check design): one file per request, 4096 output tokens.
 export const MAX_TOKENS = 4096;

@@ -32,7 +32,7 @@
       },
       "source": {
         "kind": "synthetic",
-        "note": "authored for this repository (Apache-2.0), modeled on the image-trail message barrel"
+        "note": "authored for this repository (Apache-2.0), modeled on a production message barrel"
       }
     },
     {
@@ -57,7 +57,7 @@
       },
       "source": {
         "kind": "synthetic",
-        "note": "authored for this repository (Apache-2.0), modeled on the image-trail message barrel"
+        "note": "authored for this repository (Apache-2.0), modeled on a production message barrel"
       }
     },
     {
@@ -92,7 +92,7 @@
       },
       "source": {
         "kind": "synthetic",
-        "note": "authored for this repository (Apache-2.0), modeled on the image-trail message barrel"
+        "note": "authored for this repository (Apache-2.0), modeled on a production message barrel"
       }
     },
     {
@@ -131,7 +131,7 @@
       },
       "source": {
         "kind": "synthetic",
-        "note": "authored for this repository (Apache-2.0), modeled on the image-trail message barrel"
+        "note": "authored for this repository (Apache-2.0), modeled on a production message barrel"
       }
     },
     {
@@ -210,21 +210,9 @@
         ]
       },
       "source": {
-        "kind": "vendored",
-        "repository": "qwts/image-trail",
-        "path": "extension/src/background/messages.ts",
-        "pullRequest": "https://github.com/qwts/image-trail/pull/786",
-        "base": {
-          "commit": "dce6e9c38e7f38860c30ff8d037198499caaac76",
-          "gitBlob": "b065a475e67b305f969986a4e3a4ebb0c73d9b2c"
-        },
-        "head": {
-          "commit": "ef4f8bc3297b92e34ce6c0b691821ce74bae4a07",
-          "gitBlob": "ff84d940128d5e8849611b7114edc8c8aade1531",
-          "sameBlobAt": "28b3ed5e91a75e70fdb17f10f742fff024c33888"
-        },
-        "license": "proprietary — all rights reserved (see qwts/image-trail LICENSE)",
-        "permission": "written permission from the copyright holder (zts1.com, @qwts): approving review on the qwts/agentic-code-analysis pull request that introduced this record (issue #12, step 0)"
+        "kind": "author-supplied",
+        "license": "Apache-2.0 for this calibration fixture only; the originating project remains proprietary",
+        "permission": "The copyright holder licenses this fixture excerpt for redistribution under Apache-2.0; public contact: @qwts."
       }
     }
   ]
