@@ -4,7 +4,7 @@ set -euo pipefail
 readonly git_subcommand="${1:-}"
 
 case "$git_subcommand" in
-  --help | --version | add | am | apply | blame | branch | checkout | cherry-pick | clean | clone | commit | describe | diff | fetch | format-patch | grep | help | init | log | merge | merge-base | mv | notes | pull | push | range-diff | rebase | reflog | remote | reset | restore | revert | rev-list | rev-parse | rm | show | show-ref | sparse-checkout | stash | status | switch | tag | worktree) ;;
+  --help | --version | add | am | apply | blame | branch | checkout | cherry-pick | clean | clone | commit | describe | diff | fetch | format-patch | help | init | log | merge | merge-base | mv | notes | pull | push | range-diff | rebase | reflog | remote | reset | restore | revert | rev-list | rev-parse | rm | show | show-ref | sparse-checkout | stash | status | switch | tag | worktree) ;;
   *)
     print -u2 -- "Git subcommand requires normal Codex approval: ${git_subcommand:-<missing>}"
     exit 64
@@ -51,7 +51,7 @@ fi
 if [[ "$git_subcommand" == "rebase" ]]; then
   for argument in "${@:2}"; do
     case "$argument" in
-      -x | -x* | --exec | --exec=*)
+      -x | -x* | --ex | --ex=* | --exe | --exe=* | --exec | --exec=*)
         print -u2 -- "Git rebase command execution requires normal Codex approval: $argument"
         exit 64
         ;;

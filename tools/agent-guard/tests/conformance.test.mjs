@@ -122,6 +122,8 @@ describe('agent-guard conformance (ENG-0138)', () => {
     assert.equal(evaluateHookInput({ cwd: '/outside', command: 'command env -C /project npx vitest' }, '/project', { env }).allow, false);
     assert.equal(evaluateHookInput({ cwd: '/outside', command: 'npm --prefix /project run ci' }, '/project', { env }).allow, false);
     assert.equal(evaluateHookInput({ cwd: '/outside', command: 'pnpm --dir /project run ci' }, '/project', { env }).allow, false);
+    assert.equal(evaluateHookInput({ cwd: '/outside', command: 'target=/project; cd "$target" && npm run ci' }, '/project', { env }).allow, false);
+    assert.equal(evaluateHookInput({ cwd: '/outside', command: 'pushd /project && npm run ci' }, '/project', { env }).allow, false);
   });
 
   test('executable indirection cannot bypass admission', () => {
@@ -141,8 +143,14 @@ describe('agent-guard conformance (ENG-0138)', () => {
       'command find . -maxdepth 0 -exec npx vitest \\;',
       "find . -maxdepth 0 -exec sh -c 'npm run ci' \\;",
       'lane=ci; npm run "$lane"',
+      'runner=npm; $runner run ci',
+      'name=vitest; npx $name',
+      'if true; then npm run ci; fi',
+      "printf 'npm run ci\\n' | sh",
+      'find . -maxdepth 0 -exec bash -c npx\\ vitest \\;',
       'AI_AGENT= node tools/agent-guard/run-guarded.mjs -- npm test',
       'env -uCODEX_THREAD_ID node tools/agent-guard/run-guarded.mjs -- npm test',
+      'key=AI_AGENT; env -u "$key" node tools/agent-guard/run-guarded.mjs -- npm test',
       'node --require node:path node_modules/vitest/vitest.mjs run',
       "eval -- 'npx vitest'",
       "command bash <<'EOF'\nnpx vitest\nEOF",

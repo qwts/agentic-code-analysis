@@ -345,10 +345,10 @@ export function resolveExecutionDirs(cwd, command) {
     }
   }
 
-  const transitions = /(?:^|\|\||&&|[;\n|&(){}])\s*cd\s+(?:(?:-[LPe@]+|--)\s+)*(?:"([^"]+)"|'([^']+)'|([^\s;&|(){}]+))/gu;
+  const transitions = /(?:^|\|\||&&|[;\n|&(){}])\s*(?:(?:command|builtin)\s+)?(cd|pushd)\s+(?:(?:-[LPe@]+|--)\s+)*(?:"([^"]+)"|'([^']+)'|([^\s;&|(){}]+))/gu;
   for (const match of scopedCommand.matchAll(transitions)) {
-    const index = match.index + match[0].indexOf('cd');
-    if (shellSyntax[index]) events.push({ index, target: match[1] ?? match[2] ?? match[3], type: 'cd' });
+    const index = match.index + match[0].indexOf(match[1]);
+    if (shellSyntax[index]) events.push({ index, target: match[2] ?? match[3] ?? match[4], type: 'cd' });
   }
 
   // GNU/POSIX-compatible env implementations may change directory for the
@@ -467,7 +467,20 @@ function shellHeredocBody(command, offset, body) {
   const prefix = command.slice(0, offset);
   const segment = prefix.split(/\|\||&&|[;\n|&]/u).at(-1).trim();
   const executable = commandAfterPrefixes(segment).split(/\s+/u).filter(Boolean)[0];
-  return /(?:^|\/)(?:ba|da|z)?sh$/u.test(executable ?? '') ? `\n${body}\n` : ' ';
+  const declarationEnd = command.indexOf('\n', offset);
+  const declaration = command.slice(offset, declarationEnd < 0 ? command.length : declarationEnd);
+  const pipelineSink = commandAfterPrefixes(declaration.split(/(?<![\\|])\|(?!\|)/u).at(-1).trim()).split(/\s+/u).filter(Boolean)[0];
+  return /(?:^|\/)(?:ba|da|z)?sh$/u.test(executable ?? '') || /(?:^|\/)(?:ba|da|z)?sh$/u.test(pipelineSink ?? '')
+    ? `\n${body}\n`
+    : ' ';
+}
+
+function maskNonShellHeredocs(command) {
+  return command.replace(
+    /<<-?\s*(["']?)([A-Za-z_][A-Za-z0-9_]*)\1[^\n]*\n([\s\S]*?)(?:\n\2(?=\n|$)|$)/gu,
+    (match, quote, delimiter, body, offset) =>
+      shellHeredocBody(command, offset, body) === ' ' ? match.replace(/[^\n]/gu, ' ') : match,
+  );
 }
 
 function commandSubstitutionBodies(text, { processSubstitutions = false } = {}) {
@@ -709,6 +722,17 @@ function dispatcherCommandPayloads(command) {
   return payloads;
 }
 
+function hasShellStdinProgram(command) {
+  const pipelineSegments = command.split(/(?<![\\|])\|(?!\|)/u);
+  for (let index = 0; index < pipelineSegments.length; index += 1) {
+    const executable = commandAfterPrefixes(pipelineSegments[index]);
+    const shell = executable.split(/\s+/u).filter(Boolean)[0];
+    if (!/(?:^|\/)(?:ba|da|z)?sh$/u.test(shell ?? '')) continue;
+    if (index > 0 || /(?:^|\s)(?:<<<|<(?![<(]))/u.test(executable)) return true;
+  }
+  return false;
+}
+
 function isWordCharacter(character) {
   return character !== undefined && !/[\s;&|]/u.test(character);
 }
@@ -816,7 +840,8 @@ export function stripInertText(command) {
   const substitutions = commandSubstitutionBodies(effective, { processSubstitutions: true });
   const payloads = commandStringPayloads(effective);
   const dispatchers = dispatcherCommandPayloads(effective);
-  const promoted = [...substitutions, ...payloads, ...dispatchers];
+  const dispatcherStrings = dispatchers.flatMap((payload) => commandStringPayloads(payload));
+  const promoted = [...substitutions, ...payloads, ...dispatchers, ...dispatcherStrings];
   return promoted.length > 0 ? `${effective}\n${promoted.join('\n')}` : effective;
 }
 
@@ -1084,6 +1109,74 @@ function hasDynamicPackageScript(command) {
   return packageScriptNames(command).some((script) => hasRuntimeShellExpansion(script));
 }
 
+function hasDynamicExecutionPosition(command) {
+  for (const segment of splitSegments(command)) {
+    const tokens = commandAfterPrefixes(segment).split(/\s+/u).filter(Boolean);
+    if (tokens.length === 0) continue;
+    if (hasRuntimeShellExpansion(tokens[0])) return true;
+    const executable = tokens[0].split('/').at(-1);
+    if (executable === 'npx' || executable === 'bunx') {
+      const targetAt = skipCliOptions(tokens, 1, EXEC_OPTIONS_WITH_OPERANDS);
+      if (hasRuntimeShellExpansion(tokens[targetAt] ?? '')) return true;
+    }
+    if (executable === 'npm') {
+      const verbAt = skipCliOptions(tokens, 1, NPM_OPTIONS_WITH_OPERANDS);
+      if (hasRuntimeShellExpansion(tokens[verbAt] ?? '')) return true;
+      if (tokens[verbAt] === 'exec' || tokens[verbAt] === 'x') {
+        const targetAt = skipCliOptions(tokens, verbAt + 1, EXEC_OPTIONS_WITH_OPERANDS);
+        if (hasRuntimeShellExpansion(tokens[targetAt] ?? '')) return true;
+      }
+    }
+    if (OTHER_PACKAGE_MANAGERS.has(executable)) {
+      const rest = tokens.slice(1);
+      const command = otherPackageCommandStart(executable, rest);
+      if (hasRuntimeShellExpansion(rest[command.index] ?? '')) return true;
+      if (/^(?:exec|x|dlx)$/u.test(rest[command.index] ?? '')) {
+        const targetAt = skipCliOptions(rest, command.index + 1, EXEC_OPTIONS_WITH_OPERANDS);
+        if (hasRuntimeShellExpansion(rest[targetAt] ?? '')) return true;
+      }
+    }
+    if (executable === 'node') {
+      for (let index = 1; index < tokens.length; index += 1) {
+        if (tokens[index] === '--run' && hasRuntimeShellExpansion(tokens[index + 1] ?? '')) return true;
+        if (tokens[index].startsWith('--run=') && hasRuntimeShellExpansion(tokens[index].slice('--run='.length))) return true;
+      }
+    }
+  }
+  return false;
+}
+
+function hasDynamicIdentityRemoval(command) {
+  const wrapperAt = command.indexOf('run-guarded.mjs');
+  if (wrapperAt < 0) return false;
+  const prefix = command.slice(0, wrapperAt);
+  for (const match of prefix.matchAll(/(?:^|\s)(?:-u([^\s;&|]+)|(?:-u|--unset)(?:=|\s+)([^\s;&|]+))/gu)) {
+    if (hasRuntimeShellExpansion(match[1] ?? match[2] ?? '')) return true;
+  }
+  for (const match of prefix.matchAll(/\b(?:unset|export\s+-n)\s+([^\s;&|]+)/gu)) {
+    if (hasRuntimeShellExpansion(match[1])) return true;
+  }
+  return false;
+}
+
+function hasDynamicDirectoryTarget(command) {
+  for (const segment of splitSegments(command)) {
+    const tokens = commandAfterPrefixes(segment).split(/\s+/u).filter(Boolean);
+    const executable = tokens[0]?.split('/').at(-1);
+    if (executable === 'cd' || executable === 'pushd') {
+      let targetAt = 1;
+      while (/^(?:-[LPe@n]+|--|[+-]\d+)$/u.test(tokens[targetAt] ?? '')) targetAt += 1;
+      if (hasRuntimeShellExpansion(tokens[targetAt] ?? '')) return true;
+    }
+    if (directoryOptionTargets(segment).some(({ target }) => hasRuntimeShellExpansion(target))) return true;
+  }
+  return false;
+}
+
+function referencesGuardState(command) {
+  return /(?:^|[\s<>])(?:[^\s<>]*\/)?agent-guard\/(?:leases(?:\/[^\s<>]*)?|admission\.lock(?:\/[^\s<>]*)?|machine-token)(?=$|[\s<>])/u.test(command);
+}
+
 // Node >=22 exposes package.json scripts through `node --run <script>` and
 // `node --run=<script>`. Those spellings have the same admission policy as npm.
 export function nodeRunScriptNames(command) {
@@ -1145,8 +1238,25 @@ function commandAfterPrefixes(segment) {
   let index = 0;
   while (index < tokens.length) {
     while (/^\w+=\S*$/u.test(tokens[index] ?? '')) index += 1;
+    if (/^(?:then|do|else|elif|if|while|until|!)$/u.test(tokens[index] ?? '')) {
+      index += 1;
+      continue;
+    }
+    if (/^[A-Za-z_][A-Za-z0-9_]*\(\)\{$/u.test(tokens[index] ?? '')) {
+      index += 1;
+      continue;
+    }
+    if (/^[A-Za-z_][A-Za-z0-9_]*\(\)$/u.test(tokens[index] ?? '') && tokens[index + 1] === '{') {
+      index += 2;
+      continue;
+    }
+    if (tokens[index] === 'function' && tokens[index + 1]) {
+      index += 2;
+      if (tokens[index] === '{') index += 1;
+      continue;
+    }
     const command = tokens[index]?.split('/').at(-1);
-    if (command === 'command') {
+    if (command === 'command' || command === 'builtin') {
       if (tokens.slice(index + 1).some((token) => token === '-v' || token === '-V')) break;
       index += 1;
       while (tokens[index]?.startsWith('-')) index += 1;
@@ -1265,15 +1375,38 @@ function commandAfterPrefixes(segment) {
 
 export function evaluateCommand(command) {
   if (typeof command !== 'string' || command.length === 0) return { allow: true };
-  if (hasDynamicPackageScript(command)) {
+  const dynamicCommand = maskNonShellHeredocs(command);
+  if (hasDynamicIdentityRemoval(dynamicCommand)) {
+    return {
+      allow: false,
+      reason: `Blocked a runtime-computed identity removal before run-guarded.mjs: it could erase the active harness marker. ${GUIDANCE}`,
+    };
+  }
+  if (hasDynamicPackageScript(dynamicCommand) || hasDynamicExecutionPosition(dynamicCommand)) {
     return {
       allow: false,
       reason:
-        'Blocked a runtime-computed package script name: shell expansion can resolve to a protected heavy lane after ' +
-        `static admission checks. Use the guarded entrypoint with a literal script name. ${USE_ENTRYPOINT}`,
+        'Blocked a runtime-computed executable, package command, or script: shell expansion can resolve to a protected ' +
+        `lane after static admission checks. Use the guarded entrypoint with literal command slots. ${USE_ENTRYPOINT}`,
     };
   }
   const effective = stripInertText(command);
+
+  if (referencesGuardState(effective)) {
+    return {
+      allow: false,
+      reason:
+        'Blocked direct access to the machine-wide agent-guard lease store: deleting or changing authoritative lease ' +
+        `state can admit overlapping runs. Use the arbiter status command for diagnostics. ${GUIDANCE}`,
+    };
+  }
+
+  if (hasShellStdinProgram(effective)) {
+    return {
+      allow: false,
+      reason: `Blocked a shell program supplied through stdin: its runtime payload cannot bypass guarded command classification. ${USE_ENTRYPOINT}`,
+    };
+  }
 
   for (const { pattern, reason } of TAMPERING) {
     if (pattern.test(effective)) return { allow: false, reason };
@@ -1356,7 +1489,7 @@ export function evaluateHookInput({ command, cwd }, projectDir, options = {}) {
   const executionDirs = resolveExecutionDirs(cwd, command);
   if (executionDirs.length > 0 && projectDir) {
     const inScope = executionDirs.some((executionDir) => isWithin(executionDir, projectDir) || inGuardedCheckout(executionDir));
-    if (!inScope) return { allow: true };
+    if (!inScope && !hasDynamicDirectoryTarget(maskNonShellHeredocs(command))) return { allow: true };
   }
   return evaluateCommand(command, options);
 }
