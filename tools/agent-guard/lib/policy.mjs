@@ -44,19 +44,13 @@ export function isCi(env = process.env) {
  * unrecognised agent, so it answers `true` when unsure. Same evidence,
  * opposite and deliberate failure directions.
  *
- * A human proves themselves by the absence of every agent marker, which a
- * plain terminal satisfies for free.
+ * Absence of a marker is not human authentication: an agent-controlled script
+ * can unset ordinary environment variables before invoking the wrapper. Local
+ * callers therefore fail closed. Hosted CI is exempted separately before lane
+ * policy runs; a human owner can run the underlying lane directly.
  */
-export function isAgentSession(env = process.env) {
-  if (env.AGENT_GUARD_ASSUME_HUMAN === '1') return false;
-  const aiAgent = typeof env.AI_AGENT === 'string' ? env.AI_AGENT.toLowerCase() : '';
-  return (
-    env.CLAUDECODE === '1' ||
-    (typeof env.CLAUDE_CODE_ENTRYPOINT === 'string' && env.CLAUDE_CODE_ENTRYPOINT !== '') ||
-    Object.keys(env).some((key) => key.startsWith('CODEX_')) ||
-    Object.keys(env).some((key) => key.startsWith('CURSOR_')) ||
-    aiAgent !== ''
-  );
+export function isAgentSession(_env = process.env) {
+  return true;
 }
 
 export function harnessName(env = process.env) {

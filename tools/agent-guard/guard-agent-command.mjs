@@ -146,14 +146,14 @@ const TAMPERING = [
   },
   {
     pattern:
-      /(?:\benv\b[^\n;&|]*(?:\s(?:-(?=\s|$)|-i|--ignore-environment)(?=\s|$)|(?:-u(?:=|\s*)|--unset(?:=|\s+))(?:CLAUDECODE|CLAUDE_CODE_ENTRYPOINT|AI_AGENT|CODEX_\w+|CURSOR_\w+))|\b(?:unset\s+(?:(?:--|-v|-f)\s+)*|export\s+-n\s+)(?:CLAUDECODE|CLAUDE_CODE_ENTRYPOINT|AI_AGENT|CODEX_\w+|CURSOR_\w+))[\s\S]*run-guarded\.mjs/u,
+      /(?:\benv\b[^\n;&|]*(?:\s(?:-(?=\s|$)|-i|--ignore-environment)(?=\s|$)|(?:-u(?:=|\s*)|--unset(?:=|\s+))(?:CLAUDECODE|CLAUDE_CODE_ENTRYPOINT|AI_AGENT|CODEX_\w+|CURSOR_\w+))|\b(?:unset\s+(?:(?:--|-v|-f)\s+)*|export\s+-n\s+)(?:CLAUDECODE|CLAUDE_CODE_ENTRYPOINT|AI_AGENT|CODEX_\w+|CURSOR_\w+))/u,
     reason:
       'Blocked removal of agent identity before run-guarded.mjs: the wrapper must inherit its harness markers so it ' +
       `cannot misclassify an agent as the human owner. ${GUIDANCE}`,
   },
   {
     pattern:
-      /(?:^|[\s;&|])(?:CLAUDECODE|CLAUDE_CODE_ENTRYPOINT|AI_AGENT|CODEX_\w+|CURSOR_\w+)=[^\s;&|]*[\s\S]*run-guarded\.mjs/u,
+      /(?:^|[\s;&|])(?:CLAUDECODE|CLAUDE_CODE_ENTRYPOINT|AI_AGENT|CODEX_\w+|CURSOR_\w+)=[^\s;&|]*/u,
     reason:
       'Blocked reassignment of agent identity before run-guarded.mjs: clearing or replacing a harness marker can make ' +
       `the wrapper misclassify an agent as the human owner. ${GUIDANCE}`,
@@ -212,12 +212,124 @@ function isWithin(child, parent) {
   return c === p || c.startsWith(p + sep);
 }
 
-function normalizeBackslashQuotedHeredocDelimiters(text) {
-  return text.replace(/(<<-?\s*)((?:\\.|[^\s;&|()<>"'])+)/gu, (match, prefix, word) => `${prefix}${word.replace(/\\(.)/gu, '$1')}`);
+function parseHeredocWord(line, start) {
+  let index = start;
+  let value = '';
+  let quote = null;
+  while (index < line.length) {
+    const character = line[index];
+    if (quote === "'") {
+      if (character === "'") quote = null;
+      else value += character;
+      index += 1;
+      continue;
+    }
+    if (quote === '"') {
+      if (character === '"') {
+        quote = null;
+        index += 1;
+      } else if (character === '\\' && /[\\"$`]/u.test(line[index + 1] ?? '')) {
+        value += line[index + 1];
+        index += 2;
+      } else {
+        value += character;
+        index += 1;
+      }
+      continue;
+    }
+    if (/\s|[;&|()<>]/u.test(character)) break;
+    if (character === '$' && line[index + 1] === "'") {
+      let end = index + 2;
+      while (end < line.length) {
+        if (line[end] === '\\') end += 2;
+        else if (line[end] === "'") break;
+        else end += 1;
+      }
+      if (end < line.length) {
+        value += decodeAnsiCWord(line.slice(index, end + 1));
+        index = end + 1;
+        continue;
+      }
+    }
+    if (character === "'" || character === '"') {
+      quote = character;
+      index += 1;
+      continue;
+    }
+    if (character === '\\' && index + 1 < line.length) {
+      value += line[index + 1];
+      index += 2;
+      continue;
+    }
+    value += character;
+    index += 1;
+  }
+  return { end: index, value };
+}
+
+// Canonicalize shell-valid heredoc words to identifier sentinels before the
+// scanners run. This handles mixed/backslash quoting and `<<-` tab stripping
+// without trying to express shell quote removal through a regex backreference.
+function normalizeHeredocSyntax(text) {
+  const replacements = [];
+  let cursor = 0;
+  let sequence = 0;
+  while (cursor < text.length) {
+    const declarationEnd = text.indexOf('\n', cursor);
+    const lineEnd = declarationEnd < 0 ? text.length : declarationEnd;
+    const line = text.slice(cursor, lineEnd);
+    const declarations = [];
+    const operator = /<<(-?)(?!<)\s*/gu;
+    for (const match of line.matchAll(operator)) {
+      const wordStart = match.index + match[0].length;
+      const word = parseHeredocWord(line, wordStart);
+      if (word.end === wordStart || word.value.length === 0) continue;
+      declarations.push({
+        delimiter: word.value,
+        stripTabs: match[1] === '-',
+        token: `AGENT_GUARD_HEREDOC_${sequence++}`,
+        wordEnd: cursor + word.end,
+        wordStart: cursor + wordStart,
+      });
+    }
+    if (declarations.length === 0 || declarationEnd < 0) {
+      cursor = lineEnd + (declarationEnd < 0 ? 0 : 1);
+      continue;
+    }
+    let bodyCursor = declarationEnd + 1;
+    for (const declaration of declarations) {
+      replacements.push({ start: declaration.wordStart, end: declaration.wordEnd, value: declaration.token });
+      let found = false;
+      while (bodyCursor <= text.length) {
+        const terminatorEnd = text.indexOf('\n', bodyCursor);
+        const candidateEnd = terminatorEnd < 0 ? text.length : terminatorEnd;
+        const candidate = text.slice(bodyCursor, candidateEnd).replace(/\r$/u, '');
+        const normalized = declaration.stripTabs ? candidate.replace(/^\t+/u, '') : candidate;
+        if (normalized === declaration.delimiter) {
+          replacements.push({ start: bodyCursor, end: candidateEnd, value: declaration.token });
+          bodyCursor = candidateEnd + (terminatorEnd < 0 ? 0 : 1);
+          found = true;
+          break;
+        }
+        if (terminatorEnd < 0) {
+          bodyCursor = text.length;
+          break;
+        }
+        bodyCursor = terminatorEnd + 1;
+      }
+      if (!found) break;
+    }
+    cursor = Math.max(bodyCursor, declarationEnd + 1);
+  }
+  let normalized = text;
+  for (const replacement of replacements.sort((left, right) => right.start - left.start)) {
+    normalized = normalized.slice(0, replacement.start) + replacement.value + normalized.slice(replacement.end);
+  }
+  return normalized;
 }
 
 function maskHeredocBodies(text) {
-  return normalizeBackslashQuotedHeredocDelimiters(text).replace(
+  return normalizeHeredocSyntax(text).replace(
     /<<-?\s*(["']?)([^\s;&|()<>"']+)\1[^\n]*\n[\s\S]*?(?:\n\2(?=\n|$)|$)/gu,
     (match) => match.replace(/[^\n]/gu, ' '),
   );
@@ -483,7 +595,7 @@ function shellHeredocBody(command, offset, body) {
 }
 
 function maskNonShellHeredocs(command) {
-  const normalizedCommand = normalizeBackslashQuotedHeredocDelimiters(command);
+  const normalizedCommand = normalizeHeredocSyntax(command);
   return normalizedCommand.replace(
     /<<-?\s*(["']?)([^\s;&|()<>"']+)\1[^\n]*\n([\s\S]*?)(?:\n\2(?=\n|$)|$)/gu,
     (match, quote, delimiter, body, offset) =>
@@ -786,6 +898,28 @@ function hasShellStdinProgram(command) {
   return false;
 }
 
+function hasRuntimeStdinProgram(command) {
+  const pipelineSegments = command.split(/(?<![\\|])\|(?!\|)/u);
+  for (let index = 0; index < pipelineSegments.length; index += 1) {
+    const executable = commandAfterPrefixes(pipelineSegments[index]);
+    const tokens = executable.split(/\s+/u).filter(Boolean);
+    const runtime = tokens[0]?.split('/').at(-1) ?? '';
+    if (!/^(?:node|python(?:\d+(?:\.\d+)*)?|perl|ruby|php)$/u.test(runtime)) continue;
+    let hasScript = false;
+    for (const token of tokens.slice(1)) {
+      if (/^(?:<<<|<<-?|<(?![<(]))/u.test(token)) break;
+      if (token === '-') return true;
+      if (token === '--') continue;
+      if (!token.startsWith('-')) {
+        hasScript = true;
+        break;
+      }
+    }
+    if (!hasScript && (index > 0 || /(?:^|\s)(?:<<<|<<-?|<(?![<(]))/u.test(executable))) return true;
+  }
+  return false;
+}
+
 function isWordCharacter(character) {
   return character !== undefined && !/[\s;&|]/u.test(character);
 }
@@ -858,7 +992,7 @@ function isExecutableQuotedWord(scanned, word) {
 // `bash -c "npm run test:e2e"` is blanked before its inner text is inspected.
 export function stripInertText(command) {
   let scanned = '';
-  const normalizedCommand = normalizeBackslashQuotedHeredocDelimiters(command);
+  const normalizedCommand = normalizeHeredocSyntax(command);
   let rest = normalizedCommand.replace(
     /<<-?\s*(["']?)([^\s;&|()<>"']+)\1[^\n]*\n([\s\S]*?)(?:\n\2(?=\n|$)|$)/gu,
     (match, quote, delimiter, body, offset) => shellHeredocBody(normalizedCommand, offset, body),
@@ -1222,13 +1356,10 @@ function hasDynamicExecutionPosition(command) {
 }
 
 function hasDynamicIdentityRemoval(command) {
-  const wrapperAt = command.indexOf('run-guarded.mjs');
-  if (wrapperAt < 0) return false;
-  const prefix = command.slice(0, wrapperAt);
-  for (const match of prefix.matchAll(/(?:^|\s)(?:-u([^\s;&|]+)|(?:-u|--unset)(?:=|\s+)([^\s;&|]+))/gu)) {
+  for (const match of command.matchAll(/(?:^|\s)(?:-u([^\s;&|]+)|(?:-u|--unset)(?:=|\s+)([^\s;&|]+))/gu)) {
     if (hasRuntimeShellExpansion(match[1] ?? match[2] ?? '')) return true;
   }
-  for (const segment of splitSegments(prefix)) {
+  for (const segment of splitSegments(command)) {
     const tokens = segment.split(/\s+/u).filter(Boolean);
     const executable = tokens[0]?.split('/').at(-1);
     if (executable !== 'unset' && executable !== 'export') continue;
@@ -1244,9 +1375,7 @@ function isProtectedEnvironmentName(name) {
 }
 
 function hasProtectedEnvironmentMutation(command) {
-  const wrapperAt = command.indexOf('run-guarded.mjs');
-  if (wrapperAt < 0) return false;
-  for (const segment of splitSegments(command.slice(0, wrapperAt))) {
+  for (const segment of splitSegments(command)) {
     const tokens = segment.split(/\s+/u).filter(Boolean);
     const executable = tokens[0]?.split('/').at(-1);
     if (executable === 'printf') {
@@ -1281,8 +1410,51 @@ function hasDynamicDirectoryTarget(command) {
   return false;
 }
 
+function expandSimpleBraces(value, limit = 32) {
+  const variants = [value];
+  for (let index = 0; index < variants.length && variants.length <= limit; index += 1) {
+    const match = /\{([^{}]*)\}/u.exec(variants[index]);
+    if (!match || !match[1].includes(',')) continue;
+    variants.splice(index, 1, ...match[1].split(',').map((part) => variants[index].slice(0, match.index) + part + variants[index].slice(match.index + match[0].length)));
+    index -= 1;
+  }
+  return variants.slice(0, limit);
+}
+
+function shellPatternCanMatchAgentGuard(component) {
+  for (const variant of expandSimpleBraces(component.replace(/\\(.)/gu, '$1'))) {
+    let source = '^';
+    for (let index = 0; index < variant.length; index += 1) {
+      const character = variant[index];
+      if (character === '*') source += '.*';
+      else if (character === '?') source += '.';
+      else if (character === '$') {
+        if (variant[index + 1] === '{') {
+          const close = variant.indexOf('}', index + 2);
+          index = close < 0 ? variant.length : close;
+        } else {
+          while (/[A-Za-z0-9_]/u.test(variant[index + 1] ?? '')) index += 1;
+        }
+        source += '.*';
+      } else {
+        source += character.replace(/[\\^$.*+?()[\]{}|]/gu, '\\$&');
+      }
+    }
+    if (new RegExp(`${source}$`, 'u').test('agent-guard')) return true;
+  }
+  return false;
+}
+
 function referencesGuardState(command) {
-  return /(?:^|[\s<>])(?:[^\s<>]*\/)?agent[^\s/<>]*guard\/(?:leases(?:\/[^\s<>]*)?|admission\.lock(?:\/[^\s<>]*)?|machine-token)(?=$|[\s<>])/u.test(command);
+  for (const rawWord of command.match(/[^\s<>;&|]+/gu) ?? []) {
+    const word = rawWord.slice(rawWord.lastIndexOf('=') + 1).replace(/^['"]|['"]$/gu, '');
+    const components = word.split('/');
+    const guardAt = components.findIndex(shellPatternCanMatchAgentGuard);
+    if (guardAt < 0) continue;
+    const child = components[guardAt + 1];
+    if (child === undefined || child === '' || child === 'leases' || child === 'admission.lock' || child === 'machine-token') return true;
+  }
+  return false;
 }
 
 // Node >=22 exposes package.json scripts through `node --run <script>` and
@@ -1529,6 +1701,12 @@ export function evaluateCommand(command) {
         `lane after static admission checks. Use the guarded entrypoint with literal command slots. ${USE_ENTRYPOINT}`,
     };
   }
+  if (hasRuntimeStdinProgram(command)) {
+    return {
+      allow: false,
+      reason: `Blocked a runtime program supplied through stdin: its payload can dispatch a protected lane after static admission checks. ${USE_ENTRYPOINT}`,
+    };
+  }
   const effective = stripInertText(command);
 
   // Inline runtime programs can synchronously dispatch arbitrary child
@@ -1539,11 +1717,13 @@ export function evaluateCommand(command) {
     const tokens = commandAfterPrefixes(segment).split(/\s+/u).filter(Boolean);
     const runtime = tokens[0]?.split('/').at(-1) ?? '';
     const options = tokens.slice(1);
-    if (runtime === 'node') return options.some((token) => /^(?:-[A-Za-z]*[ep]|--eval(?:=|$)|--print(?:=|$))/u.test(token));
+    if (runtime === 'node') {
+      return options.some((token) => /^(?:-[A-Za-z]*[ep]|--eval(?:=|$)|--print(?:=|$)|-r(?:=|$)|--require(?:=|$)|--import(?:=|$)|--loader(?:=|$)|--experimental-loader(?:=|$))/u.test(token));
+    }
     if (/^python(?:\d+(?:\.\d+)*)?$/u.test(runtime)) return options.some((token) => token.startsWith('-c'));
-    if (runtime === 'perl') return options.some((token) => /^-[A-Za-z]*[eE]/u.test(token));
-    if (runtime === 'ruby') return options.some((token) => /^-[A-Za-z]*e/u.test(token));
-    if (runtime === 'php') return options.some((token) => /^(?:-r|--run(?:=|$))/u.test(token));
+    if (runtime === 'perl') return options.some((token) => /^(?:-[wWT]*[eE]$|-[eE].+)/u.test(token));
+    if (runtime === 'ruby') return options.some((token) => /^(?:-[wWd]*e$|-e.+)/u.test(token));
+    if (runtime === 'php') return options.some((token) => /^(?:-[rBRE]|--(?:run|process-begin|process-code|process-end)(?:=|$))/u.test(token));
     if (/^(?:[gmn]?awk)$/u.test(runtime)) {
       if (options.some((token) => /^(?:-f|--file)(?:=|$)/u.test(token))) return false;
       return !options.every((token) => /^(?:--help|--version|-W(?:help|version))$/u.test(token));
@@ -1677,7 +1857,7 @@ function respond(protocol, verdict) {
       : {
           permission: 'deny',
           agentMessage: verdict.reason,
-          userMessage: 'Blocked by the machine memory guard (see docs/reference/agent-memory-guard.md).',
+          userMessage: `Blocked by the machine memory guard (see ${GUARD_GUIDE}).`,
         };
     process.stdout.write(`${JSON.stringify(body)}\n`);
     return;

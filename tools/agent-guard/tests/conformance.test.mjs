@@ -54,6 +54,8 @@ describe('agent-guard conformance (ENG-0138)', () => {
     ]) {
       assert.ok(existsSync(path.join(root, file)), `${file} must exist — the guard is a governed file, not an optional one`);
     }
+    const hook = readFileSync(path.join(root, 'tools/agent-guard/guard-agent-command.mjs'), 'utf8');
+    assert.match(hook, /userMessage: `Blocked by the machine memory guard \(see \$\{GUARD_GUIDE\}\)\.`/u);
   });
 
   test('monitor failures and timeouts terminate independently of RSS polling', () => {
@@ -181,6 +183,16 @@ describe('agent-guard conformance (ENG-0138)', () => {
       'rm -rf ~/.cache/agent{-,}-guard/leases',
       'yarn workspace foo npm run ci',
       'taskset -c 0 npm run ci',
+      'cat <<E"O"F\nharmless\nEOF\nnpm run ci',
+      'cat <<-EOF\nharmless\n\tEOF\nnpm run ci',
+      "cat <<$'E\\x4fF'\nharmless\nEOF\nnpm run ci",
+      "python3 <<'PY'\nimport os\nos.system('npm run ci')\nPY",
+      "node <<< \"require('node:child_process').execSync('npm run ci')\"",
+      "node --import='data:text/javascript,export default 1' script.js",
+      "php -B 'system(\"npm run ci\");' < /dev/null",
+      'unset CLAUDECODE CLAUDE_CODE_ENTRYPOINT AI_AGENT',
+      'rm -rf ~/.cache/agent-guard',
+      'd=~/.cache/agent-guard; rm -rf "$d/leases"',
     ]) {
       assert.equal(evaluateCommand(command, { env }).allow, false, `expected the guard to deny: ${command}`);
     }
@@ -198,6 +210,9 @@ describe('agent-guard conformance (ENG-0138)', () => {
     }
     assert.equal(evaluateCommand("cat > /tmp/doc <<'END-OF-FILE'\nnpm run \"$lane\"\nEND-OF-FILE", { env }).allow, true);
     assert.equal(evaluateCommand('cat > /tmp/doc <<.\nnpm run "$lane"\n.', { env }).allow, true);
+    assert.equal(evaluateCommand('perl -MFile::Spec script.pl', { env }).allow, true);
+    assert.equal(evaluateCommand('ruby -rbenchmark script.rb', { env }).allow, true);
+    assert.equal(evaluateCommand('cat agent-health-guard/leases/live.json', { env }).allow, true);
   });
 
   test('ceilings derive from the machine, so no repo can pin an unreachable one', () => {
@@ -245,5 +260,17 @@ describe('agent-guard conformance (ENG-0138)', () => {
     });
     assert.notEqual(result.status, 0);
     assert.match(result.stderr, /agents do not run it on this machine/u);
+    const forgedHuman = spawnSync(process.execPath, [runner, '--label', 'test:e2e', '--', process.execPath, '-e', 'process.exit(0)'], {
+      cwd: root,
+      encoding: 'utf8',
+      env: { ...process.env, AGENT_GUARD_ASSUME_HUMAN: '1', AI_AGENT: 'codex' },
+    });
+    assert.notEqual(forgedHuman.status, 0);
+    const strippedIdentity = spawnSync(process.execPath, [runner, '--label', 'test:e2e', '--', process.execPath, '-e', 'process.exit(0)'], {
+      cwd: root,
+      encoding: 'utf8',
+      env: { HOME: process.env.HOME, PATH: process.env.PATH },
+    });
+    assert.notEqual(strippedIdentity.status, 0);
   });
 });
