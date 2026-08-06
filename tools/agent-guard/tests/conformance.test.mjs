@@ -22,7 +22,7 @@ import { fileURLToPath } from 'node:url';
 
 import { evaluateCommand, evaluateHookInput } from '../guard-agent-command.mjs';
 import { clampCeiling, deriveBudget } from '../lib/budget.mjs';
-import { isCi } from '../lib/policy.mjs';
+import { isCi, isTrustedHostedCi } from '../lib/policy.mjs';
 import { readMemoryStatus } from '../lib/system-memory.mjs';
 
 // <repo>/tools/agent-guard/tests/this-file → <repo>
@@ -193,6 +193,18 @@ describe('agent-guard conformance (ENG-0138)', () => {
       'unset CLAUDECODE CLAUDE_CODE_ENTRYPOINT AI_AGENT',
       'rm -rf ~/.cache/agent-guard',
       'd=~/.cache/agent-guard; rm -rf "$d/leases"',
+      "ba\\sh -c 'npm run ci'",
+      "printf 'npm run ci\\n' > /tmp/lane.sh && bash /tmp/lane.sh",
+      "printf 'child_process.execSync(\"npm run ci\")' > /tmp/lane.js && node /tmp/lane.js",
+      "tar -cf /tmp/a.tar --checkpoint=1 --checkpoint-action=exec='npm run ci' README.md",
+      'rm -rf ~/.cache/agent-guard/./leases',
+      'rm -rf ~/.cache/agent-guard/foo/../leases',
+      'rm -rf ~/.cache/agen[t]-guard/leases',
+      "python -qc 'import os; os.system(\"npm run ci\")'",
+      'printf x | python -W ignore',
+      'printf x | python -X dev',
+      'perl -MFile::Spec script.pl',
+      'ruby -rbenchmark script.rb',
     ]) {
       assert.equal(evaluateCommand(command, { env }).allow, false, `expected the guard to deny: ${command}`);
     }
@@ -210,8 +222,7 @@ describe('agent-guard conformance (ENG-0138)', () => {
     }
     assert.equal(evaluateCommand("cat > /tmp/doc <<'END-OF-FILE'\nnpm run \"$lane\"\nEND-OF-FILE", { env }).allow, true);
     assert.equal(evaluateCommand('cat > /tmp/doc <<.\nnpm run "$lane"\n.', { env }).allow, true);
-    assert.equal(evaluateCommand('perl -MFile::Spec script.pl', { env }).allow, true);
-    assert.equal(evaluateCommand('ruby -rbenchmark script.rb', { env }).allow, true);
+    assert.equal(evaluateCommand('cat <<FIRST <<SECOND\nnpm run ci\nFIRST\nnpx vitest\nSECOND', { env }).allow, true);
     assert.equal(evaluateCommand('cat agent-health-guard/leases/live.json', { env }).allow, true);
   });
 
@@ -249,6 +260,15 @@ describe('agent-guard conformance (ENG-0138)', () => {
     assert.equal(isCi({ GITHUB_ACTIONS: 'true' }), true);
     assert.equal(isCi({ CI: 'true' }), true);
     assert.equal(isCi({}), false);
+    const hosted = {
+      CI: 'true',
+      GITHUB_ACTIONS: 'true',
+      RUNNER_ENVIRONMENT: 'github-hosted',
+      GITHUB_WORKSPACE: '/home/runner/work/repo/repo',
+      RUNNER_TEMP: '/home/runner/work/_temp',
+    };
+    assert.equal(isTrustedHostedCi({ env: hosted, cwd: hosted.GITHUB_WORKSPACE, platform: 'linux' }), true);
+    assert.equal(isTrustedHostedCi({ env: hosted, cwd: root, platform: 'linux' }), false);
   });
 
   test('an inherited CI marker does not exempt an agent process', () => {

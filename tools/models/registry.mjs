@@ -105,9 +105,9 @@ export function routingFor(registry, tier) {
   return VENDOR_GROUPS.map((vendor) => {
     const v = entry.vendors[vendor];
     const render = (slot) =>
-      slot.status === 'unverified'
-        ? 'unverified — do not guess'
-        : `${slot.model} (reasoning ${slot.reasoning}${slot.status === 'seeded' ? ', provisional' : ''})`;
+      slot.status === 'verified'
+        ? `${slot.model} (reasoning ${slot.reasoning})`
+        : 'unverified — do not guess';
     return {
       vendor,
       plan: render(v.plan),

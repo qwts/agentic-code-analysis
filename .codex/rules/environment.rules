@@ -17,7 +17,6 @@ prefix_rule(
             "clean",
             "commit",
             "describe",
-            "diff",
             "format-patch",
             "help",
             "init",
@@ -162,11 +161,11 @@ prefix_rule(
 )
 
 prefix_rule(
-    pattern = ["gh", "repo", ["clone", "list", "set-default", "view"]],
+    pattern = ["gh", "repo", ["list", "set-default", "view"]],
     decision = "allow",
     justification = "Non-destructive repository development operations are trusted.",
-    match = ["gh repo view qwts/example", "gh repo clone qwts/example"],
-    not_match = ["gh repo delete qwts/example --yes"],
+    match = ["gh repo view qwts/example", "gh repo list qwts"],
+    not_match = ["gh repo clone qwts/example", "gh repo delete qwts/example --yes"],
 )
 
 prefix_rule(

@@ -33,6 +33,24 @@ export function isCi(env = process.env) {
 }
 
 /**
+ * A CI marker is forgeable by a local process.  The bypass is therefore
+ * limited to the filesystem boundary of a GitHub-hosted runner: the process
+ * must actually be executing inside the hosted workspace tree, with the
+ * matching hosted-runner metadata and temp directory.  A local agent can copy
+ * these environment variables, but it cannot move its cwd underneath the
+ * runner-owned absolute root.
+ */
+export function isTrustedHostedCi({ env = process.env, cwd = process.cwd(), platform = process.platform } = {}) {
+  if (!isCi(env) || env.GITHUB_ACTIONS !== 'true' || env.RUNNER_ENVIRONMENT !== 'github-hosted') return false;
+  const runnerRoot = platform === 'darwin' ? '/Users/runner/work' : platform === 'linux' ? '/home/runner/work' : null;
+  if (runnerRoot === null) return false;
+  const workspace = typeof env.GITHUB_WORKSPACE === 'string' ? path.resolve(env.GITHUB_WORKSPACE) : '';
+  const runnerTemp = typeof env.RUNNER_TEMP === 'string' ? path.resolve(env.RUNNER_TEMP) : '';
+  const inside = (child, parent) => child === parent || child.startsWith(`${parent}${path.sep}`);
+  return inside(workspace, runnerRoot) && inside(path.resolve(cwd), workspace) && inside(runnerTemp, runnerRoot);
+}
+
+/**
  * Is an agent driving this shell?
  *
  * Mirrors the *narrow* markers agent-bot-identity's `detectAgentHarness` uses

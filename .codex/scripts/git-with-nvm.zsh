@@ -66,6 +66,21 @@ if [[ "$git_subcommand" == "clone" || "$git_subcommand" == "fetch" || "$git_subc
         print -u2 -- "Git upload-pack override requires normal Codex approval: $argument"
         exit 64
         ;;
+      -c | -c=* | -c?* | --config | --config=*)
+        print -u2 -- "Git configuration forwarding requires normal Codex approval: $argument"
+        exit 64
+        ;;
+    esac
+  done
+fi
+
+if [[ "$git_subcommand" == "diff" ]]; then
+  for argument in "${@:2}"; do
+    case "$argument" in
+      --ext-diff | --textconv)
+        print -u2 -- "External Git diff execution requires normal Codex approval: $argument"
+        exit 64
+        ;;
     esac
   done
 fi

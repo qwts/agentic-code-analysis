@@ -328,11 +328,71 @@ function normalizeHeredocSyntax(text) {
   return normalized;
 }
 
+function normalizedHeredocs(text) {
+  const normalized = normalizeHeredocSyntax(text);
+  const heredocs = [];
+  let cursor = 0;
+  while (cursor < normalized.length) {
+    const declarationEnd = normalized.indexOf('\n', cursor);
+    if (declarationEnd < 0) break;
+    const declarationLine = normalized.slice(cursor, declarationEnd);
+    const declarations = [...declarationLine.matchAll(/<<-?\s*(AGENT_GUARD_HEREDOC_\d+)/gu)].map((match) => ({
+      operatorStart: cursor + match.index,
+      operatorEnd: cursor + match.index + match[0].length,
+      token: match[1],
+    }));
+    if (declarations.length === 0) {
+      cursor = declarationEnd + 1;
+      continue;
+    }
+    let bodyStart = declarationEnd + 1;
+    for (const declaration of declarations) {
+      let terminatorStart = bodyStart;
+      let found = false;
+      while (terminatorStart <= normalized.length) {
+        const terminatorLineEnd = normalized.indexOf('\n', terminatorStart);
+        const candidateEnd = terminatorLineEnd < 0 ? normalized.length : terminatorLineEnd;
+        if (normalized.slice(terminatorStart, candidateEnd).replace(/^\t+/u, '').replace(/\r$/u, '') === declaration.token) {
+          const terminatorEnd = candidateEnd + (terminatorLineEnd < 0 ? 0 : 1);
+          heredocs.push({ ...declaration, bodyStart, bodyEnd: terminatorStart, terminatorEnd });
+          bodyStart = terminatorEnd;
+          found = true;
+          break;
+        }
+        if (terminatorLineEnd < 0) break;
+        terminatorStart = terminatorLineEnd + 1;
+      }
+      if (!found) break;
+    }
+    cursor = Math.max(bodyStart, declarationEnd + 1);
+  }
+  return { normalized, heredocs };
+}
+
+function transformHeredocs(text, mode) {
+  const { normalized, heredocs } = normalizedHeredocs(text);
+  const edits = [];
+  const blank = (value) => value.replace(/[^\n]/gu, ' ');
+  for (const heredoc of heredocs) {
+    const body = normalized.slice(heredoc.bodyStart, heredoc.bodyEnd);
+    const isShell = shellHeredocBody(normalized, heredoc.operatorStart, body) !== ' ';
+    if (mode === 'non-shell' && isShell) continue;
+    edits.push({ start: heredoc.operatorStart, end: heredoc.operatorEnd, value: blank(normalized.slice(heredoc.operatorStart, heredoc.operatorEnd)) });
+    edits.push({
+      start: heredoc.bodyStart,
+      end: heredoc.terminatorEnd,
+      value: mode === 'strip' && isShell ? `\n${body}\n` : blank(normalized.slice(heredoc.bodyStart, heredoc.terminatorEnd)),
+    });
+  }
+  let transformed = normalized;
+  for (const edit of edits.sort((left, right) => right.start - left.start)) {
+    transformed = transformed.slice(0, edit.start) + edit.value + transformed.slice(edit.end);
+  }
+  return transformed;
+}
+
 function maskHeredocBodies(text) {
-  return normalizeHeredocSyntax(text).replace(
-    /<<-?\s*(["']?)([^\s;&|()<>"']+)\1[^\n]*\n[\s\S]*?(?:\n\2(?=\n|$)|$)/gu,
-    (match) => match.replace(/[^\n]/gu, ' '),
-  );
+  return transformHeredocs(text, 'all');
 }
 
 function scopeWords(text) {
@@ -595,12 +655,7 @@ function shellHeredocBody(command, offset, body) {
 }
 
 function maskNonShellHeredocs(command) {
-  const normalizedCommand = normalizeHeredocSyntax(command);
-  return normalizedCommand.replace(
-    /<<-?\s*(["']?)([^\s;&|()<>"']+)\1[^\n]*\n([\s\S]*?)(?:\n\2(?=\n|$)|$)/gu,
-    (match, quote, delimiter, body, offset) =>
-      shellHeredocBody(normalizedCommand, offset, body) === ' ' ? match.replace(/[^\n]/gu, ' ') : match,
-  );
+  return transformHeredocs(command, 'non-shell');
 }
 
 function commandSubstitutionBodies(text, { processSubstitutions = false } = {}) {
@@ -898,24 +953,59 @@ function hasShellStdinProgram(command) {
   return false;
 }
 
+const RUNTIME_OPTION_OPERANDS = {
+  shell: new Set(['-c', '-o', '+o', '-O', '+O', '--rcfile', '--init-file']),
+  node: new Set(['-C', '--conditions', '-e', '--eval', '-p', '--print', '-r', '--require', '--import', '--loader', '--experimental-loader', '--run']),
+  python: new Set(['-W', '-X', '-c', '-m', '--check-hash-based-pycs']),
+  perl: new Set(['-I', '-M', '-m', '-e', '-E']),
+  ruby: new Set(['-C', '-E', '-F', '-I', '-K', '-e', '-r']),
+  php: new Set(['-B', '-R', '-c', '-d', '-F', '-r', '-z', '--php-ini', '--define', '--process-begin', '--process-code', '--process-end', '--file', '--run']),
+};
+
+function runtimeProgram(segment) {
+  const executable = commandAfterPrefixes(segment);
+  const tokens = executable.split(/\s+/u).filter(Boolean);
+  const runtime = tokens[0]?.split('/').at(-1) ?? '';
+  const family = /^(?:ba|da|z)?sh$/u.test(runtime) ? 'shell' : /^python(?:\d+(?:\.\d+)*)?$/u.test(runtime) ? 'python' : runtime;
+  if (!Object.hasOwn(RUNTIME_OPTION_OPERANDS, family)) return null;
+  const operandOptions = RUNTIME_OPTION_OPERANDS[family];
+  for (let index = 1; index < tokens.length; index += 1) {
+    const token = tokens[index];
+    if (/^(?:<<<|<<-?|<(?![<(]))/u.test(token)) return { executable, family, kind: 'stdin', token };
+    if (token === '-') return { executable, family, kind: 'stdin', token };
+    if (token === '--') {
+      const script = tokens[index + 1];
+      return script === undefined || /^(?:<<<|<<-?|<(?![<(]))/u.test(script)
+        ? { executable, family, kind: 'stdin', token: script }
+        : { executable, family, kind: 'file', token: script };
+    }
+    if (operandOptions.has(token)) {
+      index += 1;
+      continue;
+    }
+    if (token.startsWith('-')) continue;
+    return { executable, family, kind: 'file', token };
+  }
+  return { executable, family, kind: 'none', token: null };
+}
+
 function hasRuntimeStdinProgram(command) {
   const pipelineSegments = command.split(/(?<![\\|])\|(?!\|)/u);
   for (let index = 0; index < pipelineSegments.length; index += 1) {
-    const executable = commandAfterPrefixes(pipelineSegments[index]);
-    const tokens = executable.split(/\s+/u).filter(Boolean);
-    const runtime = tokens[0]?.split('/').at(-1) ?? '';
-    if (!/^(?:node|python(?:\d+(?:\.\d+)*)?|perl|ruby|php)$/u.test(runtime)) continue;
-    let hasScript = false;
-    for (const token of tokens.slice(1)) {
-      if (/^(?:<<<|<<-?|<(?![<(]))/u.test(token)) break;
-      if (token === '-') return true;
-      if (token === '--') continue;
-      if (!token.startsWith('-')) {
-        hasScript = true;
-        break;
-      }
-    }
-    if (!hasScript && (index > 0 || /(?:^|\s)(?:<<<|<<-?|<(?![<(]))/u.test(executable))) return true;
+    const program = runtimeProgram(pipelineSegments[index]);
+    if (program?.kind === 'stdin') return true;
+    if (program?.kind === 'none' && (index > 0 || /(?:^|\s)(?:<<<|<<-?|<(?![<(]))/u.test(program.executable))) return true;
+  }
+  return false;
+}
+
+function hasRuntimeScriptFile(command) {
+  for (const segment of splitSegments(command)) {
+    const program = runtimeProgram(segment);
+    if (program?.kind !== 'file') continue;
+    const normalized = program.token.replaceAll('\u0004', ' ');
+    if (program.family === 'node' && /(?:^|\/)tools\/agent-guard\/(?:run-guarded|arbiter)\.mjs$/u.test(normalized)) continue;
+    return true;
   }
   return false;
 }
@@ -992,11 +1082,7 @@ function isExecutableQuotedWord(scanned, word) {
 // `bash -c "npm run test:e2e"` is blanked before its inner text is inspected.
 export function stripInertText(command) {
   let scanned = '';
-  const normalizedCommand = normalizeHeredocSyntax(command);
-  let rest = normalizedCommand.replace(
-    /<<-?\s*(["']?)([^\s;&|()<>"']+)\1[^\n]*\n([\s\S]*?)(?:\n\2(?=\n|$)|$)/gu,
-    (match, quote, delimiter, body, offset) => shellHeredocBody(normalizedCommand, offset, body),
-  );
+  let rest = transformHeredocs(command, 'strip');
   for (;;) {
     const match = QUOTED.exec(rest);
     if (!match) break;
@@ -1428,6 +1514,15 @@ function shellPatternCanMatchAgentGuard(component) {
       const character = variant[index];
       if (character === '*') source += '.*';
       else if (character === '?') source += '.';
+      else if (character === '[') {
+        const close = variant.indexOf(']', index + 1);
+        if (close < 0) source += '\\[';
+        else {
+          const members = variant.slice(index + 1, close).replace(/^!/u, '^').replace(/\\/gu, '\\\\');
+          source += `[${members}]`;
+          index = close;
+        }
+      }
       else if (character === '$') {
         if (variant[index + 1] === '{') {
           const close = variant.indexOf('}', index + 2);
@@ -1451,7 +1546,13 @@ function referencesGuardState(command) {
     const components = word.split('/');
     const guardAt = components.findIndex(shellPatternCanMatchAgentGuard);
     if (guardAt < 0) continue;
-    const child = components[guardAt + 1];
+    const tail = [];
+    for (const component of components.slice(guardAt + 1)) {
+      if (component === '' || component === '.') continue;
+      if (component === '..') tail.pop();
+      else tail.push(component);
+    }
+    const child = tail[0];
     if (child === undefined || child === '' || child === 'leases' || child === 'admission.lock' || child === 'machine-token') return true;
   }
   return false;
@@ -1514,7 +1615,7 @@ export function heavyLaneFor(command) {
 }
 
 function commandAfterPrefixes(segment) {
-  const tokens = segment.split(/\s+/u).filter(Boolean);
+  const tokens = normalizeUnquotedEscapes(segment).split(/\s+/u).filter(Boolean);
   let index = 0;
   while (index < tokens.length) {
     while (/^\w+=\S*$/u.test(tokens[index] ?? '')) index += 1;
@@ -1709,6 +1810,20 @@ export function evaluateCommand(command) {
   }
   const effective = stripInertText(command);
 
+  if (/(?:^|\s)--checkpoint-action(?:=|\s+)exec(?:=|\s|$)/u.test(dynamicCommand)) {
+    return {
+      allow: false,
+      reason: `Blocked a tar checkpoint exec action: it runs an arbitrary shell command outside guarded classification. ${USE_ENTRYPOINT}`,
+    };
+  }
+
+  if (hasRuntimeScriptFile(effective)) {
+    return {
+      allow: false,
+      reason: `Blocked direct runtime script-file dispatch: a script can launch a protected lane after static shell checks. Run it through the repository's guarded entrypoint. ${USE_ENTRYPOINT}`,
+    };
+  }
+
   // Inline runtime programs can synchronously dispatch arbitrary child
   // commands whose strings are not shell syntax. Static shell classification
   // cannot authenticate their contents, so agent commands must use checked-in
@@ -1720,7 +1835,7 @@ export function evaluateCommand(command) {
     if (runtime === 'node') {
       return options.some((token) => /^(?:-[A-Za-z]*[ep]|--eval(?:=|$)|--print(?:=|$)|-r(?:=|$)|--require(?:=|$)|--import(?:=|$)|--loader(?:=|$)|--experimental-loader(?:=|$))/u.test(token));
     }
-    if (/^python(?:\d+(?:\.\d+)*)?$/u.test(runtime)) return options.some((token) => token.startsWith('-c'));
+    if (/^python(?:\d+(?:\.\d+)*)?$/u.test(runtime)) return options.some((token) => /^-[bBdiIOqRsSuvVx]*c/u.test(token));
     if (runtime === 'perl') return options.some((token) => /^(?:-[wWT]*[eE]$|-[eE].+)/u.test(token));
     if (runtime === 'ruby') return options.some((token) => /^(?:-[wWd]*e$|-e.+)/u.test(token));
     if (runtime === 'php') return options.some((token) => /^(?:-[rBRE]|--(?:run|process-begin|process-code|process-end)(?:=|$))/u.test(token));

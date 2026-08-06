@@ -63,7 +63,7 @@ case "$gh_group" in
     ;;
   repo)
     case "$gh_action" in
-      clone | list | set-default | view) ;;
+      list | set-default | view) ;;
       *) return_code=64 ;;
     esac
     ;;

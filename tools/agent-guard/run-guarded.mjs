@@ -30,7 +30,7 @@ import process from 'node:process';
 
 import { clampCeiling, decideAdmission, deriveBudgetForMemory } from './lib/budget.mjs';
 import { acquireLease, heartbeatLease, leaseExists, psExecutable, readLeases, releaseLease, retargetLease, withAdmissionLock } from './lib/leases.mjs';
-import { evaluateLanePolicy, harnessName, isAgentSession, isCi } from './lib/policy.mjs';
+import { evaluateLanePolicy, harnessName, isAgentSession, isTrustedHostedCi } from './lib/policy.mjs';
 import { readMemoryStatus, topConsumers } from './lib/system-memory.mjs';
 
 const POLL_MS = 250;
@@ -208,10 +208,10 @@ async function main() {
   const { options, command } = parsed;
   if (command.length === 0) fail('no command given');
 
-  // Hosted CI is exempt, but an agent marker takes precedence. CI variables
-  // are ordinary process environment and can be inherited from a script the
-  // agent created, so they are not sufficient proof of an isolated runner.
-  if (isCi(process.env) && !isAgentSession(process.env)) return passthrough(command);
+  // Hosted CI is exempt only when the process is actually inside the fixed
+  // GitHub-hosted runner workspace. CI variables alone are ordinary process
+  // environment and are not sufficient proof of an isolated runner.
+  if (isTrustedHostedCi({ env: process.env, cwd: process.cwd(), platform: process.platform })) return passthrough(command);
   // Nested guarded scripts pass through — but only when the marker names a
   // live lease bound to this caller's process group. Lease ids are visible to
   // same-user processes, so id knowledge alone cannot prove nesting. A copied
