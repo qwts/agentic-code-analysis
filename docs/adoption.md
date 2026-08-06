@@ -13,7 +13,7 @@ it passes the ratchet AND the semantic check.
   "include": ["src/**"],
   "exclude": ["src/generated/**", "**/*.lock"],
   "tiers": {
-    "T1": { "provider": "anthropic", "model": "<model id>" }
+    "T1": { "provider": "<provider>", "model": "<registry-model-id>" }
   }
 }
 ```
@@ -43,15 +43,15 @@ it passes the ratchet AND the semantic check.
   [ACA-0064](decisions/ACA-0064-qwen-reasoning-budgets.md) and Qwen's
   [Chat API](https://docs.qwencloud.com/api-reference/chat/openai-chat).
   The zero-egress local route
-  (`{ "provider": "local", "model": "<loaded model id>" }`) judges against
+  (`{ "provider": "local", "model": "<loaded-model-id>" }`) judges against
   an OpenAI-compatible server on the runner (`ACA_LOCAL_BASE_URL`, default
   `http://localhost:1234/v1`) and requires no credential.
 
 ## 2. CI step (advisory)
 
-There is no npm package yet (deliberate — Node refuses type stripping under
-`node_modules`, and packaging waits for a second consumer). Check the suite
-out beside your repo and run it directly with Node ≥ 24:
+Install the CLI as a development dependency. The package ships emitted
+JavaScript because Node deliberately refuses native TypeScript stripping under
+`node_modules`:
 
 ```yaml
 jobs:
@@ -61,22 +61,15 @@ jobs:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           fetch-depth: 0 # merge-base with origin/main needs history
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
-        with:
-          repository: qwts/agentic-code-analysis
-          ref: <pin a commit sha>
-          path: .tools/aca
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: 24
-      - run: npm --prefix .tools/aca clean-install
-      - run: node .tools/aca/src/cli.ts context-footprint --base origin/main
+          cache: npm
+      - run: npm clean-install
+      - run: npx aca context-footprint --base origin/main
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
 ```
-
-The `.tools/aca` checkout path avoids colliding with the consuming repository's
-`.aca/` directory, which ACA reserves for check-local evidence sidecars.
 
 Behavior you can rely on (exit-code contract, ACA-0003 D3):
 
@@ -94,7 +87,7 @@ Behavior you can rely on (exit-code contract, ACA-0003 D3):
   add `.cache/aca/` to the runner's cache action to carry it between runs
   (that exact subdirectory — `.cache/` would sweep up unrelated tooling).
   Observed spend: calibration + a 6-file change = $0.32 at the then-configured
-  T1 route (2026-08-04, prompt v1; v2 sends base+head for legacy files,
+  T1 route (2026-08-04, prompt v1; v2+ sends base+head for legacy files,
   roughly doubling those files' input tokens).
 - `context-footprint` verdicts are comparative
   ([ACA-0013](decisions/ACA-0013-comparative-judgment.md)): a new file
@@ -116,7 +109,7 @@ Behavior you can rely on (exit-code contract, ACA-0003 D3):
 ## 3. Local dev loop
 
 ```bash
-node path/to/agentic-code-analysis/src/cli.ts context-footprint src/thing.ts
+npx aca context-footprint src/thing.ts
 ```
 
 Explicit paths bypass diff selection; same verdicts, same cache.
@@ -137,7 +130,7 @@ Judge a whole corpus-bound Agent Skill package by naming its directory,
 `SKILL.md`, or any resource beneath it:
 
 ```bash
-node path/to/agentic-code-analysis/src/cli.ts skill-information-architecture .agents/skills/git --json
+npx aca skill-information-architecture .agents/skills/git --json
 ```
 
 Without workload evidence the check uses `basis: cohesion-only` and abstains

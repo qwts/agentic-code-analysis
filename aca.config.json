@@ -1,7 +1,5 @@
 {
   "include": ["src/**", "tests/**"],
   "exclude": ["src/checks/*/fixtures/**", "tests/fixtures/**"],
-  "tiers": {
-    "T1": { "provider": "anthropic", "model": "claude-opus-5" }
-  }
+  "tiers": {}
 }

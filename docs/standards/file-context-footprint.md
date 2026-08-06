@@ -1,17 +1,14 @@
 <!--
-Vendored copy. Canonical source:
-~/Library/Mobile Documents/com~apple~CloudDocs/Agent Space/engineering-standards/file-context-footprint.md
-CI and consuming agents cannot read iCloud; this copy exists so the judge can
-embed the rule text at runtime. Update by re-copying the canonical file, never
-by editing here.
+Canonical packaged copy for agentic-code-analysis. The judge embeds this text
+at runtime, so changes require a prompt-version bump and live recalibration.
 -->
 # File organization: minimal context footprint per concept
 
-Stated by Chris, 2026-08-04. Applies to every coding agent working in his
-repositories — this folder is deliberately outside any one agent's private
-memory so Codex, Cursor, Devin, and Claude are all held to the same rule.
+Recorded by the project owner, 2026-08-04. Applies to every coding agent
+working in the owner's repositories so Codex, Cursor, Devin, and Claude are
+all held to the same rule.
 
-## The rule (his words, verbatim)
+## The rule
 
 > A file should have the smallest practical context footprint that still
 > completely represents one coherent concept.
@@ -61,30 +58,27 @@ useful outside that file.
 
 ## The failure mode this exists to correct
 
-**Chris's diagnosis:** the criterion *"difficult to understand independently"* is
-the one that breaks models. A model reads it as "one file is easier to
+**Maintainer's diagnosis:** the criterion *"difficult to understand
+independently"* is the one that breaks models. A model reads it as "one file is easier to
 understand" — but that is a statement about the *model's own* context limits,
 not a property of the code. Projecting that preference onto a codebase produces
-exactly the tendency he named: **put everything in the file.**
+exactly the named tendency: **put everything in the file.**
 
 Length ratchets do not fix this. They punish the symptom, and a model under a
 ratchet will relocate a blob rather than fix the concept — satisfying the number
 while leaving the context footprint untouched.
 
-## Worked example — qwts/image-trail, 2026-08-04
+## Worked example — production browser extension, 2026-08-04
 
-`extension/src/background/messages.ts` hit its size ratchet at 552 lines. The
-first attempt moved `ExtensionRequest` / `ExtensionResponse` into a new file:
-258 lines, ~120 type imports, every individual message type enumerated. The
-number went down; the footprint did not. That file failed the rule outright —
-its contents were useful outside it, and touching any one message domain meant
+A central message-union file hit its size ratchet at 552 lines. The first
+attempt moved its request and response unions into a new file: 258 lines,
+roughly 120 type imports, every individual message type enumerated. The number
+went down; the footprint did not. That file failed the rule outright — its
+contents were useful outside it, and touching any one message domain meant
 loading all fourteen.
 
 What the codebase already had, unnoticed: **every domain module already exported
-its own sub-union** (`BlobRequest`, `BookmarkRequest`, `PanelRequest`,
-`PCloudRequest`, `ImageFetchRequest`, `RecallRequest`, `UrlTemplateRequest`,
-`CommonRequest`, `AlbumRequest`, `BlobKeyRequest`, `DestinationRequest`,
-`OriginalBlobRequest`, `RecentHistoryRequest`). Composing from those instead of
+its own sub-union**. Composing from those domain-owned unions instead of
 enumerating took the file from **258 lines to 58**, and — the part that matters
 — adding a message type now touches exactly one domain file, never this one.
 

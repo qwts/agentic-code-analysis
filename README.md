@@ -9,17 +9,22 @@ context budget well.
 Every built-in analysis is T1 (model judgment), uses the same provider-neutral
 `JudgeClient`, supports advisory and CI-enforced modes, and ships a graded
 calibration self-test. TypeScript runs directly on Node >= 24; there is no
-build step or `dist/` directory.
+development build step. The npm publication boundary emits JavaScript into an
+ignored `dist/` directory because Node does not strip TypeScript beneath
+`node_modules`.
 
 ## Quick start
 
-ACA is not published as an npm package yet. Clone it beside the repository you
-want to analyze and install its dependencies:
+Install ACA as a development dependency, then run its linked executable:
 
 ```bash
-git clone https://github.com/qwts/agentic-code-analysis.git /path/to/agentic-code-analysis
-npm --prefix /path/to/agentic-code-analysis clean-install
+npm install --save-dev agentic-code-analysis
+npx aca --help
 ```
+
+The first registry publication is tracked in issue #66. Before that release,
+clone this repository, run `npm clean-install`, and replace `npx aca` below
+with `node /path/to/agentic-code-analysis/src/cli.ts`.
 
 In the repository being analyzed, create `aca.config.json` with the files that
 may select work and a provider/model route for T1. Obtain the model id from the
@@ -57,17 +62,17 @@ a one-off run. Before trusting any route, qualify that exact provider/model and
 check; self-tests are live and intentionally bypass the verdict cache:
 
 ```bash
-node /path/to/agentic-code-analysis/src/cli.ts context-footprint --self-test --json
+npx aca context-footprint --self-test --json
 ```
 
 Then run an advisory analysis from the repository being analyzed:
 
 ```bash
 # Changed files against origin/main
-node /path/to/agentic-code-analysis/src/cli.ts context-footprint --base origin/main
+npx aca context-footprint --base origin/main
 
 # Explicit paths bypass change selection
-node /path/to/agentic-code-analysis/src/cli.ts context-footprint src/messages.ts --json
+npx aca context-footprint src/messages.ts --json
 ```
 
 Advisory mode always exits 0, even when it reports findings. Add `--enforce`
@@ -77,6 +82,7 @@ only after observing the check and qualifying its configured route.
 
 ```text
 aca <check> [paths...] [--enforce] [--json] [--base <ref>] [--self-test]
+aca --version
 ```
 
 | Option | Behavior |
@@ -86,6 +92,7 @@ aca <check> [paths...] [--enforce] [--json] [--base <ref>] [--self-test]
 | `--json` | Emit machine-readable verdict or qualification output. |
 | `--self-test` | Run the selected check's live, graded calibration exam. |
 | `--enforce` | Exit 1 when any verdict fails; without it, findings are advisory. |
+| `--version` | Print the installed package version. |
 
 Exit codes are `0` for advisory/success, `1` for an enforced finding or
 self-test miss, `2` for usage/configuration errors, and `78` when an enforced
@@ -124,33 +131,28 @@ prints the commands registered by the installed checkout.
 
 ## CI
 
-A consuming workflow needs full history, an ACA checkout pinned to a commit,
-Node 24, dependencies, and the provider credential. This is an advisory job;
-add `--enforce` only through an explicit promotion decision.
+A consuming workflow needs full history, Node 24, ACA in the consuming
+project's lockfile, and the provider credential. This is an advisory job; add
+`--enforce` only through an explicit promotion decision.
 
 ```yaml
 steps:
   - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
     with:
       fetch-depth: 0
-  - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
-    with:
-      repository: qwts/agentic-code-analysis
-      ref: <pin a commit sha>
-      path: .tools/aca
   - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
     with:
       node-version: 24
-  - run: npm --prefix .tools/aca clean-install
-  - run: node .tools/aca/src/cli.ts context-footprint --base origin/main
+      cache: npm
+  - run: npm clean-install
+  - run: npx aca context-footprint --base origin/main
     env:
       ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
 ```
 
 See [Adopting ACA in your repo](docs/adoption.md) for check-specific config,
 cache persistence, cost posture, qualification evidence, and enforcement
-promotion. The `.tools/aca` checkout deliberately stays outside the consuming
-repository's `.aca/` evidence namespace.
+promotion.
 
 ## Project documentation
 
@@ -159,5 +161,6 @@ repository's `.aca/` evidence namespace.
 - [Prior art and the bar being raised](docs/design/prior-art.md)
 - [Implementation plan](docs/plan/issues.md) and [check backlog](docs/plan/backlog.md)
 - [Decisions (ACA series)](docs/decisions/README.md)
+- [Release procedure](docs/release.md) — package verification, calibration, and npm handoff
 - [Enforced standards](docs/standards/)
 - [Contributing](CONTRIBUTING.md) and [agent context](AGENTS.md)
