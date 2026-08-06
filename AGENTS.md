@@ -40,7 +40,9 @@ Designs are accepted — read them before changing anything:
    vendor SDK; checks never import each other; the three core libraries stay
    narrow — fork rather than widen.
    Language: TypeScript 7 on Node ≥ 24, erasable syntax only, `.ts` import
-   specifiers, run via native type stripping — no build step, no `dist/`.
+   specifiers, run via native type stripping during development. Per
+   [ACA-0059](docs/decisions/ACA-0059-npm-release-boundary.md), npm packaging
+   may emit an ignored `dist/` tree; generated JavaScript is never committed.
    `npm run typecheck` (tsgo) and `npm test` (Node's runner) must pass.
 3. **No recalled model names.** Model/provider selection follows the tier map
    (ENG-0151); cite the registry or say unknown.

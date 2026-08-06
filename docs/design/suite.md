@@ -1,6 +1,7 @@
 # Design: the agentic-code-analysis suite
 
-**Status:** Proposed — presented for review before any implementation.
+**Status:** Accepted 2026-08-04; superseded where the decision records below
+say so.
 **Reviewed against:** [ENG-0012](https://github.com/qwts/playbook-engineering/blob/main/docs/decisions/ENG-0012-decision-priority-order.md)
 (security → compliance → agentic development → human developers).
 
@@ -72,10 +73,12 @@ src/
     naming-truth/         later check — same shape, forked mechanics (checks stay independent)
 ```
 
-Language (decided 2026-08-04, issue #3): TypeScript 7 on Node ≥ 24 —
-erasable-syntax-only `.ts` run directly via Node's native type stripping, no
-build step or `dist/`; `tsgo` type-checks in CI. Tests use Node's built-in
-runner; type-aware linting waits for the TS 7.1 programmatic API.
+Language (decided 2026-08-04, issue #3; publication boundary superseded by
+ACA-0059): TypeScript 7 on Node ≥ 24 — erasable-syntax-only `.ts` runs directly
+via Node's native type stripping during development. npm packaging may emit
+ESM JavaScript into an ignored `dist/` tree; generated JavaScript is never
+committed. `tsgo` type-checks in CI. Tests use Node's built-in runner;
+type-aware linting waits for the TS 7.1 programmatic API.
 
 ### The JudgeClient interface (decision D2)
 
@@ -185,6 +188,10 @@ not in the ENG series):
   diff judge I/O convention — head-line-numbered unified payload, a
   120k-char bound all diff checks inherit, whole-file omission that always
   surfaces as `warn`, findings anchored to added head lines only.
+- **[ACA-0059](../decisions/ACA-0059-npm-release-boundary.md)** — npm release
+  boundary (2026-08-06): authored TypeScript remains build-free in development;
+  publication emits ignored JavaScript, copies runtime assets, and exposes an
+  exact privacy-reviewed tarball surface.
 - **[ACA-0064](../decisions/ACA-0064-qwen-reasoning-budgets.md)** — Qwen
   reasoning budgets (2026-08-05): preserve the frozen JudgeClient, define
   `maxTokens` as visible answer capacity, and bound provider reasoning

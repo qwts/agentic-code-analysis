@@ -1,7 +1,7 @@
 # ACA-0059: npm release boundary — emitted JavaScript, explicit publication surface, pseudonymous fixture licensing
 
-**Status:** Proposed
-**Date:** 2026-08-05
+**Status:** Accepted
+**Date:** 2026-08-06
 **Issue:** #59
 **Supersedes:** [ACA-0003](ACA-0003-suite-contracts.md)'s no-build packaging
 constraint for published artifacts only; development continues to execute

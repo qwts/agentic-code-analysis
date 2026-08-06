@@ -25,5 +25,5 @@ the check issue — rather than one issue per decision.
 | [ACA-0014](ACA-0014-naming-truth.md) | naming-truth — behavioral contract, three lies, host-enforced comparative mapping | Accepted |
 | [ACA-0020](ACA-0020-diff-fixture-corpus.md) | Diff-fixture corpus and the canonical diff artifact — pair fixtures, diff judge I/O convention | Accepted |
 | [ACA-0023](ACA-0023-agent-context-check-architecture.md) | Agent-context check architecture — independent checks over a shared evidence library; supersedes ACA-0003 D1's "exactly three libraries" | Accepted |
+| [ACA-0059](ACA-0059-npm-release-boundary.md) | npm release boundary — emitted JavaScript, explicit publication surface, pseudonymous fixture licensing | Accepted |
 | [ACA-0064](ACA-0064-qwen-reasoning-budgets.md) | Qwen reasoning budgets — visible answer bound, deterministic hidden-reasoning bound, frozen JudgeClient | Accepted |
-| [ACA-0059](ACA-0059-npm-release-boundary.md) | npm release boundary — emitted JavaScript, explicit publication surface, pseudonymous fixture licensing | Proposed |
