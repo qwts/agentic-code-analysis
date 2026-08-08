@@ -3,18 +3,25 @@
 A suite of small, loosely coupled CLI checks (`aca <check>`) that use an LLM
 judge for structure/maintainability judgments mechanical linters cannot make.
 Checks: `context-footprint`, `failure-posture`, `test-honesty`, `doc-drift`.
+<!-- governed:shared-agent-discovery:start -->
 
 ## Shared agent conventions and skills
 
 PR-first workflow, validation-before-push, commit and PR hygiene, and the
-untrusted-input threat model are defined once in the
+untrusted-input threat model are defined once, for every repo, in the
 [org-wide agent conventions](https://github.com/qwts/playbook-engineering/blob/main/docs/reference/agent-conventions.md).
-Before creating or copying a repo-local skill, consult the
-[shared agent skills](https://github.com/qwts/playbook-engineering/blob/main/skills/README.md)
-index and reuse an existing skill when it fits. This repository inherits the
-playbook's [shared SOPs](https://github.com/qwts/playbook-engineering/blob/main/docs/sop/README.md)
+Before creating or copying a repo-local skill, consult the reviewed
+[shared agent skills](https://github.com/qwts/playbook-engineering/blob/74e775ef23d8e7d8f8e693ccc2329f430978c096/skills/README.md)
+index. Reuse only the pinned version supplied by the governed harness; a skill
+genuinely specific to this repository belongs in its local context.
+This repository is governed by
+[playbook-engineering](https://github.com/qwts/playbook-engineering) — its
+[shared SOPs](https://github.com/qwts/playbook-engineering/blob/main/docs/sop/README.md)
 and [engineering decisions](https://github.com/qwts/playbook-engineering/blob/main/docs/decisions/README.md)
-by default; record any variance explicitly.
+apply here by default
+([ENG-0008](https://github.com/qwts/playbook-engineering/blob/main/docs/decisions/ENG-0008-shared-sop-inheritance.md):
+inherit by default, vary by explicit delta).
+<!-- governed:shared-agent-discovery:end -->
 
 Designs are accepted — read them before changing anything:
 
