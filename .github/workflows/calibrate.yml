@@ -11,11 +11,14 @@ on:
         description: Judge provider to qualify
         required: true
         type: choice
+        # No `local`: this lane runs on a hosted runner, and the local adapter
+        # dials localhost. Dispatching it would measure connection failures as
+        # fixture misses and report a route as unqualified that was never
+        # reached. Qualify a local server from the machine that hosts it.
         options:
           - anthropic
           - openai
           - qwen
-          - local
       model:
         description: Exact model id, as the provider names it
         required: true
@@ -102,7 +105,12 @@ jobs:
         run: |
           mkdir -p results
           node src/cli.ts "$CHECK" --self-test --json | tee "results/$CHECK.json"
+      # Uploads even when setup failed, so a dead runner shows up as an empty
+      # result rather than vanishing from a table that would then read as a
+      # clean sweep. The report job also renders a row for any check with no
+      # artifact at all.
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        if: always()
         with:
           name: qualification-${{ matrix.check }}
           path: results/
@@ -130,11 +138,12 @@ jobs:
         env:
           PROVIDER: ${{ inputs.provider }}
           MODEL: ${{ inputs.model }}
+          SELECTED: ${{ needs.select.outputs.checks }}
         run: |
           {
             echo "## Route qualification"
             echo ""
             echo "Route: \`$PROVIDER/$MODEL\`"
             echo ""
-            node scripts/qualification-summary.ts results
+            node scripts/qualification-summary.ts results "$SELECTED"
           } >> "$GITHUB_STEP_SUMMARY"
