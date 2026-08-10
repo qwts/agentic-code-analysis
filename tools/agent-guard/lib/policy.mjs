@@ -33,21 +33,48 @@ export function isCi(env = process.env) {
 }
 
 /**
+ * The runner-owned work root, per platform.
+ *
+ * Linux and macOS runners have one fixed absolute path each. Windows runners
+ * use `<drive>:\a` — `D:\a` on the current hosted images, but the volume has
+ * moved before, so anchor on the shape rather than one hard-coded letter. The
+ * security property is unchanged either way: a local checkout does not live
+ * directly under a two-character `\a` at the root of a drive.
+ */
+function hostedRunnerRoot(platform, workspace) {
+  if (platform === 'darwin') return '/Users/runner/work';
+  if (platform === 'linux') return '/home/runner/work';
+  if (platform !== 'win32') return null;
+  const { root } = path.win32.parse(workspace);
+  return /^[A-Za-z]:\\$/u.test(root) ? `${root}a` : null;
+}
+
+/**
  * A CI marker is forgeable by a local process.  The bypass is therefore
  * limited to the filesystem boundary of a GitHub-hosted runner: the process
  * must actually be executing inside the hosted workspace tree, with the
  * matching hosted-runner metadata and temp directory.  A local agent can copy
  * these environment variables, but it cannot move its cwd underneath the
  * runner-owned absolute root.
+ *
+ * Path handling is pinned to the *target* platform rather than the host's, so
+ * a Windows workspace is compared with Windows separators and case folding
+ * even when this runs (or is tested) on POSIX.
  */
 export function isTrustedHostedCi({ env = process.env, cwd = process.cwd(), platform = process.platform } = {}) {
   if (!isCi(env) || env.GITHUB_ACTIONS !== 'true' || env.RUNNER_ENVIRONMENT !== 'github-hosted') return false;
-  const runnerRoot = platform === 'darwin' ? '/Users/runner/work' : platform === 'linux' ? '/home/runner/work' : null;
+  const platformPath = platform === 'win32' ? path.win32 : path.posix;
+  const resolve = (value) => (typeof value === 'string' && value !== '' ? platformPath.resolve(value) : null);
+  const workspace = resolve(env.GITHUB_WORKSPACE);
+  const runnerTemp = resolve(env.RUNNER_TEMP);
+  if (workspace === null || runnerTemp === null) return false;
+  const runnerRoot = hostedRunnerRoot(platform, workspace);
   if (runnerRoot === null) return false;
-  const workspace = typeof env.GITHUB_WORKSPACE === 'string' ? path.resolve(env.GITHUB_WORKSPACE) : '';
-  const runnerTemp = typeof env.RUNNER_TEMP === 'string' ? path.resolve(env.RUNNER_TEMP) : '';
-  const inside = (child, parent) => child === parent || child.startsWith(`${parent}${path.sep}`);
-  return inside(workspace, runnerRoot) && inside(path.resolve(cwd), workspace) && inside(runnerTemp, runnerRoot);
+  // Windows paths are case-insensitive: `d:\a\repo` and `D:\A\Repo` name the
+  // same directory, and a case-sensitive compare would refuse a real runner.
+  const fold = (value) => (platform === 'win32' ? value.toLowerCase() : value);
+  const inside = (child, parent) => fold(child) === fold(parent) || fold(child).startsWith(`${fold(parent)}${platformPath.sep}`);
+  return inside(workspace, runnerRoot) && inside(platformPath.resolve(cwd), workspace) && inside(runnerTemp, runnerRoot);
 }
 
 /**

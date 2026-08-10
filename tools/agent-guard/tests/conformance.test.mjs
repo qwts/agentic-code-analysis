@@ -24,6 +24,7 @@ import { evaluateCommand, evaluateHookInput } from '../guard-agent-command.mjs';
 import { clampCeiling, deriveBudget } from '../lib/budget.mjs';
 import { isCi, isTrustedHostedCi } from '../lib/policy.mjs';
 import { readMemoryStatus } from '../lib/system-memory.mjs';
+import { spawnTarget } from '../run-guarded.mjs';
 
 // <repo>/tools/agent-guard/tests/this-file → <repo>
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..', '..');
@@ -286,6 +287,80 @@ describe('agent-guard conformance (ENG-0138)', () => {
     };
     assert.equal(isTrustedHostedCi({ env: hosted, cwd: hosted.GITHUB_WORKSPACE, platform: 'linux' }), true);
     assert.equal(isTrustedHostedCi({ env: hosted, cwd: root, platform: 'linux' }), false);
+  });
+
+  test('a hosted Windows runner is exempt too, not just the POSIX ones', () => {
+    // `D:\a\<repo>\<repo>` is the hosted Windows workspace. Before this was
+    // matched, win32 fell through to the "unsupported platform" branch, so the
+    // guard was deciding for a runner it is meant to stay out of entirely.
+    const hosted = {
+      CI: 'true',
+      GITHUB_ACTIONS: 'true',
+      RUNNER_ENVIRONMENT: 'github-hosted',
+      GITHUB_WORKSPACE: 'D:\\a\\repo\\repo',
+      RUNNER_TEMP: 'D:\\a\\_temp',
+    };
+    assert.equal(isTrustedHostedCi({ env: hosted, cwd: hosted.GITHUB_WORKSPACE, platform: 'win32' }), true);
+    // Windows paths are case-insensitive, and the work volume has moved before.
+    const otherDrive = { ...hosted, GITHUB_WORKSPACE: 'c:\\a\\repo\\repo', RUNNER_TEMP: 'C:\\a\\_temp' };
+    assert.equal(isTrustedHostedCi({ env: otherDrive, cwd: 'C:\\A\\Repo\\Repo', platform: 'win32' }), true);
+    // A local Windows checkout carrying copied CI variables still is not CI.
+    const local = { ...hosted, GITHUB_WORKSPACE: 'C:\\Users\\dev\\repo', RUNNER_TEMP: 'C:\\Users\\dev\\tmp' };
+    assert.equal(isTrustedHostedCi({ env: local, cwd: local.GITHUB_WORKSPACE, platform: 'win32' }), false);
+    assert.equal(isTrustedHostedCi({ env: hosted, cwd: 'D:\\a\\other\\other', platform: 'win32' }), false);
+  });
+
+  test('the wrapped command launches on Windows, where npm is a .cmd shim', () => {
+    // `spawn('npm', …)` reports `spawn npm ENOENT` on a Windows runner: spawn
+    // does not consult PATHEXT, and Node refuses to launch a `.cmd` outright
+    // unless it goes through a shell.
+    const env = { PATH: 'C:\\Program Files\\nodejs', PATHEXT: '.COM;.EXE;.BAT;.CMD' };
+    // NTFS is case-insensitive, so the lookup finds `npm.cmd` through the
+    // uppercase `.CMD` that PATHEXT actually advertises.
+    const installed = new Set(['c:\\program files\\nodejs\\npm.cmd', 'c:\\program files\\nodejs\\node.exe']);
+    const exists = (candidate) => installed.has(candidate.toLowerCase());
+    const npm = spawnTarget(['npm', 'run', 'test:inner'], { platform: 'win32', env, exists });
+    assert.equal(npm.options.shell, true);
+    assert.deepEqual(npm.args, []);
+    assert.match(npm.file, /^"C:\\Program Files\\nodejs\\npm\.cmd" /iu);
+
+    // A real executable needs no shell at all, so there is no quoting to lose.
+    const node = spawnTarget(['node', '--version'], { platform: 'win32', env, exists });
+    assert.equal(node.file.toLowerCase(), 'c:\\program files\\nodejs\\node.exe');
+    assert.deepEqual(node.args, ['--version']);
+    assert.deepEqual(node.options, {});
+
+    // Arguments must survive the shell: a space must not split one argument
+    // into two, and cmd.exe metacharacters must not be interpreted. A `.cmd`
+    // shim is parsed twice, so each layer carries its own escape.
+    const spaced = spawnTarget(['npm', 'run', 'a b & echo pwned'], { platform: 'win32', env, exists });
+    assert.ok(!/(?<!\^)&/u.test(spaced.file), `unescaped & would run a second command: ${spaced.file}`);
+    assert.match(spaced.file, /\^+"a\^+ b\^+ \^+&\^+ echo\^+ pwned\^+"/u);
+
+    // cmd.exe expands `%VAR%` before it strips caret escapes, and there is no
+    // command-line escape for `%` outside a batch file — so the caller's argv
+    // cannot be passed through faithfully. Refuse instead of expanding it,
+    // since an expanded value can itself carry command syntax.
+    assert.throws(() => spawnTarget(['npm', 'run', '%PATH%'], { platform: 'win32', env, exists }), /%VAR%/u);
+    // The direct-spawn path never involves a shell, so `%` is ordinary there.
+    assert.deepEqual(spawnTarget(['node', '-e', 'x=%PATH%'], { platform: 'win32', env, exists }).args, ['-e', 'x=%PATH%']);
+
+    // POSIX keeps launching the command directly, exactly as before.
+    assert.deepEqual(spawnTarget(['npm', 'run', 'test:inner'], { platform: 'linux', env, exists }), {
+      file: 'npm',
+      args: ['run', 'test:inner'],
+      options: {},
+    });
+  });
+
+  test('both spawn sites go through the platform-aware launcher', () => {
+    const runner = readFileSync(path.join(root, 'tools/agent-guard/run-guarded.mjs'), 'utf8');
+    assert.equal(
+      runner.match(/spawn\(target\.file, target\.args,/gu)?.length,
+      2,
+      'passthrough and the guarded run must both launch through spawnTarget — a raw spawn(command[0], …) is the Windows ENOENT',
+    );
+    assert.doesNotMatch(runner, /spawn\(command\[0\]/u);
   });
 
   test('an inherited CI marker does not exempt an agent process', () => {
