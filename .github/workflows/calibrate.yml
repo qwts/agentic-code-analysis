@@ -1,21 +1,140 @@
+# Live qualification of one provider/model route against the graded self-tests
+# (ACA-0012). Self-tests bypass the verdict cache and spend real judge calls,
+# so this workflow is dispatch-only and never scheduled: a route is measured
+# when someone asks for it, not on a timer.
 name: calibrate
+run-name: calibrate ${{ inputs.provider }}/${{ inputs.model }} (${{ inputs.checks }})
 on:
   workflow_dispatch:
+    inputs:
+      provider:
+        description: Judge provider to qualify
+        required: true
+        type: choice
+        options:
+          - anthropic
+          - openai
+          - qwen
+          - local
+      model:
+        description: Exact model id, as the provider names it
+        required: true
+        type: string
+      checks:
+        description: Comma-separated check names, or "all"
+        required: true
+        default: all
+        type: string
+      openai_base_url:
+        description: OpenAI-compatible endpoint (e.g. an inference router); blank uses OpenAI itself
+        required: false
+        type: string
+      qwen_base_url:
+        description: Qwen endpoint; required when provider is qwen
+        required: false
+        type: string
+
 permissions:
   contents: read
+
+# One qualification run per route at a time: concurrent runs of the same
+# tuple would bill twice for one answer.
+concurrency:
+  group: calibrate-${{ inputs.provider }}-${{ inputs.model }}
+  cancel-in-progress: false
+
 jobs:
-  context-footprint:
+  select:
+    name: Select checks
     runs-on: ubuntu-latest
+    outputs:
+      checks: ${{ steps.list.outputs.checks }}
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
-      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: 24
           cache: npm
-      - run: npm clean-install
-      - run: node src/cli.ts context-footprint --self-test --json
+      - run: npm ci
+      - id: list
         env:
-          ACA_PROVIDER: ${{ vars.ACA_PROVIDER }}
-          ACA_MODEL: ${{ vars.ACA_MODEL }}
+          REQUESTED: ${{ inputs.checks }}
+        run: |
+          set -euo pipefail
+          checks=$(node scripts/list-checks.ts "$REQUESTED")
+          echo "checks=$checks" >> "$GITHUB_OUTPUT"
+          echo "Qualifying: $checks"
+
+  qualify:
+    name: ${{ matrix.check }}
+    needs: select
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        check: ${{ fromJSON(needs.select.outputs.checks) }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      # An unqualified check is a measurement, not a workflow failure: the run
+      # must reach the summary so every row is visible together.
+      - name: Self-test
+        continue-on-error: true
+        env:
+          ACA_PROVIDER: ${{ inputs.provider }}
+          ACA_MODEL: ${{ inputs.model }}
+          OPENAI_BASE_URL: ${{ inputs.openai_base_url }}
+          QWEN_BASE_URL: ${{ inputs.qwen_base_url }}
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          QWEN_API_KEY: ${{ secrets.QWEN_API_KEY }}
+          # Dispatch inputs and matrix values reach the shell as environment
+          # values, never as template text spliced into the script.
+          CHECK: ${{ matrix.check }}
+        run: |
+          mkdir -p results
+          node src/cli.ts "$CHECK" --self-test --json | tee "results/$CHECK.json"
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: qualification-${{ matrix.check }}
+          path: results/
+          if-no-files-found: warn
+          retention-days: 30
+
+  report:
+    name: Qualification summary
+    needs: [select, qualify]
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 24
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          path: results
+          pattern: qualification-*
+          merge-multiple: false
+      - name: Render the table
+        env:
+          PROVIDER: ${{ inputs.provider }}
+          MODEL: ${{ inputs.model }}
+        run: |
+          {
+            echo "## Route qualification"
+            echo ""
+            echo "Route: \`$PROVIDER/$MODEL\`"
+            echo ""
+            node scripts/qualification-summary.ts results
+          } >> "$GITHUB_STEP_SUMMARY"
