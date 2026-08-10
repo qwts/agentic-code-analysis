@@ -24,7 +24,7 @@
 //        AGENT_GUARDED=1 (set for children so nested guards pass through).
 
 import { execFile, spawn } from 'node:child_process';
-import { appendFileSync, mkdirSync, writeFileSync } from 'node:fs';
+import { appendFileSync, existsSync, mkdirSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import process from 'node:process';
 
@@ -129,8 +129,72 @@ export function collectTreeRssKb(psOutput, rootPid) {
   return { totalKb, processCount };
 }
 
+// --- Launching the wrapped command ------------------------------------------
+//
+// Windows has no execve. `spawn` looks for the literal name and never consults
+// PATHEXT, so `spawn('npm', …)` on a Windows runner dies with `spawn npm
+// ENOENT` — npm ships as `npm.cmd`. Resolving to `npm.cmd` is not enough
+// either: since the BatBadBut fix (CVE-2024-27980) Node refuses to launch a
+// `.cmd`/`.bat` at all without `shell: true`, which means going through
+// cmd.exe.
+//
+// So resolve the name here. A real executable is spawned directly — no shell,
+// and therefore no quoting to get wrong. Only a batch shim takes the cmd.exe
+// route, and then the quoting is done below, because Node joins argv with
+// plain spaces under `shell: true` and escapes nothing itself.
+
+const WINDOWS_DEFAULT_PATHEXT = '.COM;.EXE;.BAT;.CMD';
+
+// cmd.exe consumes one layer of `^` escapes per parse, and a batch shim is
+// parsed twice: once as the `/c` command line, once when the batch file itself
+// runs. Hence the second pass for `.cmd`/`.bat` targets.
+const CMD_META = /([()[\]%!^"`<>&|;, *?])/gu;
+
+export function resolveWindowsCommand(name, env = process.env, exists = existsSync) {
+  const extensions = (env.PATHEXT ?? WINDOWS_DEFAULT_PATHEXT).split(';').filter(Boolean);
+  const named = /[\\/]/u.test(name) || /^[A-Za-z]:/u.test(name);
+  const directories = named ? [''] : (env.Path ?? env.PATH ?? '').split(';').filter(Boolean);
+  for (const directory of directories) {
+    // PATH entries may be quoted; the quotes are shell syntax, not path bytes.
+    const base = directory === '' ? name : path.win32.join(directory.replace(/^"|"$/gu, ''), name);
+    if (extensions.some((extension) => base.toLowerCase().endsWith(extension.toLowerCase())) && exists(base)) return base;
+    for (const extension of extensions) {
+      if (exists(`${base}${extension}`)) return `${base}${extension}`;
+    }
+  }
+  return null;
+}
+
+// The executable slot is parsed by cmd.exe itself, so it may be quoted but must
+// NOT be caret-escaped: a `^"` reaches cmd as a literal quote and it would look
+// for a program whose name starts with one.
+function quoteWindowsExecutable(word) {
+  return /\s/u.test(word) ? `"${word}"` : word;
+}
+
+function escapeWindowsArgument(word, isBatch) {
+  // First the backslash/quote encoding that CommandLineToArgvW reverses in the
+  // child, then cmd.exe's own metacharacters, which it acts on beforehand.
+  let escaped = `"${word.replace(/(\\*)"/gu, '$1$1\\"').replace(/(\\*)$/u, '$1$1')}"`.replace(CMD_META, '^$1');
+  if (isBatch) escaped = escaped.replace(CMD_META, '^$1');
+  return escaped;
+}
+
+export function spawnTarget(command, { platform = process.platform, env = process.env, exists = existsSync } = {}) {
+  if (platform !== 'win32') return { file: command[0], args: command.slice(1), options: {} };
+  const resolved = resolveWindowsCommand(command[0], env, exists);
+  const isBatch = resolved !== null && /\.(?:bat|cmd)$/iu.test(resolved);
+  if (resolved !== null && !isBatch) return { file: resolved, args: command.slice(1), options: {} };
+  // An unresolved name still goes through cmd.exe rather than failing here: it
+  // can find shims this lookup did not model, and a genuinely missing command
+  // then reports itself instead of surfacing as a misleading ENOENT.
+  const line = [quoteWindowsExecutable(resolved ?? command[0]), ...command.slice(1).map((word) => escapeWindowsArgument(word, isBatch))];
+  return { file: line.join(' '), args: [], options: { shell: true } };
+}
+
 function passthrough(command) {
-  const child = spawn(command[0], command.slice(1), { stdio: 'inherit' });
+  const target = spawnTarget(command);
+  const child = spawn(target.file, target.args, { stdio: 'inherit', ...target.options });
   child.on('exit', (code, signal) => process.exit(code ?? (signal ? 1 : 0)));
   child.on('error', (error) => fail(`failed to start command: ${error.message}`));
 }
@@ -257,12 +321,14 @@ async function main() {
 
   const nodeOptions = [process.env.NODE_OPTIONS, `--max-old-space-size=${request.heapMb}`].filter(Boolean).join(' ');
   const startedAt = Date.now();
-  const child = spawn(command[0], command.slice(1), {
+  const target = spawnTarget(command);
+  const child = spawn(target.file, target.args, {
     stdio: 'inherit',
     detached: true, // new process group; kill(-pid) reaches every descendant
     // The marker carries this run's lease id, so a child can prove it is
     // nested inside a real guarded run rather than merely asserting it.
     env: { ...process.env, AGENT_GUARDED: lease.id, NODE_OPTIONS: nodeOptions },
+    ...target.options,
   });
 
   // The admitted reservation must follow the detached group, not this
