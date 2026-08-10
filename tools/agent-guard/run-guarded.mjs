@@ -148,7 +148,12 @@ const WINDOWS_DEFAULT_PATHEXT = '.COM;.EXE;.BAT;.CMD';
 // cmd.exe consumes one layer of `^` escapes per parse, and a batch shim is
 // parsed twice: once as the `/c` command line, once when the batch file itself
 // runs. Hence the second pass for `.cmd`/`.bat` targets.
-const CMD_META = /([()[\]%!^"`<>&|;, *?])/gu;
+//
+// `%` is deliberately absent. cmd expands `%VAR%` *before* it strips carets, so
+// `^%` does not protect anything — it just leaves a stray caret behind when the
+// name does not resolve. There is no command-line escape for it outside a batch
+// file, so percent arguments are refused below rather than silently mangled.
+const CMD_META = /([()[\]!^"`<>&|;, *?])/gu;
 
 export function resolveWindowsCommand(name, env = process.env, exists = existsSync) {
   const extensions = (env.PATHEXT ?? WINDOWS_DEFAULT_PATHEXT).split(';').filter(Boolean);
@@ -185,6 +190,17 @@ export function spawnTarget(command, { platform = process.platform, env = proces
   const resolved = resolveWindowsCommand(command[0], env, exists);
   const isBatch = resolved !== null && /\.(?:bat|cmd)$/iu.test(resolved);
   if (resolved !== null && !isBatch) return { file: resolved, args: command.slice(1), options: {} };
+  // Only the cmd.exe route is exposed to percent expansion; the direct-spawn
+  // path above never sees a shell. Refusing beats guessing here — an expanded
+  // value can itself contain metacharacters and turn into command syntax, which
+  // is precisely what this wrapper exists to prevent.
+  const percent = command.slice(1).find((word) => word.includes('%'));
+  if (percent !== undefined) {
+    throw new Error(
+      `cannot pass the argument "${percent}" through the Windows shim ${resolved ?? command[0]}: ` +
+        'cmd.exe expands %VAR% before the command sees it and offers no command-line escape for it',
+    );
+  }
   // An unresolved name still goes through cmd.exe rather than failing here: it
   // can find shims this lookup did not model, and a genuinely missing command
   // then reports itself instead of surfacing as a misleading ENOENT.

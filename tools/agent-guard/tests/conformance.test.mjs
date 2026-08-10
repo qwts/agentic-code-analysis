@@ -337,6 +337,14 @@ describe('agent-guard conformance (ENG-0138)', () => {
     assert.ok(!/(?<!\^)&/u.test(spaced.file), `unescaped & would run a second command: ${spaced.file}`);
     assert.match(spaced.file, /\^+"a\^+ b\^+ \^+&\^+ echo\^+ pwned\^+"/u);
 
+    // cmd.exe expands `%VAR%` before it strips caret escapes, and there is no
+    // command-line escape for `%` outside a batch file — so the caller's argv
+    // cannot be passed through faithfully. Refuse instead of expanding it,
+    // since an expanded value can itself carry command syntax.
+    assert.throws(() => spawnTarget(['npm', 'run', '%PATH%'], { platform: 'win32', env, exists }), /%VAR%/u);
+    // The direct-spawn path never involves a shell, so `%` is ordinary there.
+    assert.deepEqual(spawnTarget(['node', '-e', 'x=%PATH%'], { platform: 'win32', env, exists }).args, ['-e', 'x=%PATH%']);
+
     // POSIX keeps launching the command directly, exactly as before.
     assert.deepEqual(spawnTarget(['npm', 'run', 'test:inner'], { platform: 'linux', env, exists }), {
       file: 'npm',
