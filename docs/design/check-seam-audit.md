@@ -167,7 +167,7 @@ version, comparison kind, explicit absent-base marker or base
 path/content/evidence, head path/content/evidence, rubric text, provider,
 model. Never keyed on base ref/SHA or derivable orientation — the same
 semantic pair stays a hit when the merge-base moves; changing either
-snapshot, the evidence extraction's output, the rubric, prompt version,
+snapshot, the evidence extraction's output, the rubric, prompt version, the token bound,
 provider, or model misses. Mechanical leaf passes bypass the cache entirely.
 
 ## Calibration — graded self-test (ACA-0012)

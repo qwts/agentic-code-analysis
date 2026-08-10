@@ -127,7 +127,7 @@ Identical to context-footprint: one file per request, concurrency 3,
 before the pool; stable result order. Pinned prompt version
 `single-responsibility-v1` — any prompt change fixes the prompt, never the
 fixtures, and bumps the version. Cache at `.cache/aca/single-responsibility/`
-with the pair-addressed key (prompt version, kind, both snapshots'
+with the pair-addressed key (prompt version, token bound, kind, both snapshots'
 path/content/import edges with an explicit absent-base marker, rule text,
 provider, model). Base ref/SHA, growth, and line counts stay out: a moving
 merge-base cannot re-bill an unchanged semantic pair; the same head against a

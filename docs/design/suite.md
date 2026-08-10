@@ -130,7 +130,10 @@ on the CLI bypass diff selection for local iteration.
 
 `.cache/aca/<check>/` (gitignored), keyed on every semantic input to the
 comparative judgment:
-`sha256(comparison kind ‖ base path+content+import edges (or an explicit absent-base marker) ‖ head path+content+import edges ‖ rule text ‖ prompt version ‖ provider ‖ model id)`.
+`sha256(comparison kind ‖ base path+content+import edges (or an explicit absent-base marker) ‖ head path+content+import edges ‖ rule text ‖ prompt version ‖ token bound ‖ provider ‖ model id)`.
+The token bound is in the key because on a wire that derives hidden reasoning
+from it, the bound is part of the inference profile rather than a mere output
+ceiling ([ACA-0070](../decisions/ACA-0070-judge-token-budgets.md)).
 The import edges are in the key because the verdict depends on them (review
 finding, PR #1): a new importer changes the footprint question even when the
 file's content is unchanged. The base ref/SHA, diff hunks, and line counts

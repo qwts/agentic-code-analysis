@@ -123,7 +123,7 @@ self-application run read "file I/O" literally and failed read-only
 sourcing like a rule-file load). Verdicts memoized with the
 **pair-addressed key** of ACA-0013: comparison kind (explicit absent-base
 marker), both snapshots' path/content/sorted import edges, rule text,
-prompt version, provider, model. Path is a semantic input here — the module
+prompt version, token bound, provider, model. Path is a semantic input here — the module
 name is evidence. Base ref/SHA and derived orientation stay out. Inputs are
 normalized and deduplicated before the pool; an invalid base is a run-level
 config error; an unreadable snapshot is a non-cacheable per-file warn.

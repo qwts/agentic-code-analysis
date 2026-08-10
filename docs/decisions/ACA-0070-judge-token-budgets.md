@@ -48,12 +48,27 @@ emitted, so a check whose verdict is 300 tokens costs the same under 32,768 as
 under 4,096. The raised ceiling buys headroom for hidden reasoning on wires
 that share it, and costs nothing on wires that do not.
 
-**No prompt-version bump, and no new cache-key component.** A verdict produced
-under the old ceiling was produced *because the model stopped before reaching
-it* — a raised ceiling cannot retroactively change a completion that never hit
-the cap. Truncated responses were already non-cacheable failures. Existing
-cache entries and existing recorded qualifications therefore remain valid, and
-the Anthropic qualification the suite paid for is not revoked.
+**The bound joins the verdict cache identity.** Every check's key now carries
+`MAX_TOKENS` alongside its prompt version, provider, and model.
+
+The tempting argument is that it need not: a verdict produced under the old
+ceiling was produced *because the model stopped before reaching it*, so a
+raised ceiling cannot retroactively change a completion that never hit the cap,
+and truncated responses were already non-cacheable failures. That reasoning
+holds only where the bound is an output ceiling. It fails on any wire that
+derives hidden reasoning from the same number — Qwen's adapter sets
+`thinking_budget = request.maxTokens`, so raising the bound changes how far the
+judge may reason before answering. A cached verdict from the smaller bound is
+then not "the same answer, reached early"; it is the answer of a judge that was
+allowed to think less. Serving it would silently substitute one inference
+profile for another (Codex review, PR #73).
+
+Keeping the bound in the key also makes every future budget change
+self-invalidating, rather than relying on a maintainer to remember a version
+bump. The cost is a one-time cache miss across every route on this change.
+Recorded qualifications are unaffected: they are keyed by check, prompt
+version, and fixture suite, and re-qualification is a measurement question that
+this record does not answer for any route.
 
 **The Qwen adapter keeps its separate thinking budget.** Its
 `thinking_budget = request.maxTokens` mapping now derives from the raised

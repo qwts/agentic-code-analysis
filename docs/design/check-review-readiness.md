@@ -119,7 +119,7 @@ The judgment is artifact-level; the renderer receives the standard
 One cache lookup, then **exactly one judge call per run** on a non-empty
 miss — outside any file loop; an empty scope or hunkless diff makes zero
 calls. `max_tokens` 32768. The key holds every semantic input: prompt
-version, the **full canonical artifact** (including content omitted from a
+version, the token bound, the **full canonical artifact** (including content omitted from a
 bounded payload), the bounded payload and omission manifest actually sent,
 provider, model — never branch name, SHA, or base-ref identity. Re-running
 an unchanged unpushed worktree makes zero API calls; a change confined to

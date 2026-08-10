@@ -109,7 +109,8 @@ Verdict policy:
 
 Only the validated semantic result is cached. The key includes prompt/schema/
 verifier versions, canonical topology and omission manifest, diagnostics,
-normalized task evidence, estimator and bound identities, provider, and
+normalized task evidence, estimator, input-char and judge-token bound
+identities, provider, and
 configured model—not CLI spelling, base identity, or unrelated files.
 
 ## Calibration and measurement handoff

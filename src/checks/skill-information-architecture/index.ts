@@ -33,6 +33,7 @@ function canonicalTarget(path: string): string {
 function cacheKey(payload: string, provider: string, model: string): string {
   return VerdictCache.key([
     PROMPT_VERSION,
+    `${MAX_TOKENS}`,
     SCHEMA_VERSION,
     VERIFIER_VERSION,
     PAYLOAD_VERSION,

@@ -123,7 +123,7 @@ scores subtracted.
 One file per request; concurrency 3; `max_tokens` 32768; no sampling
 parameters. Inputs are normalized and deduplicated before the worker pool.
 Verdicts memoized per the suite cache design with a **pair-addressed key**
-(kind, both snapshots' path/content/import edges, rule, prompt version,
+(kind, both snapshots' path/content/import edges, rule, prompt version, token bound,
 provider, model) — a second run over an unchanged branch makes zero API
 calls, a moving merge-base cannot re-bill an unchanged semantic pair, and
 the same head against a different base rejudges. A legacy judgment sends

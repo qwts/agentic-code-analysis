@@ -24,7 +24,7 @@ import { selfTest } from './self-test.ts';
 function cacheKey(comparison: Comparison, rubric: string, provider: string, model: string): string {
   const snapshot = (s: Snapshot): string[] => [s.path, s.content, JSON.stringify(s.dependencies), JSON.stringify(s.candidates)];
   const base = comparison.kind === 'legacy' ? snapshot(comparison.base) : ['(no base)'];
-  return VerdictCache.key([PROMPT_VERSION, comparison.kind, ...base, ...snapshot(comparison.head), rubric, provider, model]);
+  return VerdictCache.key([PROMPT_VERSION, String(MAX_TOKENS), comparison.kind, ...base, ...snapshot(comparison.head), rubric, provider, model]);
 }
 
 /** The zero-call path: recomputed every run, never cached, observable in

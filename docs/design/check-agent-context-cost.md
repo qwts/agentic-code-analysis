@@ -97,7 +97,7 @@ verified findings with proposals and savings, estimated total savings.
 
 ## Cache
 
-Key: prompt version ‖ source content ‖ delivered fragments ‖ normalized
+Key: prompt version ‖ token bound ‖ source content ‖ delivered fragments ‖ normalized
 bindings (tool, convention, scope, activation, semantics status) ‖
 estimator id ‖ provider ‖ model. Only the validated semantic judgment is
 cached; current mechanical totals (load-set memberships, totals) decorate

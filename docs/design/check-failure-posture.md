@@ -156,7 +156,7 @@ change that can alter judgment routing bumps it; fix the prompt or routing
 rule, never the calibration fixtures.
 
 Cache (`.cache/aca/failure-posture/`) holds judged, cacheable outcomes only.
-The pair-addressed key is prompt version, comparison kind, explicit
+The pair-addressed key is prompt version, token bound, comparison kind, explicit
 absent-base marker or full base snapshot, full head snapshot
 (path/content/imports/imported-by each), rubric text, provider, model.
 Prefilter hints are deterministic from those inputs and add nothing; base

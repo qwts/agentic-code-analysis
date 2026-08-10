@@ -22,6 +22,7 @@ import { selfTest } from './self-test.ts';
 function cacheKey(evidence: Evidence, rubric: string, provider: string, model: string): string {
   return VerdictCache.key([
     PROMPT_VERSION,
+    String(MAX_TOKENS),
     evidence.file,
     evidence.content,
     evidence.mode,

@@ -141,7 +141,7 @@ non-empty miss; an empty artifact (no scoped changes and no deletions)
 and bounded payloads make zero calls. An empty *selection* alone does
 not short-circuit: change scope excludes deletions, so a deletion-only
 change arrives as zero selected files and is still judged. `max_tokens` 32768. The key holds every semantic
-input: prompt version (`commit-coherence-v1`), the full canonical
+input: prompt version (`commit-coherence-v1`), the token bound, the full canonical
 artifact (deletions included), the rendered payload and omission
 manifest, provider, model — never branch name, SHA, or base-ref identity.
 Only well-formed `pass`/`fail`/judged-`uncertain` outcomes cache;

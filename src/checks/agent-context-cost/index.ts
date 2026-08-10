@@ -28,7 +28,7 @@ import { defaultEstimator } from '../../corpora/instructions/index.ts';
 function cacheKey(source: InstructionFile, provider: string, model: string): string {
   const fragments = source.bindings.map((b) => [b.charged.kind, b.activation, b.charged.text]);
   const bindings = source.bindings.map((b) => [b.tool, b.profile, b.convention, JSON.stringify(b.scope), b.activation, b.semantics.status]);
-  return VerdictCache.key([PROMPT_VERSION, source.content, JSON.stringify(fragments), JSON.stringify(bindings), DEFAULT_ESTIMATOR_ID, provider, model]);
+  return VerdictCache.key([PROMPT_VERSION, String(MAX_TOKENS), source.content, JSON.stringify(fragments), JSON.stringify(bindings), DEFAULT_ESTIMATOR_ID, provider, model]);
 }
 
 const toPosix = (path: string): string => normalize(path).replaceAll('\\', '/').replace(/\/+$/, '');

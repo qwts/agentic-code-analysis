@@ -9,7 +9,9 @@
 // construction and requires live requalification.
 export const PROMPT_VERSION = 'agent-rule-conflict-v1';
 
-// Operational output bound (check design): 8192 tokens per partition reply.
+// Operational output bound per partition reply: the suite-wide ACA-0070
+// bound, which also leaves room for hidden reasoning on wires that charge it
+// against the same number.
 export const MAX_TOKENS = 32_768;
 
 export const CRITERIA = ['direct-contradiction', 'unresolved-precedence', 'cross-tool-divergence'] as const;

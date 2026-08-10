@@ -157,7 +157,7 @@ doc-drift-extract-v1`; any prompt change fixes the prompt (never fixtures)
 and bumps the version.
 
 Cache key (`.cache/aca/doc-drift/`), every semantic input: prompt +
-extraction versions, document path + content, sorted reference records, each
+extraction versions, the token bound, document path + content, sorted reference records, each
 selected referent's path + status + rename target + head content or absent
 marker, rubric text, provider, model. Deliberately excluded: doc globs, base
 ref/SHA, unrelated changed paths — they select work, they do not affect this

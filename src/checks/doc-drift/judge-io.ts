@@ -15,8 +15,9 @@ import { SCAN_MODE } from './references.ts';
 export const PROMPT_VERSION = 'doc-drift-v1';
 // Bump when the reference grammar changes; same cache consequence.
 export const EXTRACTION_VERSION = 'doc-drift-extract-v1';
-// 8192, not the suite's usual 4096: reference-heavy docs (50+ records)
-// truncated structured output at 4096 in the first live dogfood run.
+// The suite-wide bound (ACA-0070). This check was the first to outgrow the
+// original 4096, which truncated structured output on reference-heavy docs
+// (50+ records) in the first live dogfood run.
 export const MAX_TOKENS = 32_768;
 
 const RULE_PATH = fileURLToPath(new URL('../../../docs/standards/doc-drift.md', import.meta.url));
