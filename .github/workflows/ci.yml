@@ -97,8 +97,14 @@ jobs:
       (needs.policy.outputs.run_post_merge == 'true' && needs.merge-evidence.outputs.validated != 'true'))
     strategy:
       fail-fast: false
+      # windows-latest is intentionally absent. The leg has never passed: it
+      # died in the guard before running a single test, so the suite's Windows
+      # portability defects (native path separators in evidence, CRLF checkout
+      # breaking fixture checksums, guard escape handling) were never visible.
+      # Restore it with the portability fixes, not before — a permanently red
+      # leg reports nothing. Tracked in #72.
       matrix:
-        os: [ubuntu-latest, macos-latest, windows-latest]
+        os: [ubuntu-latest, macos-latest]
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
