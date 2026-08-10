@@ -116,7 +116,7 @@ behavior → suggested truthful name).
 ## Operational bounds
 
 One file per request; concurrency 3 through a stable-order worker pool
-shared by run and self-test; `max_tokens` 4096; pinned prompt version
+shared by run and self-test; `max_tokens` 32768; pinned prompt version
 `naming-truth-v2` (any prompt change bumps it; v1 → v2 sharpened
 `name-omits-side-effect` to state-changing I/O after a cross-model
 self-application run read "file I/O" literally and failed read-only

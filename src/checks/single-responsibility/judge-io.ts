@@ -14,7 +14,7 @@ import type { Comparison, Snapshot } from './comparison.ts';
 export const PROMPT_VERSION = 'single-responsibility-v1';
 
 // Operational bound (check design): one file per request, 4096 output tokens.
-export const MAX_TOKENS = 4096;
+export const MAX_TOKENS = 32_768;
 
 // Repo-authored rule — this repo IS the canonical source (check design).
 const RULE_PATH = fileURLToPath(new URL('../../../docs/standards/file-single-responsibility.md', import.meta.url));

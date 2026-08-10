@@ -17,7 +17,7 @@ export const PROMPT_VERSION = 'doc-drift-v1';
 export const EXTRACTION_VERSION = 'doc-drift-extract-v1';
 // 8192, not the suite's usual 4096: reference-heavy docs (50+ records)
 // truncated structured output at 4096 in the first live dogfood run.
-export const MAX_TOKENS = 8192;
+export const MAX_TOKENS = 32_768;
 
 const RULE_PATH = fileURLToPath(new URL('../../../docs/standards/doc-drift.md', import.meta.url));
 

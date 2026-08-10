@@ -149,7 +149,7 @@ optional `skipped`) — the shared registry contract is not widened.
 ## Operational bounds and memoization
 
 Identical to context-footprint: one file per request, concurrency 3,
-`max_tokens` 4096, inputs normalized and deduplicated before the pool,
+`max_tokens` 32768, inputs normalized and deduplicated before the pool,
 stable input-order results. Prompt version pinned
 (`failure-posture-v1`) — any prompt, rubric, payload, or applicability-rule
 change that can alter judgment routing bumps it; fix the prompt or routing

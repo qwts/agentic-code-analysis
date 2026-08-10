@@ -123,7 +123,7 @@ widened.
 ## Operational bounds and memoization
 
 Identical to context-footprint: one file per request, concurrency 3,
-`max_tokens` 4096, no sampling parameters; inputs normalized and deduplicated
+`max_tokens` 32768, no sampling parameters; inputs normalized and deduplicated
 before the pool; stable result order. Pinned prompt version
 `single-responsibility-v1` — any prompt change fixes the prompt, never the
 fixtures, and bumps the version. Cache at `.cache/aca/single-responsibility/`

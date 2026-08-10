@@ -20,7 +20,7 @@ mechanical layer frame the judgment — it never replaces it.
 ## Shape
 
 `aca agent-context-cost [paths…]` — T1, one JudgeClient request per unique
-physical instruction source, concurrency 3, `maxTokens` 4096, pinned prompt
+physical instruction source, concurrency 3, `maxTokens` 32768, pinned prompt
 version, `.cache/aca/agent-context-cost/`.
 
 Target selection (ACA-0023): positional paths — or the change scope when

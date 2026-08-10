@@ -147,8 +147,9 @@ generic renderer learns nothing new.
 ## Operational bounds and cache identity
 
 One request per candidate document; stable document order; concurrency 3;
-`maxTokens` 8192 (the suite's usual 4096 truncated structured output on
-reference-heavy docs in the first live dogfood run). Hard caps per document: **12 selected referents** and
+`maxTokens` 32768, the suite-wide bound of [ACA-0070](../decisions/ACA-0070-judge-token-budgets.md).
+This check was the first to outgrow the original 4096, which truncated structured output on
+reference-heavy docs in the first live dogfood run. Hard caps per document: **12 selected referents** and
 **128 KiB of UTF-8 referent evidence**; overflow is an explicit
 non-cacheable `warn` naming the cap, never silent truncation. Pinned
 `PROMPT_VERSION = doc-drift-v1` and `EXTRACTION_VERSION =

@@ -150,7 +150,7 @@ assertion — with no test-specific behavior added to `src/cli.ts`.
 
 ## Operational bounds
 
-One file per request; concurrency 3; `max_tokens` 4096; pinned
+One file per request; concurrency 3; `max_tokens` 32768; pinned
 `PROMPT_VERSION = test-honesty-v1` (bump on any prompt or rubric change).
 Input order is preserved while workers run concurrently. The cache key holds
 every semantic input: prompt version, normalized test path and content,

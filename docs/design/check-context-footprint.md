@@ -120,7 +120,7 @@ scores subtracted.
 
 ## Operational bounds
 
-One file per request; concurrency 3; `max_tokens` 4096; no sampling
+One file per request; concurrency 3; `max_tokens` 32768; no sampling
 parameters. Inputs are normalized and deduplicated before the worker pool.
 Verdicts memoized per the suite cache design with a **pair-addressed key**
 (kind, both snapshots' path/content/import edges, rule, prompt version,

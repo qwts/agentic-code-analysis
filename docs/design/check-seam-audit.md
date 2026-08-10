@@ -161,7 +161,7 @@ suggestion is the natural seam.
 
 ## Operational bounds and cache
 
-One file per request; concurrency 3; `max_tokens` 4096; inputs normalized
+One file per request; concurrency 3; `max_tokens` 32768; inputs normalized
 and deduplicated; stable output order. Pair-addressed cache key: prompt
 version, comparison kind, explicit absent-base marker or base
 path/content/evidence, head path/content/evidence, rubric text, provider,

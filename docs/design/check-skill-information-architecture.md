@@ -79,7 +79,7 @@ cannot support a clean pass. Unlinked present resources remain evidence for
 
 ## Judge contract and bounds
 
-One package is sent per request, concurrency 3, `maxTokens: 4096`. The input is
+One package is sent per request, concurrency 3, `maxTokens: 32768`. The input is
 bounded at 120,000 characters. Files are included whole in deterministic path
 order; nothing is silently truncated. Omitted resources appear in an omission
 manifest. If the root body alone exceeds the bound, the package warns without
