@@ -14,7 +14,7 @@ import type { Comparison, Snapshot } from './comparison.ts';
 export const PROMPT_VERSION = 'seam-audit-v1';
 
 // Operational bound (check design): one file per request, 4096 output tokens.
-export const MAX_TOKENS = 4096;
+export const MAX_TOKENS = 32_768;
 
 const RUBRIC_PATH = fileURLToPath(new URL('./rubric.md', import.meta.url));
 

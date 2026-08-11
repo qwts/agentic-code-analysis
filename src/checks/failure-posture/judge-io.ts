@@ -21,7 +21,7 @@ import type { PrefilterHint } from './prefilter.ts';
 export const PROMPT_VERSION = 'failure-posture-v2';
 
 // Operational bound (check design): one file per request, 4096 output tokens.
-export const MAX_TOKENS = 4096;
+export const MAX_TOKENS = 32_768;
 
 // The authoritative rubric ships with this package, not the consuming repo.
 const RUBRIC_PATH = fileURLToPath(new URL('../../../docs/standards/file-failure-posture.md', import.meta.url));

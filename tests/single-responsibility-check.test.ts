@@ -137,7 +137,7 @@ test('operational bounds: max_tokens 4096 and observed concurrency never above 3
   const verdicts = await check.run(context(root, gated, files, 'base'));
   assert.equal(requests.length, 6);
   assert.ok(maxInFlight <= 3, `observed concurrency ${maxInFlight}`);
-  assert.ok(requests.every((r) => r.maxTokens === 4096));
+  assert.ok(requests.every((r) => r.maxTokens === 32_768));
   assert.deepEqual(verdicts.map((v) => v.file), files, 'result order matches input order');
 });
 

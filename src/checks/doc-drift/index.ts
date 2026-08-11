@@ -38,7 +38,7 @@ import { selfTest } from './self-test.ts';
  */
 function cacheKey(docPath: string, docContent: string, bundle: EvidenceBundle, rubric: string, provider: string, model: string): string {
   const referents = bundle.referents.flatMap((r) => [r.path, r.status, r.renamedTo ?? '', r.content ?? '(absent)']);
-  return VerdictCache.key([PROMPT_VERSION, EXTRACTION_VERSION, docPath, docContent, JSON.stringify(bundle.references), ...referents, rubric, provider, model]);
+  return VerdictCache.key([PROMPT_VERSION, String(MAX_TOKENS), EXTRACTION_VERSION, docPath, docContent, JSON.stringify(bundle.references), ...referents, rubric, provider, model]);
 }
 
 async function run(context: CheckContext): Promise<FileVerdict[]> {

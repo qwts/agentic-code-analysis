@@ -85,7 +85,7 @@ test('skipped and judged files keep stable input order; candidates are judged wi
   assert.deepEqual(verdicts.map((v) => v.skipped ?? false), [true, false]);
   assert.equal(requests.length, 1);
   assert.match(requests[0]!.user, /network\/call: fetch/);
-  assert.equal(requests[0]!.maxTokens, 4096);
+  assert.equal(requests[0]!.maxTokens, 32_768);
 });
 
 test('a base-only effect still judges: removing a dependency is a direction of change', async () => {

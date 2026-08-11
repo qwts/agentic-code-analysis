@@ -113,7 +113,7 @@ Operational bounds, pinned here (check-local; deliberately far under any
 current provider window so estimator error cannot overflow — not derived
 from a recalled context size): serialized partition payload ≤ **48,000
 estimated tokens** (corpus estimator) **and ≤ 320 KiB UTF-8**; output
-`maxTokens` 8192; concurrency 2.
+`maxTokens` 32768 (the suite-wide bound of ACA-0070); concurrency 2.
 
 1. Complete artifact fits → exactly one `whole-corpus` judge call.
 2. Else coalesce sessions with identical ordered load sets → one
@@ -155,7 +155,7 @@ estimator id ‖ partition-plan version ‖ outcome-policy version ‖ provider 
 model. Valid pass/fail and judged uncertainty are cached; refusals,
 malformed envelopes, invented evidence, and incomplete coverage are not.
 Any semantic change — content, membership, precedence, verification
-status, plan/policy/prompt version, provider, model — misses by
+status, plan/policy/prompt version, token bound, provider, model — misses by
 construction. Hits are observable per partition in `--json`.
 
 ## Calibration (ACA-0012 exam)

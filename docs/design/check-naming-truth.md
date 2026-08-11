@@ -116,14 +116,14 @@ behavior → suggested truthful name).
 ## Operational bounds
 
 One file per request; concurrency 3 through a stable-order worker pool
-shared by run and self-test; `max_tokens` 4096; pinned prompt version
+shared by run and self-test; `max_tokens` 32768; pinned prompt version
 `naming-truth-v2` (any prompt change bumps it; v1 → v2 sharpened
 `name-omits-side-effect` to state-changing I/O after a cross-model
 self-application run read "file I/O" literally and failed read-only
 sourcing like a rule-file load). Verdicts memoized with the
 **pair-addressed key** of ACA-0013: comparison kind (explicit absent-base
 marker), both snapshots' path/content/sorted import edges, rule text,
-prompt version, provider, model. Path is a semantic input here — the module
+prompt version, token bound, provider, model. Path is a semantic input here — the module
 name is evidence. Base ref/SHA and derived orientation stay out. Inputs are
 normalized and deduplicated before the pool; an invalid base is a run-level
 config error; an unreadable snapshot is a non-cacheable per-file warn.

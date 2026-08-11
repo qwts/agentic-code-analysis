@@ -149,14 +149,14 @@ optional `skipped`) — the shared registry contract is not widened.
 ## Operational bounds and memoization
 
 Identical to context-footprint: one file per request, concurrency 3,
-`max_tokens` 4096, inputs normalized and deduplicated before the pool,
+`max_tokens` 32768, inputs normalized and deduplicated before the pool,
 stable input-order results. Prompt version pinned
 (`failure-posture-v1`) — any prompt, rubric, payload, or applicability-rule
 change that can alter judgment routing bumps it; fix the prompt or routing
 rule, never the calibration fixtures.
 
 Cache (`.cache/aca/failure-posture/`) holds judged, cacheable outcomes only.
-The pair-addressed key is prompt version, comparison kind, explicit
+The pair-addressed key is prompt version, token bound, comparison kind, explicit
 absent-base marker or full base snapshot, full head snapshot
 (path/content/imports/imported-by each), rubric text, provider, model.
 Prefilter hints are deterministic from those inputs and add nothing; base

@@ -15,7 +15,7 @@ import type { Comparison, Snapshot } from './comparison.ts';
 export const PROMPT_VERSION = 'context-footprint-v3';
 
 // Operational bound (check design): one file per request, 4096 output tokens.
-export const MAX_TOKENS = 4096;
+export const MAX_TOKENS = 32_768;
 
 // The vendored rule ships with this package, not the consuming repo.
 const RULE_PATH = fileURLToPath(new URL('../../../docs/standards/file-context-footprint.md', import.meta.url));
