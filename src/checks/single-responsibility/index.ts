@@ -19,7 +19,7 @@ import { selfTest } from './self-test.ts';
 function cacheKey(comparison: Comparison, rule: string, provider: string, model: string): string {
   const snapshot = (s: Snapshot): string[] => [s.path, s.content, JSON.stringify(s.imports), JSON.stringify(s.importedBy)];
   const base = comparison.kind === 'legacy' ? snapshot(comparison.base) : ['(no base)'];
-  return VerdictCache.key([PROMPT_VERSION, comparison.kind, ...base, ...snapshot(comparison.head), rule, provider, model]);
+  return VerdictCache.key([PROMPT_VERSION, String(MAX_TOKENS), comparison.kind, ...base, ...snapshot(comparison.head), rule, provider, model]);
 }
 
 async function run(context: CheckContext): Promise<FileVerdict[]> {

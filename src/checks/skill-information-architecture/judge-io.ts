@@ -14,7 +14,7 @@ import type { Action, Criterion } from './model.ts';
 export const PROMPT_VERSION = 'skill-information-architecture-v5';
 export const SCHEMA_VERSION = 'skill-ia-schema-v1';
 export const VERIFIER_VERSION = 'skill-ia-verifier-v2';
-export const MAX_TOKENS = 4096;
+export const MAX_TOKENS = 32_768;
 export const CONCURRENCY = 3;
 export const ASSESSMENTS = ['well-structured', 'needs-restructure', 'uncertain'] as const;
 export const CRITERIA = ['buried-core-guidance', 'fragmented-core-workflow', 'eager-specialist-detail', 'weak-disclosure-route'] as const;

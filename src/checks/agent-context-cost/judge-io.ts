@@ -14,7 +14,7 @@ import type { TokenEstimator } from '../../corpora/instructions/index.ts';
 export const PROMPT_VERSION = 'agent-context-cost-v1';
 
 // Operational bound (check design): one source per request, 4096 output tokens.
-export const MAX_TOKENS = 4096;
+export const MAX_TOKENS = 32_768;
 
 export const CRITERIA = ['discoverable-restatement', 'low-density-prose', 'oversized-example', 'mechanically-enforceable'] as const;
 export const ACTIONS = ['rewrite', 'table', 'delete', 'move-to-hook'] as const;

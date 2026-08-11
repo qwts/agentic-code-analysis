@@ -46,7 +46,7 @@ function cacheKey(artifact: DiffArtifact, payload: RenderedPayload, provider: st
   // The rendered payload and omission manifest are derivable from the
   // artifact, but keying on them too means a renderer or bound change
   // cannot serve a stale judgment even if the prompt version were missed.
-  return VerdictCache.key([PROMPT_VERSION, JSON.stringify(artifact), payload.text, JSON.stringify(payload.omitted), provider, model]);
+  return VerdictCache.key([PROMPT_VERSION, String(MAX_TOKENS), JSON.stringify(artifact), payload.text, JSON.stringify(payload.omitted), provider, model]);
 }
 
 async function run(context: CheckContext): Promise<FileVerdict[]> {

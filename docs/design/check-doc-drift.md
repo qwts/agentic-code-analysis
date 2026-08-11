@@ -147,8 +147,9 @@ generic renderer learns nothing new.
 ## Operational bounds and cache identity
 
 One request per candidate document; stable document order; concurrency 3;
-`maxTokens` 8192 (the suite's usual 4096 truncated structured output on
-reference-heavy docs in the first live dogfood run). Hard caps per document: **12 selected referents** and
+`maxTokens` 32768, the suite-wide bound of [ACA-0070](../decisions/ACA-0070-judge-token-budgets.md).
+This check was the first to outgrow the original 4096, which truncated structured output on
+reference-heavy docs in the first live dogfood run. Hard caps per document: **12 selected referents** and
 **128 KiB of UTF-8 referent evidence**; overflow is an explicit
 non-cacheable `warn` naming the cap, never silent truncation. Pinned
 `PROMPT_VERSION = doc-drift-v1` and `EXTRACTION_VERSION =
@@ -156,7 +157,7 @@ doc-drift-extract-v1`; any prompt change fixes the prompt (never fixtures)
 and bumps the version.
 
 Cache key (`.cache/aca/doc-drift/`), every semantic input: prompt +
-extraction versions, document path + content, sorted reference records, each
+extraction versions, the token bound, document path + content, sorted reference records, each
 selected referent's path + status + rename target + head content or absent
 marker, rubric text, provider, model. Deliberately excluded: doc globs, base
 ref/SHA, unrelated changed paths — they select work, they do not affect this

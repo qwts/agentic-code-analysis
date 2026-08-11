@@ -16,7 +16,7 @@ export const PROMPT_VERSION = 'commit-coherence-v1';
 // One whole-diff request; 4096 output tokens covers an entangled reply with
 // a multi-part split naming every changed unit — a diff needing more has
 // overflowed the input bound first.
-export const MAX_TOKENS = 4096;
+export const MAX_TOKENS = 32_768;
 
 export const CRITERIA = ['mixed-refactor-and-behavior', 'unrelated-changes', 'drive-by-edits'] as const;
 

@@ -15,7 +15,7 @@ import type { Comparison } from './comparison.ts';
 export const PROMPT_VERSION = 'naming-truth-v2';
 
 // Operational bound (check design): one file per request, 4096 output tokens.
-export const MAX_TOKENS = 4096;
+export const MAX_TOKENS = 32_768;
 
 // ACA-authored authoritative rule; ships with this package (ACA-0014).
 const RULE_PATH = fileURLToPath(new URL('../../../docs/standards/naming-truth.md', import.meta.url));

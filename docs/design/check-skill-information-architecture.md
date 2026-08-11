@@ -79,7 +79,7 @@ cannot support a clean pass. Unlinked present resources remain evidence for
 
 ## Judge contract and bounds
 
-One package is sent per request, concurrency 3, `maxTokens: 4096`. The input is
+One package is sent per request, concurrency 3, `maxTokens: 32768`. The input is
 bounded at 120,000 characters. Files are included whole in deterministic path
 order; nothing is silently truncated. Omitted resources appear in an omission
 manifest. If the root body alone exceeds the bound, the package warns without
@@ -109,7 +109,8 @@ Verdict policy:
 
 Only the validated semantic result is cached. The key includes prompt/schema/
 verifier versions, canonical topology and omission manifest, diagnostics,
-normalized task evidence, estimator and bound identities, provider, and
+normalized task evidence, estimator, input-char and judge-token bound
+identities, provider, and
 configured model—not CLI spelling, base identity, or unrelated files.
 
 ## Calibration and measurement handoff

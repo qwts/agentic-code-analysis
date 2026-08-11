@@ -15,7 +15,7 @@ export const PROMPT_VERSION = 'review-readiness-v1';
 // Operational bound (check design): one whole-diff request; 4096 output
 // tokens covers a not-ready reply with a dozen anchored findings — a diff
 // needing more findings than that has failed for simpler reasons.
-export const MAX_TOKENS = 4096;
+export const MAX_TOKENS = 32_768;
 
 export const CRITERIA = [
   'leftover-debug',

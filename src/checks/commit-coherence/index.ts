@@ -53,7 +53,7 @@ export interface CommitCoherenceVerdict extends FileVerdict {
 type StoredOutcome = Pick<ArtifactOutcome, 'assessment' | 'verdict' | 'overallIntent' | 'findings' | 'splitProposal' | 'note'>;
 
 function cacheKey(artifact: DiffArtifact, payload: RenderedPayload, provider: string, model: string): string {
-  return VerdictCache.key([PROMPT_VERSION, JSON.stringify(artifact), payload.text, JSON.stringify(payload.omitted), provider, model]);
+  return VerdictCache.key([PROMPT_VERSION, String(MAX_TOKENS), JSON.stringify(artifact), payload.text, JSON.stringify(payload.omitted), provider, model]);
 }
 
 async function run(context: CheckContext): Promise<FileVerdict[]> {

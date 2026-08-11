@@ -83,10 +83,14 @@ type-aware linting waits for the TS 7.1 programmatic API.
 ### The JudgeClient interface (decision D2)
 
 One method: `judge({system, user, schema, maxTokens}) → {ok, verdict} | {ok:false, note}`.
-`maxTokens` is the maximum visible structured answer. Hidden provider
-reasoning does not consume that answer allowance: an adapter whose wire
-combines them must fork and translate the request behind this frozen port
-([ACA-0064](../decisions/ACA-0064-qwen-reasoning-budgets.md)).
+`maxTokens` is the maximum visible structured answer, and every check sets it
+to the suite-wide 32,768 of
+[ACA-0070](../decisions/ACA-0070-judge-token-budgets.md). Wires differ in
+whether hidden reasoning is charged against that same number; the raised bound
+leaves room for both readings, and an adapter may still fork to translate the
+request behind this frozen port
+([ACA-0064](../decisions/ACA-0064-qwen-reasoning-budgets.md)). The bound is a
+ceiling, not a reservation: providers bill only emitted tokens.
 Contract every adapter must meet:
 
 - **Structured output against a strict JSON schema** (`additionalProperties:
@@ -126,7 +130,10 @@ on the CLI bypass diff selection for local iteration.
 
 `.cache/aca/<check>/` (gitignored), keyed on every semantic input to the
 comparative judgment:
-`sha256(comparison kind ‖ base path+content+import edges (or an explicit absent-base marker) ‖ head path+content+import edges ‖ rule text ‖ prompt version ‖ provider ‖ model id)`.
+`sha256(comparison kind ‖ base path+content+import edges (or an explicit absent-base marker) ‖ head path+content+import edges ‖ rule text ‖ prompt version ‖ token bound ‖ provider ‖ model id)`.
+The token bound is in the key because on a wire that derives hidden reasoning
+from it, the bound is part of the inference profile rather than a mere output
+ceiling ([ACA-0070](../decisions/ACA-0070-judge-token-budgets.md)).
 The import edges are in the key because the verdict depends on them (review
 finding, PR #1): a new importer changes the footprint question even when the
 file's content is unchanged. The base ref/SHA, diff hunks, and line counts
@@ -196,6 +203,11 @@ not in the ENG series):
   reasoning budgets (2026-08-05): preserve the frozen JudgeClient, define
   `maxTokens` as visible answer capacity, and bound provider reasoning
   deterministically inside the dedicated adapter.
+- **[ACA-0070](../decisions/ACA-0070-judge-token-budgets.md)** — judge token
+  budgets (2026-08-10): one raised bound of 32,768 for every check and every
+  route, so reasoning-capable models stop truncating on wires that charge
+  hidden reasoning to the answer allowance. Narrows ACA-0064's Qwen-only
+  remedy without unfreezing the port.
 
 ## Security posture (ENG-0012 priority 1)
 

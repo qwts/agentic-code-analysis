@@ -24,7 +24,7 @@ export interface OutcomeCache {
 }
 
 function cacheKey(partition: Partition, payload: string, estimator: string, client: JudgeClient): string {
-  return VerdictCache.key([PROMPT_VERSION, PLAN_VERSION, POLICY_VERSION, partition.kind, payload, estimator, client.provider, client.model]);
+  return VerdictCache.key([PROMPT_VERSION, String(MAX_TOKENS), PLAN_VERSION, POLICY_VERSION, partition.kind, payload, estimator, client.provider, client.model]);
 }
 
 /** Guard for cache reads: a corrupted entry must re-judge, never crash —

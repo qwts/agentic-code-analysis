@@ -14,7 +14,7 @@ import { externalSnapshotUnresolved, type Evidence } from './unit-context.ts';
 export const PROMPT_VERSION = 'test-honesty-v1';
 
 // Operational bound (check design): one file per request, 4096 output tokens.
-export const MAX_TOKENS = 4096;
+export const MAX_TOKENS = 32_768;
 
 const RUBRIC_PATH = fileURLToPath(new URL('./rubric.md', import.meta.url));
 
