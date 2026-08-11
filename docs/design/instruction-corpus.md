@@ -120,10 +120,12 @@ that profile:
    paths to POSIX form. List each root **once**, in stable sorted order.
    `.git` is always skipped; `node_modules` is skipped by default and the
    exclusion is recorded as a corpus diagnostic (visible, not silent).
-   Paths matching the request's `exclude` globs are dropped from the
+   Paths matching the request's `exclude` globs are dropped inside the
    listing with the same diagnostic posture — adapters never see, read,
    or tokenize a match (ACA-0060). Listing stops with a diagnostic at
-   `maxEntriesPerRoot` (default 50,000).
+   `maxEntriesPerRoot` (default 50,000); excluded paths never count
+   toward the cap, so a huge excluded tree cannot blank a root's
+   discovery.
 2. Every convention adapter selects candidate paths from the immutable
    listing; the union is read once through a memoized source map.
    Unreadable candidates and files over `maxFileBytes` (default 1 MiB)

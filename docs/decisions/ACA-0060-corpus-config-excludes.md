@@ -31,9 +31,11 @@ itself skips excluded paths (option 2).
 dot-inclusive (`**` crosses `.github`/`.cursor`; the platform matcher
 remains as a fallback for syntax only it accepts), matched against every
 root's root-relative POSIX paths, and applied in the listing pass: a match
-is never interpreted, read, or tokenized by any adapter. The drop is
-recorded as a corpus diagnostic — visible, not silent, the same posture as
-the `.git`/`node_modules` skip.
+is never interpreted, read, or tokenized by any adapter, and never counts
+toward the per-root entry cap — a huge excluded tree must not exhaust the
+cap and blank a root's discovery (PR #75 review). The drop is recorded as
+a corpus diagnostic — visible, not silent, the same posture as the
+`.git`/`node_modules` skip.
 
 **Consuming checks wire the suite config's `exclude` into the request by
 default.** `agent-context-cost` and `skill-information-architecture` pass

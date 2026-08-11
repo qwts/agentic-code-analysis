@@ -50,23 +50,33 @@ export async function discoverInstructionCorpus(
   const diagnostics: CorpusDiagnostic[] = [];
 
   const roots = await validateRoots(request, fileSystem);
-  // Request excludes are dropped from the listing itself, so adapters never
-  // interpret, read, or tokenize a match. The library matcher sees dotfiles
-  // under `**` (instruction files live in .github, .cursor); the platform
-  // matcher stays as a fallback for syntax it alone accepts (extglob).
+  // Request excludes are dropped inside the listing itself — never listed,
+  // never counted toward the entry cap (a huge excluded tree must not blank
+  // a root's discovery; PR #75 review) — so adapters never interpret, read,
+  // or tokenize a match. The library matcher sees dotfiles under `**`
+  // (instruction files live in .github, .cursor); the platform matcher
+  // stays as a fallback for syntax it alone accepts (extglob).
   const excludeGlobs = request.exclude ?? [];
-  const isExcluded = (path: string): boolean =>
-    excludeGlobs.some((glob) => matchGlob(glob, path) || matchesGlob(path, glob));
   let excludedCount = 0;
+  const exclude =
+    excludeGlobs.length === 0
+      ? undefined
+      : (path: string): boolean => {
+          if (!excludeGlobs.some((glob) => matchGlob(glob, path) || matchesGlob(path, glob))) return false;
+          excludedCount += 1;
+          return true;
+        };
   const listings: RootListing[] = [];
   for (const root of roots) {
     try {
       const listed = await fileSystem.listTree(root.path, {
         skipDirs: SKIP_DIRS,
         maxEntries: MAX_ENTRIES_PER_ROOT,
+        exclude,
       });
-      const paths = excludeGlobs.length === 0 ? listed : listed.filter((path) => !isExcluded(path));
-      excludedCount += listed.length - paths.length;
+      // Re-filter for injected ports that predate the exclude option; a
+      // conforming port has already dropped (and counted) every match.
+      const paths = exclude === undefined ? listed : listed.filter((path) => !exclude(path));
       listings.push({ root, paths });
     } catch (cause) {
       if (cause instanceof EntryCapError) {

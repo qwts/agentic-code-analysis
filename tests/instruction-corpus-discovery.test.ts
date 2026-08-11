@@ -143,6 +143,31 @@ test('request exclude globs drop matching paths before adapters see them', async
   ), 'the drop is recorded as a corpus diagnostic');
 });
 
+test('excluded paths never count toward the listing entry cap', async () => {
+  const tree: Record<string, string> = { 'AGENTS.md': 'Real guidance.\n' };
+  for (let index = 0; index < 50_001; index += 1) tree[`tests/fixtures/big/f${index}.txt`] = '';
+  const fs = memoryFileSystem({ '/repo': tree });
+
+  const capped = await discoverInstructionCorpus(
+    { repoRoot: '/repo' },
+    { estimator: fakeEstimator, fileSystem: fs },
+  );
+  assert.ok(
+    capped.diagnostics.some((d) => /discovery for it is incomplete/.test(d.message)),
+    'without excludes the tree alone crosses the cap — the premise of this test',
+  );
+
+  const corpus = await discoverInstructionCorpus(
+    { repoRoot: '/repo', exclude: ['tests/fixtures/**'] },
+    { estimator: fakeEstimator, fileSystem: fs },
+  );
+  assert.deepEqual(corpus.files.map((file) => file.locator), ['repo:AGENTS.md']);
+  assert.ok(
+    !corpus.diagnostics.some((d) => /discovery for it is incomplete/.test(d.message)),
+    'a huge excluded tree must not blank the root\'s discovery',
+  );
+});
+
 test('root validation: relative paths, duplicate ids, and colon ids are usage errors', async () => {
   const fs = memoryFileSystem({ '/repo': {} });
   await assert.rejects(

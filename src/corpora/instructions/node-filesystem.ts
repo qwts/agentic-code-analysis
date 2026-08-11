@@ -32,8 +32,10 @@ async function listInto(
   files.sort();
   dirs.sort();
   for (const name of files) {
+    const relPath = relDir === '' ? name : `${relDir}/${name}`;
+    if (options.exclude?.(relPath) === true) continue;
     if (out.length >= options.maxEntries) throw new EntryCapError(rootPath, options.maxEntries);
-    out.push(relDir === '' ? name : `${relDir}/${name}`);
+    out.push(relPath);
   }
   for (const name of dirs) {
     await listInto(rootPath, relDir === '' ? name : `${relDir}/${name}`, options, out);
