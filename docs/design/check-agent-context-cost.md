@@ -25,8 +25,10 @@ version, `.cache/aca/agent-context-cost/`.
 
 Target selection (ACA-0023): positional paths — or the change scope when
 none are given — are **session target paths**. The full corpus is always
-discovered; targets resolve to session load sets; the union of their member
-sources is judged. A directory target selects every load set at or beneath
+discovered — with the consuming repo's `aca.config.json` `exclude` globs
+applied at discovery (ACA-0060), so fixture trees never become sources or
+load-set classes; targets resolve to session load sets; the union of their
+member sources is judged. A directory target selects every load set at or beneath
 it, so `aca agent-context-cost .` is the full-corpus dogfood invocation. A
 target that is itself an instruction source is judged directly. Sources are
 deduplicated before the pool — one source, one judgment, however many load

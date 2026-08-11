@@ -4,6 +4,7 @@
 // judgments.
 import { posix } from 'node:path';
 import type { Check, CheckContext, FileVerdict } from '../registry.ts';
+import { loadConfig } from '../../core/config.ts';
 import { VerdictCache } from '../../core/verdict-cache.ts';
 import { defaultEstimator, DEFAULT_ESTIMATOR_ID, discoverInstructionCorpus } from '../../corpora/instructions/index.ts';
 import { buildPayload, INPUT_CHAR_LIMIT, PAYLOAD_VERSION } from './payload.ts';
@@ -58,7 +59,9 @@ function unsupportedTargets(targets: readonly string[], selected: readonly { pac
 async function run(context: CheckContext): Promise<FileVerdict[]> {
   const targets = [...new Set(context.files.map(canonicalTarget))];
   if (targets.length === 0) return [];
-  const corpus = await discoverInstructionCorpus({ repoRoot: context.repoRoot });
+  // Repo exclude globs apply at discovery (ACA-0060): planted fixture
+  // skill trees never become packages.
+  const corpus = await discoverInstructionCorpus({ repoRoot: context.repoRoot, exclude: loadConfig(context.repoRoot).exclude });
   const packages = buildSkillPackages(corpus);
   const selected = selectSkillPackages(packages, targets, SIDECAR_PATH);
   const evidence = loadTaskEvidence(context.repoRoot, selected);

@@ -14,8 +14,10 @@ import type {
   RootListing,
   SessionProfileId,
 } from './model.ts';
+import { matchesGlob } from 'node:path';
 import type { CorpusDeps, FileSystemPort, TokenEstimator } from './ports.ts';
 import { EntryCapError } from './ports.ts';
+import { matchGlob } from './cascade.ts';
 import { nodeFileSystem } from './node-filesystem.ts';
 import { defaultEstimator, makeEstimate } from './token-estimate.ts';
 import { codexAdapter } from './conventions/codex.ts';
@@ -48,13 +50,24 @@ export async function discoverInstructionCorpus(
   const diagnostics: CorpusDiagnostic[] = [];
 
   const roots = await validateRoots(request, fileSystem);
+  // Request excludes are dropped from the listing itself, so adapters never
+  // interpret, read, or tokenize a match. The library matcher sees dotfiles
+  // under `**` (instruction files live in .github, .cursor); the platform
+  // matcher stays as a fallback for syntax it alone accepts (extglob).
+  const excludeGlobs = request.exclude ?? [];
+  const isExcluded = (path: string): boolean =>
+    excludeGlobs.some((glob) => matchGlob(glob, path) || matchesGlob(path, glob));
+  let excludedCount = 0;
   const listings: RootListing[] = [];
   for (const root of roots) {
     try {
-      listings.push({ root, paths: await fileSystem.listTree(root.path, {
+      const listed = await fileSystem.listTree(root.path, {
         skipDirs: SKIP_DIRS,
         maxEntries: MAX_ENTRIES_PER_ROOT,
-      }) });
+      });
+      const paths = excludeGlobs.length === 0 ? listed : listed.filter((path) => !isExcluded(path));
+      excludedCount += listed.length - paths.length;
+      listings.push({ root, paths });
     } catch (cause) {
       if (cause instanceof EntryCapError) {
         diagnostics.push({
@@ -71,6 +84,12 @@ export async function discoverInstructionCorpus(
     severity: 'info',
     message: `directories skipped during listing: ${SKIP_DIRS.join(', ')}`,
   });
+  if (excludeGlobs.length > 0) {
+    diagnostics.push({
+      severity: 'info',
+      message: `request exclude globs (${excludeGlobs.join(', ')}) skipped ${excludedCount} path(s) during listing`,
+    });
+  }
 
   // Memoized single read per unique candidate, with size cap and
   // symlink containment inside the candidate's authorized root.

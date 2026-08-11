@@ -130,6 +130,26 @@ test('a file target passes itself as a touched path, so applyTo-scoped instructi
   }
 });
 
+test('config exclude globs keep fixture trees out of the corpus and its load-set classes', async () => {
+  const root = repo({
+    'aca.config.json': JSON.stringify({ include: ['**'], exclude: ['tests/fixtures/**'] }),
+    'AGENTS.md': 'root rules\n',
+    'tests/fixtures/corpus/repo/AGENTS.md': 'planted padded rules\n',
+  });
+  try {
+    const judge = client();
+    const verdicts = (await check.run(context(root, ['.'], judge))) as AgentContextCostVerdict[];
+    assert.deepEqual(verdicts.map((v) => v.file), ['AGENTS.md'], 'the planted source is never selected');
+    assert.equal(judge.calls.length, 1, 'the planted source costs no judge call');
+    assert.ok(
+      verdicts[0]!.loadSets!.every((set) => !set.id.includes('tests/fixtures')),
+      'no phantom load-set class from the fixture directory',
+    );
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
 test('no targets → no verdicts and zero judge calls; empty corpus likewise', async () => {
   const root = repo({ 'AGENTS.md': 'rules\n' });
   const bare = repo({ 'src/x.ts': 'export {};\n' });
