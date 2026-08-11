@@ -82,6 +82,22 @@ test('an incomplete package warns without judge spend', async () => {
   }
 });
 
+test('config exclude globs keep planted fixture skill trees out of the package universe', async () => {
+  const root = repo({
+    'aca.config.json': JSON.stringify({ include: ['**'], exclude: ['tests/fixtures/**'] }),
+    '.agents/skills/git/SKILL.md': SKILL,
+    'tests/fixtures/skills/repo/.agents/skills/planted/SKILL.md': SKILL,
+  });
+  try {
+    const judge = client();
+    const verdicts = await check.run(context(root, ['.'], judge)) as SkillInformationArchitectureVerdict[];
+    assert.deepEqual(verdicts.map((v) => v.file), ['.agents/skills/git/SKILL.md']);
+    assert.equal(judge.calls.length, 1, 'the planted package costs no judge call');
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
 test('degraded judge results never cache', async () => {
   const root = repo({ '.agents/skills/git/SKILL.md': SKILL });
   try {

@@ -54,6 +54,17 @@ export interface CorpusRequest {
   /** Explicitly authorized user roots (home-directory analogs). */
   readonly userRoots?: readonly Omit<CorpusRootSpec, 'kind'>[];
   readonly config?: CorpusConfig;
+  /**
+   * Caller-supplied exclude globs (`**`, `*`, `?`, `{a,b}`; dot-inclusive),
+   * matched against every root's root-relative POSIX paths. Matching paths
+   * are dropped from the listing before adapters run — never discovered,
+   * read, tokenized, or counted toward the per-root entry cap — and the
+   * drop is recorded as a corpus diagnostic
+   * (visible, not silent). Content reached only by explicit reference
+   * (e.g. Claude `@`-imports) is unaffected: what a session genuinely
+   * loads stays charged (ACA-0060).
+   */
+  readonly exclude?: readonly string[];
 }
 
 export interface TokenEstimate {

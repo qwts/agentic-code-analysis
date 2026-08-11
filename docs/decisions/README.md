@@ -26,5 +26,6 @@ the check issue — rather than one issue per decision.
 | [ACA-0020](ACA-0020-diff-fixture-corpus.md) | Diff-fixture corpus and the canonical diff artifact — pair fixtures, diff judge I/O convention | Accepted |
 | [ACA-0023](ACA-0023-agent-context-check-architecture.md) | Agent-context check architecture — independent checks over a shared evidence library; supersedes ACA-0003 D1's "exactly three libraries" | Accepted |
 | [ACA-0059](ACA-0059-npm-release-boundary.md) | npm release boundary — emitted JavaScript, explicit publication surface, pseudonymous fixture licensing | Accepted |
+| [ACA-0060](ACA-0060-corpus-config-excludes.md) | Corpus consumption honors configured excludes — `CorpusRequest.exclude` applied in the listing pass, wired from `aca.config.json` | Accepted |
 | [ACA-0064](ACA-0064-qwen-reasoning-budgets.md) | Qwen reasoning budgets — visible answer bound, deterministic hidden-reasoning bound, frozen JudgeClient | Accepted |
 | [ACA-0070](ACA-0070-judge-token-budgets.md) | One raised judge token budget (32,768) for every check and route; narrows ACA-0064's Qwen-only remedy | Accepted |

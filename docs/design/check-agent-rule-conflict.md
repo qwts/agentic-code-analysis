@@ -34,6 +34,10 @@ reusable fixture pattern — this check's own fixture trees and the corpus
 library's test trees contain planted instruction files that must not enter
 this repository's corpus). Exclusions are visible in `--json`; `include`
 globs are not applied (real instruction files live at the repo root).
+The request-level `CorpusRequest.exclude` (ACA-0060) is deliberately not
+used here: projection-level exclusion keeps the excluded **source** list
+visible per path in `--json`, which listing-pass exclusion cannot provide
+(an excluded candidate is never interpreted as an instruction file).
 
 ## Artifact (check-local projection)
 

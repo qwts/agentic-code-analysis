@@ -37,7 +37,10 @@ export function memoryFileSystem(
     async listTree(rootPath, listOptions) {
       const tree = trees[rootPath];
       if (tree === undefined) throw new Error(`unknown root ${rootPath}`);
-      const paths = Object.keys(tree).toSorted();
+      const all = Object.keys(tree).toSorted();
+      // Port contract: excluded paths are neither listed nor counted
+      // toward the entry cap.
+      const paths = listOptions.exclude === undefined ? all : all.filter((path) => !listOptions.exclude!(path));
       if (paths.length > listOptions.maxEntries) throw new EntryCapError(rootPath, listOptions.maxEntries);
       return options.listOrder === 'reversed' ? paths.toReversed() : paths;
     },

@@ -109,6 +109,65 @@ test('a root over the entry cap yields an incomplete-discovery diagnostic instea
   assert.equal(corpus.files.length, 0);
 });
 
+test('request exclude globs drop matching paths before adapters see them', async () => {
+  const trees = {
+    '/repo': {
+      'AGENTS.md': 'Real guidance.\n',
+      'tests/fixtures/corpus/repo/AGENTS.md': 'Planted padded rules.\n',
+      // A dot directory under the excluded tree: `**` must stay
+      // dot-inclusive or planted rule files leak past the guard.
+      'tests/fixtures/corpus/repo/.cursor/rules/planted.mdc': '---\nalwaysApply: true\n---\nPlanted rule.\n',
+    },
+  };
+  const unfiltered = await discoverInstructionCorpus(
+    { repoRoot: '/repo' },
+    { estimator: fakeEstimator, fileSystem: memoryFileSystem(trees) },
+  );
+  assert.ok(
+    unfiltered.files.some((file) => file.path.startsWith('tests/fixtures/')),
+    'without excludes the planted tree is discovered — the premise of this test',
+  );
+
+  const recording = recordingFileSystem(memoryFileSystem(trees));
+  const corpus = await discoverInstructionCorpus(
+    { repoRoot: '/repo', exclude: ['tests/fixtures/**'] },
+    { estimator: fakeEstimator, fileSystem: recording.port },
+  );
+  assert.deepEqual(corpus.files.map((file) => file.locator), ['repo:AGENTS.md']);
+  assert.ok(
+    !recording.readCalls.some((call) => call.includes('tests/fixtures')),
+    'an excluded candidate is never read',
+  );
+  assert.ok(corpus.diagnostics.some(
+    (d) => d.severity === 'info' && /exclude globs \(tests\/fixtures\/\*\*\) skipped 2 path\(s\)/.test(d.message),
+  ), 'the drop is recorded as a corpus diagnostic');
+});
+
+test('excluded paths never count toward the listing entry cap', async () => {
+  const tree: Record<string, string> = { 'AGENTS.md': 'Real guidance.\n' };
+  for (let index = 0; index < 50_001; index += 1) tree[`tests/fixtures/big/f${index}.txt`] = '';
+  const fs = memoryFileSystem({ '/repo': tree });
+
+  const capped = await discoverInstructionCorpus(
+    { repoRoot: '/repo' },
+    { estimator: fakeEstimator, fileSystem: fs },
+  );
+  assert.ok(
+    capped.diagnostics.some((d) => /discovery for it is incomplete/.test(d.message)),
+    'without excludes the tree alone crosses the cap — the premise of this test',
+  );
+
+  const corpus = await discoverInstructionCorpus(
+    { repoRoot: '/repo', exclude: ['tests/fixtures/**'] },
+    { estimator: fakeEstimator, fileSystem: fs },
+  );
+  assert.deepEqual(corpus.files.map((file) => file.locator), ['repo:AGENTS.md']);
+  assert.ok(
+    !corpus.diagnostics.some((d) => /discovery for it is incomplete/.test(d.message)),
+    'a huge excluded tree must not blank the root\'s discovery',
+  );
+});
+
 test('root validation: relative paths, duplicate ids, and colon ids are usage errors', async () => {
   const fs = memoryFileSystem({ '/repo': {} });
   await assert.rejects(

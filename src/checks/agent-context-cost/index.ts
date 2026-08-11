@@ -6,6 +6,7 @@
 import { statSync } from 'node:fs';
 import { join, normalize } from 'node:path';
 import type { Check, CheckContext } from '../registry.ts';
+import { loadConfig } from '../../core/config.ts';
 import { VerdictCache } from '../../core/verdict-cache.ts';
 import {
   discoverInstructionCorpus,
@@ -134,7 +135,10 @@ function selectSources(corpus: InstructionCorpus, classes: LoadSetClass[], repoR
 async function run(context: CheckContext): Promise<AgentContextCostVerdict[]> {
   const targets = [...new Set(context.files.map(toPosix))];
   if (targets.length === 0) return [];
-  const corpus = await discoverInstructionCorpus({ repoRoot: context.repoRoot });
+  // The judged corpus is the one the config says exists (ACA-0060): the
+  // repo's exclude globs are applied at discovery, so planted fixture trees
+  // never become sources or load-set classes.
+  const corpus = await discoverInstructionCorpus({ repoRoot: context.repoRoot, exclude: loadConfig(context.repoRoot).exclude });
   const classes = loadSetClasses(corpus);
   const system = systemPrompt();
   const sources = selectSources(corpus, classes, context.repoRoot, targets);

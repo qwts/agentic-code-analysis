@@ -7,6 +7,12 @@ export interface ListTreeOptions {
   readonly skipDirs: readonly string[];
   /** Hard cap on listed entries; the port throws EntryCapError beyond it. */
   readonly maxEntries: number;
+  /**
+   * Optional per-file exclusion, called with the root-relative POSIX path.
+   * A matching path is neither listed nor counted toward `maxEntries` — a
+   * huge excluded tree must not exhaust the cap for the rest of the root.
+   */
+  readonly exclude?: (path: string) => boolean;
 }
 
 export class EntryCapError extends Error {

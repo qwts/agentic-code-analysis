@@ -44,8 +44,15 @@ resolveInstructionSession(corpus, scenario) → SessionLoadSet   // pure
 `CorpusRequest`: `repoRoot` (absolute), optional `userRoots`
 (id + absolute path, explicitly authorized — a user root is the analog of
 a home directory), optional `config` snapshot (Codex fallback filenames /
-byte cap, Claude auto-memory directory, …). `deps` injects the filesystem
-port and token estimator (production defaults otherwise).
+byte cap, Claude auto-memory directory, …), optional `exclude` globs
+(ACA-0060 — dot-inclusive `**`/`*`/`?`/`{a,b}`, matched against every
+root's root-relative POSIX paths; matches are dropped from the listing
+before adapters run, and the drop is recorded as a corpus diagnostic).
+Consuming checks pass the suite config's `exclude` so they judge the
+corpus the config says exists; content reached only by explicit reference
+(e.g. Claude `@`-imports) is unaffected — what a session genuinely loads
+stays charged. `deps` injects the filesystem port and token estimator
+(production defaults otherwise).
 
 ### Corpus model
 
@@ -113,8 +120,12 @@ that profile:
    paths to POSIX form. List each root **once**, in stable sorted order.
    `.git` is always skipped; `node_modules` is skipped by default and the
    exclusion is recorded as a corpus diagnostic (visible, not silent).
-   Listing stops with a diagnostic at `maxEntriesPerRoot` (default
-   50,000).
+   Paths matching the request's `exclude` globs are dropped inside the
+   listing with the same diagnostic posture — adapters never see, read,
+   or tokenize a match (ACA-0060). Listing stops with a diagnostic at
+   `maxEntriesPerRoot` (default 50,000); excluded paths never count
+   toward the cap, so a huge excluded tree cannot blank a root's
+   discovery.
 2. Every convention adapter selects candidate paths from the immutable
    listing; the union is read once through a memoized source map.
    Unreadable candidates and files over `maxFileBytes` (default 1 MiB)

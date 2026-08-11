@@ -28,7 +28,9 @@ checks must be rerun before applying another exact-span proposal.
 
 ## Selection and public evidence mapping
 
-The selectable universe is exactly repository packages bound by the corpus.
+The selectable universe is exactly repository packages bound by the corpus,
+discovered with the consuming repo's `aca.config.json` `exclude` globs
+applied (ACA-0060) — planted fixture skill trees never become packages.
 A package root is an `InstructionFile` named `SKILL.md` with a `skill-body`
 binding. Descendant files with `skill-resource` bindings are members. The same
 physical package is judged once while retaining every host/profile binding.
