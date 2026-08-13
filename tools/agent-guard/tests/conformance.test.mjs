@@ -20,11 +20,11 @@ import path from 'node:path';
 import { after, describe, test } from 'node:test';
 import { fileURLToPath } from 'node:url';
 
+import { parseGrantMinutes } from '../arbiter.mjs';
 import { evaluateCommand, evaluateHookInput } from '../guard-agent-command.mjs';
 import { clampCeiling, deriveBudget } from '../lib/budget.mjs';
-import { isCi, isTrustedHostedCi } from '../lib/policy.mjs';
+import { isCi } from '../lib/policy.mjs';
 import { readMemoryStatus } from '../lib/system-memory.mjs';
-import { spawnTarget } from '../run-guarded.mjs';
 
 // <repo>/tools/agent-guard/tests/this-file → <repo>
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..', '..');
@@ -143,6 +143,7 @@ describe('agent-guard conformance (ENG-0138)', () => {
     for (const command of [
       'corepack yarn run test:e2e',
       'yarn workspaces foreach -A npm run ci',
+      'npm run ci [z-a]',
       'cat <(npx vitest)',
       "watch -n 1 'npx vitest'",
       'printf x | xargs npx vitest',
@@ -217,14 +218,75 @@ describe('agent-guard conformance (ENG-0138)', () => {
       'rm -rf ~/.cache/agent-guard/lease?',
       'rm -rf ~/.cache/agent-guard/[l]eases',
       'rm -rf ~/.cache/agent-guard/lea{ses,se}',
+      // A script generated, marked executable, and dispatched in one shell
+      // line never existed when the hook inspected the filesystem (#189).
+      "printf 'npx vitest\\n' > lane && chmod +x lane && ./lane",
+      "printf 'npx vitest\\n' > lane; chmod +x lane; ./lane",
+      "printf 'npx vitest\\n' > 'lane' && chmod +x 'lane' && './lane'",
+      "printf 'npx vitest\\n' > /tmp/lane-189 && chmod +x /tmp/lane-189 && /tmp/lane-189",
+      'touch ./lane && ./lane',
+      // Quoting the deletion target does not make it prose (#198).
+      'rm -rf "$XDG_CACHE_HOME/agent-guard"',
+      'rm -rf "$HOME/.cache/agent-guard/leases"',
+      'rm -rf ~/".cache/agent-guard"',
+      'rm -rf "$HOME"/.cache/agent-guard/leases',
+      ': > "$HOME/.cache/agent-guard/leases/live.json"',
     ]) {
       assert.equal(evaluateCommand(command, { env }).allow, false, `expected the guard to deny: ${command}`);
+    }
+  });
+
+  test('unenumerated wrappers cannot hide a heavy lane or test binary', () => {
+    // The prefix stripper knows an enumerated wrapper set; anything outside
+    // it (flock, sudo, doas, chrt, strace, …) must not become a bypass. The
+    // deny-side scans consider every runner-shaped token as a candidate
+    // command start, so the wrapper's argument tail is still inspected.
+    for (const command of [
+      'flock /tmp/agent.lock npm run ci',
+      'sudo npx vitest',
+      'doas npm run test:e2e',
+      'chrt -b 0 node --run ci',
+      'flock /tmp/agent.lock pnpm run test:stories:ci',
+      'strace -f npx playwright test',
+      'sudo -u me npx c8 npm test',
+      'flock /tmp/agent.lock npm run test:e2e:inner',
+      'flock /tmp/agent.lock npm run $lane',
+      // The -c string form runs its payload like `script -c`; a quoted
+      // payload is a command, not prose, and is promoted for the same scans.
+      "flock /tmp/agent.lock -c 'npm run ci'",
+      "flock -n /tmp/agent.lock --command 'npx vitest'",
+    ]) {
+      assert.equal(evaluateCommand(command, { env }).allow, false, `expected the guard to deny: ${command}`);
+    }
+    // The canonical wrapper still carries its own sanctioned tail, and a
+    // runner-shaped word in argument position is data, not an invocation.
+    for (const command of [
+      'node tools/agent-guard/run-guarded.mjs --label test:e2e -- npm run test:e2e:inner',
+      'brew info npm',
+      'git log --oneline -- vitest.config.ts',
+      "flock /tmp/agent.lock -c 'npm run lint'",
+    ]) {
+      assert.equal(evaluateCommand(command, { env }).allow, true, `expected the guard to allow: ${command}`);
     }
   });
 
   test('the guard denies tampering with its own controls', () => {
     for (const command of ['AGENT_GUARD_FORCE=1 npm run test:dom', 'AGENT_GUARD_ASSUME_HUMAN=1 npm run test:dom', 'node tools/agent-guard/arbiter.mjs grant e2e']) {
       assert.equal(evaluateCommand(command, { env }).allow, false, `expected the guard to deny: ${command}`);
+    }
+  });
+
+  test('grant honors the documented --minutes flag instead of silently defaulting', () => {
+    // In-process on purpose: spawning the real arbiter would mint a real
+    // machine-wide grant — stateDir ignores env overrides for real processes.
+    assert.deepEqual(parseGrantMinutes(['grant', 'e2e', '--minutes', '5']), { ok: true, minutes: 5 });
+    assert.deepEqual(parseGrantMinutes(['grant', 'e2e', '7']), { ok: true, minutes: 7 });
+    assert.deepEqual(parseGrantMinutes(['grant', 'e2e']), { ok: true, minutes: 30 });
+    assert.deepEqual(parseGrantMinutes(['grant', 'e2e', '--minutes', '9999']), { ok: true, minutes: 240 });
+    // 0.1 is positive but rounds to zero minutes — a grant already expired at
+    // write time must be a refusal, not a reported success.
+    for (const argv of [['grant', 'e2e', '--minutes', 'soon'], ['grant', 'e2e', '--minutes'], ['grant', 'e2e', '--minutes', '-5'], ['grant', 'e2e', '--minutes', '0'], ['grant', 'e2e', '--minutes', '0.1'], ['grant', 'e2e', '0.4']]) {
+      assert.equal(parseGrantMinutes(argv).ok, false, `expected a refusal for: ${argv.join(' ')}`);
     }
   });
 
@@ -236,6 +298,26 @@ describe('agent-guard conformance (ENG-0138)', () => {
     assert.equal(evaluateCommand('cat > /tmp/doc <<.\nnpm run "$lane"\n.', { env }).allow, true);
     assert.equal(evaluateCommand('cat <<FIRST <<SECOND\nnpm run ci\nFIRST\nnpx vitest\nSECOND', { env }).allow, true);
     assert.equal(evaluateCommand('cat agent-health-guard/leases/live.json', { env }).allow, true);
+    // Protected-variable text inside quotes is a mention, not an assignment
+    // (#192): commit messages, search patterns, and file payloads are data.
+    for (const command of [
+      'rg "NODE_OPTIONS=" docs',
+      'git commit -m "Document PATH=/usr/bin"',
+      "printf 'PATH=/tmp\\n' > note.txt",
+      "echo 'NODE_OPTIONS=--require ./x'",
+      'git log --grep "GIT_SSH_COMMAND=" --oneline',
+    ]) {
+      assert.equal(evaluateCommand(command, { env }).allow, true, `expected the guard to allow: ${command}`);
+    }
+    // Relative paths as command *arguments* are not dispatches (#189):
+    // creating or naming a file is fine as long as nothing executes it.
+    for (const command of [
+      "printf 'notes\\n' > lane && git add lane",
+      'mkdir -p dist && cp cli.mjs dist/cli.mjs',
+      './configure-does-not-exist',
+    ]) {
+      assert.equal(evaluateCommand(command, { env }).allow, true, `expected the guard to allow: ${command}`);
+    }
   });
 
   test('directly executed text scripts cannot hide protected commands', () => {
@@ -274,7 +356,7 @@ describe('agent-guard conformance (ENG-0138)', () => {
     assert.equal(status.availableMb, 3225);
   });
 
-  test('CI is exempt, so this never slows a hosted runner down', () => {
+  test('CI markers are informational and never grant a wrapper exemption', () => {
     assert.equal(isCi({ GITHUB_ACTIONS: 'true' }), true);
     assert.equal(isCi({ CI: 'true' }), true);
     assert.equal(isCi({}), false);
@@ -285,82 +367,7 @@ describe('agent-guard conformance (ENG-0138)', () => {
       GITHUB_WORKSPACE: '/home/runner/work/repo/repo',
       RUNNER_TEMP: '/home/runner/work/_temp',
     };
-    assert.equal(isTrustedHostedCi({ env: hosted, cwd: hosted.GITHUB_WORKSPACE, platform: 'linux' }), true);
-    assert.equal(isTrustedHostedCi({ env: hosted, cwd: root, platform: 'linux' }), false);
-  });
-
-  test('a hosted Windows runner is exempt too, not just the POSIX ones', () => {
-    // `D:\a\<repo>\<repo>` is the hosted Windows workspace. Before this was
-    // matched, win32 fell through to the "unsupported platform" branch, so the
-    // guard was deciding for a runner it is meant to stay out of entirely.
-    const hosted = {
-      CI: 'true',
-      GITHUB_ACTIONS: 'true',
-      RUNNER_ENVIRONMENT: 'github-hosted',
-      GITHUB_WORKSPACE: 'D:\\a\\repo\\repo',
-      RUNNER_TEMP: 'D:\\a\\_temp',
-    };
-    assert.equal(isTrustedHostedCi({ env: hosted, cwd: hosted.GITHUB_WORKSPACE, platform: 'win32' }), true);
-    // Windows paths are case-insensitive, and the work volume has moved before.
-    const otherDrive = { ...hosted, GITHUB_WORKSPACE: 'c:\\a\\repo\\repo', RUNNER_TEMP: 'C:\\a\\_temp' };
-    assert.equal(isTrustedHostedCi({ env: otherDrive, cwd: 'C:\\A\\Repo\\Repo', platform: 'win32' }), true);
-    // A local Windows checkout carrying copied CI variables still is not CI.
-    const local = { ...hosted, GITHUB_WORKSPACE: 'C:\\Users\\dev\\repo', RUNNER_TEMP: 'C:\\Users\\dev\\tmp' };
-    assert.equal(isTrustedHostedCi({ env: local, cwd: local.GITHUB_WORKSPACE, platform: 'win32' }), false);
-    assert.equal(isTrustedHostedCi({ env: hosted, cwd: 'D:\\a\\other\\other', platform: 'win32' }), false);
-  });
-
-  test('the wrapped command launches on Windows, where npm is a .cmd shim', () => {
-    // `spawn('npm', …)` reports `spawn npm ENOENT` on a Windows runner: spawn
-    // does not consult PATHEXT, and Node refuses to launch a `.cmd` outright
-    // unless it goes through a shell.
-    const env = { PATH: 'C:\\Program Files\\nodejs', PATHEXT: '.COM;.EXE;.BAT;.CMD' };
-    // NTFS is case-insensitive, so the lookup finds `npm.cmd` through the
-    // uppercase `.CMD` that PATHEXT actually advertises.
-    const installed = new Set(['c:\\program files\\nodejs\\npm.cmd', 'c:\\program files\\nodejs\\node.exe']);
-    const exists = (candidate) => installed.has(candidate.toLowerCase());
-    const npm = spawnTarget(['npm', 'run', 'test:inner'], { platform: 'win32', env, exists });
-    assert.equal(npm.options.shell, true);
-    assert.deepEqual(npm.args, []);
-    assert.match(npm.file, /^"C:\\Program Files\\nodejs\\npm\.cmd" /iu);
-
-    // A real executable needs no shell at all, so there is no quoting to lose.
-    const node = spawnTarget(['node', '--version'], { platform: 'win32', env, exists });
-    assert.equal(node.file.toLowerCase(), 'c:\\program files\\nodejs\\node.exe');
-    assert.deepEqual(node.args, ['--version']);
-    assert.deepEqual(node.options, {});
-
-    // Arguments must survive the shell: a space must not split one argument
-    // into two, and cmd.exe metacharacters must not be interpreted. A `.cmd`
-    // shim is parsed twice, so each layer carries its own escape.
-    const spaced = spawnTarget(['npm', 'run', 'a b & echo pwned'], { platform: 'win32', env, exists });
-    assert.ok(!/(?<!\^)&/u.test(spaced.file), `unescaped & would run a second command: ${spaced.file}`);
-    assert.match(spaced.file, /\^+"a\^+ b\^+ \^+&\^+ echo\^+ pwned\^+"/u);
-
-    // cmd.exe expands `%VAR%` before it strips caret escapes, and there is no
-    // command-line escape for `%` outside a batch file — so the caller's argv
-    // cannot be passed through faithfully. Refuse instead of expanding it,
-    // since an expanded value can itself carry command syntax.
-    assert.throws(() => spawnTarget(['npm', 'run', '%PATH%'], { platform: 'win32', env, exists }), /%VAR%/u);
-    // The direct-spawn path never involves a shell, so `%` is ordinary there.
-    assert.deepEqual(spawnTarget(['node', '-e', 'x=%PATH%'], { platform: 'win32', env, exists }).args, ['-e', 'x=%PATH%']);
-
-    // POSIX keeps launching the command directly, exactly as before.
-    assert.deepEqual(spawnTarget(['npm', 'run', 'test:inner'], { platform: 'linux', env, exists }), {
-      file: 'npm',
-      args: ['run', 'test:inner'],
-      options: {},
-    });
-  });
-
-  test('both spawn sites go through the platform-aware launcher', () => {
-    const runner = readFileSync(path.join(root, 'tools/agent-guard/run-guarded.mjs'), 'utf8');
-    assert.equal(
-      runner.match(/spawn\(target\.file, target\.args,/gu)?.length,
-      2,
-      'passthrough and the guarded run must both launch through spawnTarget — a raw spawn(command[0], …) is the Windows ENOENT',
-    );
-    assert.doesNotMatch(runner, /spawn\(command\[0\]/u);
+    assert.equal(isCi(hosted), true);
   });
 
   test('an inherited CI marker does not exempt an agent process', () => {
@@ -391,5 +398,21 @@ describe('agent-guard conformance (ENG-0138)', () => {
       env: { HOME: process.env.HOME, PATH: process.env.PATH },
     });
     assert.notEqual(strippedIdentity.status, 0);
+    const forgedHosted = spawnSync(process.execPath, [runner, '--label', 'test:e2e', '--', process.execPath, '-e', 'process.exit(0)'], {
+      cwd: root,
+      encoding: 'utf8',
+      env: {
+        ...localProcessEnv,
+        CI: 'true',
+        GITHUB_ACTIONS: 'true',
+        RUNNER_ENVIRONMENT: 'github-hosted',
+        GITHUB_WORKSPACE: '/home/runner/work/repo/repo',
+        RUNNER_TEMP: '/home/runner/work/_temp',
+        ACTIONS_ID_TOKEN_REQUEST_URL: 'https://attacker.invalid/token',
+        ACTIONS_ID_TOKEN_REQUEST_TOKEN: 'forged',
+      },
+    });
+    assert.notEqual(forgedHosted.status, 0);
+    assert.match(forgedHosted.stderr, /agents do not run it on this machine/u);
   });
 });
