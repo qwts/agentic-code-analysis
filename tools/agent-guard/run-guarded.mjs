@@ -4,7 +4,7 @@
 // governed repo carried its own drifting copy of.
 //
 // What it does, in order:
-//   1. Gets out of the way in CI, and for nested guarded commands.
+//   1. Gets out of the way for nested guarded commands.
 //   2. Applies the agent-vs-human lane policy (lib/policy.mjs).
 //   3. Derives the ceiling from the effective machine/cgroup total and CLAMPS the request down to
 //      it — an `--rss-mb 8192` inherited from an old npm script becomes 3072 on
@@ -24,13 +24,13 @@
 //        AGENT_GUARDED=1 (set for children so nested guards pass through).
 
 import { execFile, spawn } from 'node:child_process';
-import { appendFileSync, existsSync, mkdirSync, writeFileSync } from 'node:fs';
+import { appendFileSync, mkdirSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import process from 'node:process';
 
-import { clampCeiling, decideAdmission, deriveBudgetForMemory } from './lib/budget.mjs';
-import { acquireLease, heartbeatLease, leaseExists, psExecutable, readLeases, releaseLease, retargetLease, withAdmissionLock } from './lib/leases.mjs';
-import { evaluateLanePolicy, harnessName, isAgentSession, isTrustedHostedCi } from './lib/policy.mjs';
+import { clampCeiling, decideAdmission, deriveBudgetForMemory, laneReservationMb } from './lib/budget.mjs';
+import { acquireLease, heartbeatLease, leaseExists, psExecutable, readLanePeakMb, readLeases, recordLanePeak, releaseLease, retargetLease, withAdmissionLock } from './lib/leases.mjs';
+import { evaluateLanePolicy, harnessName, isAgentSession } from './lib/policy.mjs';
 import { readMemoryStatus, topConsumers } from './lib/system-memory.mjs';
 
 const POLL_MS = 250;
@@ -129,88 +129,8 @@ export function collectTreeRssKb(psOutput, rootPid) {
   return { totalKb, processCount };
 }
 
-// --- Launching the wrapped command ------------------------------------------
-//
-// Windows has no execve. `spawn` looks for the literal name and never consults
-// PATHEXT, so `spawn('npm', …)` on a Windows runner dies with `spawn npm
-// ENOENT` — npm ships as `npm.cmd`. Resolving to `npm.cmd` is not enough
-// either: since the BatBadBut fix (CVE-2024-27980) Node refuses to launch a
-// `.cmd`/`.bat` at all without `shell: true`, which means going through
-// cmd.exe.
-//
-// So resolve the name here. A real executable is spawned directly — no shell,
-// and therefore no quoting to get wrong. Only a batch shim takes the cmd.exe
-// route, and then the quoting is done below, because Node joins argv with
-// plain spaces under `shell: true` and escapes nothing itself.
-
-const WINDOWS_DEFAULT_PATHEXT = '.COM;.EXE;.BAT;.CMD';
-
-// cmd.exe consumes one layer of `^` escapes per parse, and a batch shim is
-// parsed twice: once as the `/c` command line, once when the batch file itself
-// runs. Hence the second pass for `.cmd`/`.bat` targets.
-//
-// `%` is deliberately absent. cmd expands `%VAR%` *before* it strips carets, so
-// `^%` does not protect anything — it just leaves a stray caret behind when the
-// name does not resolve. There is no command-line escape for it outside a batch
-// file, so percent arguments are refused below rather than silently mangled.
-const CMD_META = /([()[\]!^"`<>&|;, *?])/gu;
-
-export function resolveWindowsCommand(name, env = process.env, exists = existsSync) {
-  const extensions = (env.PATHEXT ?? WINDOWS_DEFAULT_PATHEXT).split(';').filter(Boolean);
-  const named = /[\\/]/u.test(name) || /^[A-Za-z]:/u.test(name);
-  const directories = named ? [''] : (env.Path ?? env.PATH ?? '').split(';').filter(Boolean);
-  for (const directory of directories) {
-    // PATH entries may be quoted; the quotes are shell syntax, not path bytes.
-    const base = directory === '' ? name : path.win32.join(directory.replace(/^"|"$/gu, ''), name);
-    if (extensions.some((extension) => base.toLowerCase().endsWith(extension.toLowerCase())) && exists(base)) return base;
-    for (const extension of extensions) {
-      if (exists(`${base}${extension}`)) return `${base}${extension}`;
-    }
-  }
-  return null;
-}
-
-// The executable slot is parsed by cmd.exe itself, so it may be quoted but must
-// NOT be caret-escaped: a `^"` reaches cmd as a literal quote and it would look
-// for a program whose name starts with one.
-function quoteWindowsExecutable(word) {
-  return /\s/u.test(word) ? `"${word}"` : word;
-}
-
-function escapeWindowsArgument(word, isBatch) {
-  // First the backslash/quote encoding that CommandLineToArgvW reverses in the
-  // child, then cmd.exe's own metacharacters, which it acts on beforehand.
-  let escaped = `"${word.replace(/(\\*)"/gu, '$1$1\\"').replace(/(\\*)$/u, '$1$1')}"`.replace(CMD_META, '^$1');
-  if (isBatch) escaped = escaped.replace(CMD_META, '^$1');
-  return escaped;
-}
-
-export function spawnTarget(command, { platform = process.platform, env = process.env, exists = existsSync } = {}) {
-  if (platform !== 'win32') return { file: command[0], args: command.slice(1), options: {} };
-  const resolved = resolveWindowsCommand(command[0], env, exists);
-  const isBatch = resolved !== null && /\.(?:bat|cmd)$/iu.test(resolved);
-  if (resolved !== null && !isBatch) return { file: resolved, args: command.slice(1), options: {} };
-  // Only the cmd.exe route is exposed to percent expansion; the direct-spawn
-  // path above never sees a shell. Refusing beats guessing here — an expanded
-  // value can itself contain metacharacters and turn into command syntax, which
-  // is precisely what this wrapper exists to prevent.
-  const percent = command.slice(1).find((word) => word.includes('%'));
-  if (percent !== undefined) {
-    throw new Error(
-      `cannot pass the argument "${percent}" through the Windows shim ${resolved ?? command[0]}: ` +
-        'cmd.exe expands %VAR% before the command sees it and offers no command-line escape for it',
-    );
-  }
-  // An unresolved name still goes through cmd.exe rather than failing here: it
-  // can find shims this lookup did not model, and a genuinely missing command
-  // then reports itself instead of surfacing as a misleading ENOENT.
-  const line = [quoteWindowsExecutable(resolved ?? command[0]), ...command.slice(1).map((word) => escapeWindowsArgument(word, isBatch))];
-  return { file: line.join(' '), args: [], options: { shell: true } };
-}
-
 function passthrough(command) {
-  const target = spawnTarget(command);
-  const child = spawn(target.file, target.args, { stdio: 'inherit', ...target.options });
+  const child = spawn(command[0], command.slice(1), { stdio: 'inherit' });
   child.on('exit', (code, signal) => process.exit(code ?? (signal ? 1 : 0)));
   child.on('error', (error) => fail(`failed to start command: ${error.message}`));
 }
@@ -228,7 +148,7 @@ function describeRefusal(decision, env) {
   if (consumers.length > 0) {
     lines.push(`Largest resident processes: ${consumers.map((entry) => `${entry.name} ${entry.rssMb} MB`).join(', ')}`);
   }
-  lines.push('CI is exempt from this guard — pushing and letting GitHub verify is always available.');
+  lines.push('GitHub CI runs the underlying CI entrypoint directly, so pushing and letting GitHub verify is always available.');
   return lines.join('\n[guard] ');
 }
 
@@ -259,9 +179,9 @@ async function admit({ env, request, budget, leaseFields }) {
     const attempt = await withAdmissionLock(env, () => {
       const memory = readMemoryStatus();
       const leases = readLeases(env);
-      const decision = decideAdmission({ budget, memory, leases, requestMb: request.ceilingMb });
+      const decision = decideAdmission({ budget, memory, leases, requestMb: request.reserveMb ?? request.ceilingMb });
       if (!decision.granted && env.AGENT_GUARD_FORCE !== '1') return { decision, memory };
-      const lease = acquireLease({ env, estimatedMb: request.ceilingMb, ...leaseFields });
+      const lease = acquireLease({ env, estimatedMb: request.reserveMb ?? request.ceilingMb, ...leaseFields });
       return { decision, memory, lease };
     });
     if (attempt.lease) {
@@ -288,10 +208,6 @@ async function main() {
   const { options, command } = parsed;
   if (command.length === 0) fail('no command given');
 
-  // Hosted CI is exempt only when the process is actually inside the fixed
-  // GitHub-hosted runner workspace. CI variables alone are ordinary process
-  // environment and are not sufficient proof of an isolated runner.
-  if (isTrustedHostedCi({ env: process.env, cwd: process.cwd(), platform: process.platform })) return passthrough(command);
   // Nested guarded scripts pass through — but only when the marker names a
   // live lease bound to this caller's process group. Lease ids are visible to
   // same-user processes, so id knowledge alone cannot prove nesting. A copied
@@ -318,6 +234,19 @@ async function main() {
   }
 
   const worktree = process.cwd();
+  const guardDir = path.join(worktree, '.guard');
+
+  // Plan with what the lane actually costs, enforce with the ceiling. Peaks
+  // come from the protected state store — recorded only by run-guarded from
+  // RSS it measured, never from worktree files an agent can edit (#203
+  // review) — so a trustworthy recent peak lowers the reservation while the
+  // kill at the ceiling is unchanged by history.
+  const lanePeakMb = readLanePeakMb({ env: process.env, repo: path.basename(worktree), label: options.label });
+  request.reserveMb = laneReservationMb(request.ceilingMb, lanePeakMb);
+  if (request.reserveMb < request.ceilingMb) {
+    note(`reserving ${request.reserveMb} MB from the lane's recent measured peak (${lanePeakMb} MB); the enforced ceiling stays ${request.ceilingMb} MB.`);
+  }
+
   const { decision, memory, lease, refused } = await admit({
     env: process.env,
     request,
@@ -332,19 +261,16 @@ async function main() {
   });
   if (refused) fail(describeRefusal(decision, process.env));
 
-  const guardDir = path.join(worktree, '.guard');
   mkdirSync(guardDir, { recursive: true });
 
   const nodeOptions = [process.env.NODE_OPTIONS, `--max-old-space-size=${request.heapMb}`].filter(Boolean).join(' ');
   const startedAt = Date.now();
-  const target = spawnTarget(command);
-  const child = spawn(target.file, target.args, {
+  const child = spawn(command[0], command.slice(1), {
     stdio: 'inherit',
     detached: true, // new process group; kill(-pid) reaches every descendant
     // The marker carries this run's lease id, so a child can prove it is
     // nested inside a real guarded run rather than merely asserting it.
     env: { ...process.env, AGENT_GUARDED: lease.id, NODE_OPTIONS: nodeOptions },
-    ...target.options,
   });
 
   // The admitted reservation must follow the detached group, not this
@@ -437,6 +363,7 @@ async function main() {
       peakRssMb: state.peakRssMb,
       peakProcessCount: state.peakProcessCount,
       ceilingMb: request.ceilingMb,
+      reservedMb: request.reserveMb,
       requestedMb: request.requestedMb,
       clamped: request.clamped,
       heapMb: request.heapMb,
@@ -456,6 +383,9 @@ async function main() {
       note(`run failed: ${state.reason} (diagnostics in .guard/last-run.json).`);
       process.exit(1);
     }
+    // Only a completed run's peak informs future reservations: a run killed
+    // at the ceiling or timed out proves nothing about steady-state cost.
+    if (code === 0) recordLanePeak({ env: process.env, repo: path.basename(worktree), label: options.label, peakRssMb: state.peakRssMb });
     process.exit(code ?? (signal ? 1 : 0));
   });
 
