@@ -7,12 +7,19 @@ import { JudgeUnavailableError, MissingCredentialsError } from '../src/core/judg
 const REQUEST = { system: 'rule text', user: 'file payload', schema: { type: 'object' }, maxTokens: 64 };
 
 function stub(response: unknown, capture?: { params?: unknown }): Anthropic {
+  // The adapter streams (the 32k budget trips the SDK's non-streaming
+  // 10-minute guard) and consumes the reassembled final message, so the stub
+  // models exactly that surface: stream(params) -> { finalMessage() }.
   return {
     messages: {
-      create: async (params: unknown) => {
+      stream: (params: unknown) => {
         if (capture) capture.params = params;
-        if (response instanceof Error) throw response;
-        return response;
+        return {
+          finalMessage: async () => {
+            if (response instanceof Error) throw response;
+            return response;
+          },
+        };
       },
     },
   } as unknown as Anthropic;
