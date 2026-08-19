@@ -29,13 +29,23 @@ export function createAnthropicJudge(model: string, client?: Anthropic): JudgeCl
 async function judge(anthropic: Anthropic, model: string, request: JudgeRequest): Promise<JudgeResult> {
   let response: Anthropic.Message;
   try {
-    response = await anthropic.messages.create({
-      model,
-      max_tokens: request.maxTokens,
-      system: [{ type: 'text', text: request.system, cache_control: { type: 'ephemeral' } }],
-      output_config: { format: { type: 'json_schema', schema: request.schema } },
-      messages: [{ role: 'user', content: request.user }],
-    });
+    // Streamed, then reassembled: at the ACA-0070 budget (32,768 tokens) the
+    // SDK's client-side estimate refuses every non-streaming request as
+    // "may take longer than 10 minutes" — which silently degraded a whole
+    // qualification run to api-error warns (issue #78: opus judged nothing
+    // and scored `none`). Streaming is the SDK's sanctioned path for long
+    // generations, and a byte trickle also survives the idle-connection
+    // reaping that a minutes-long silent response invites. The consumed
+    // result is the same `Anthropic.Message`; nothing downstream changes.
+    response = await anthropic.messages
+      .stream({
+        model,
+        max_tokens: request.maxTokens,
+        system: [{ type: 'text', text: request.system, cache_control: { type: 'ephemeral' } }],
+        output_config: { format: { type: 'json_schema', schema: request.schema } },
+        messages: [{ role: 'user', content: request.user }],
+      })
+      .finalMessage();
   } catch (err) {
     // Non-Error throws must still yield an informative note (review, PR #9).
     const message = err instanceof Error ? err.message : String(err);
