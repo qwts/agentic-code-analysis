@@ -147,8 +147,8 @@ jobs:
 
   report:
     name: Qualification summary
-    needs: [select, qualify]
-    if: always()
+    needs: [policy, select, qualify]
+    if: always() && needs.policy.result == 'success'
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:

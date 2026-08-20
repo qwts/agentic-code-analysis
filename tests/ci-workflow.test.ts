@@ -30,4 +30,6 @@ test('dispatch-only paid calibration authorizes before checkout or secrets', () 
   assert.ok(policy < calibrate.indexOf('actions/checkout@'));
   assert.ok(policy < calibrate.indexOf('ANTHROPIC_API_KEY'));
   assert.match(calibrate, /authorization-only: 'true'/u);
+  assert.match(calibrate, /needs: \[policy, select, qualify\]/u);
+  assert.match(calibrate, /if: always\(\) && needs\.policy\.result == 'success'/u);
 });
