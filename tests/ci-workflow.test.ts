@@ -8,7 +8,7 @@ const codeql = readFileSync(new URL('../.github/workflows/codeql.yml', import.me
 
 test('every runner and installer is covered by the runtime contract', () => {
   for (const source of [ci, calibrate, codeql]) {
-    for (const match of source.matchAll(/^  ([a-zA-Z0-9_-]+):\n([\s\S]*?)(?=^  [a-zA-Z0-9_-]+:|\s*$)/gmu)) {
+    for (const match of source.matchAll(/^  ([a-zA-Z0-9_-]+):\n([\s\S]*?)(?=^  [a-zA-Z0-9_-]+:|(?![\s\S]))/gmu)) {
       const name = match[1] ?? 'unknown job';
       const body = match[2] ?? '';
       if (/runs-on:/u.test(body)) assert.match(body, /timeout-minutes:/u, name);
