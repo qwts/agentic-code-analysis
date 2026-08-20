@@ -47,9 +47,20 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  policy:
+    name: Action Policy
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: qwts/playbook-engineering/.github/actions/ci-policy@5455a3f5939369ea843b1bbb4d2573739f4381a6
+        with:
+          authorization-only: 'true'
+
   select:
     name: Select checks
+    needs: policy
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     outputs:
       checks: ${{ steps.list.outputs.checks }}
     steps:
@@ -60,7 +71,15 @@ jobs:
         with:
           node-version: 24
           cache: npm
-      - run: npm ci
+      - name: Install locked selection dependencies
+        uses: qwts/playbook-engineering/.github/actions/bounded-command@5455a3f5939369ea843b1bbb4d2573739f4381a6
+        with:
+          task: Install locked selection dependencies
+          executable: npm
+          arguments-json: '["ci"]'
+          timeout-seconds: '600'
+          attempts: '2'
+          retry-delay-seconds: '5'
       - id: list
         env:
           REQUESTED: ${{ inputs.checks }}
@@ -74,6 +93,7 @@ jobs:
     name: ${{ matrix.check }}
     needs: select
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     strategy:
       fail-fast: false
       matrix:
@@ -86,7 +106,15 @@ jobs:
         with:
           node-version: 24
           cache: npm
-      - run: npm ci
+      - name: Install locked qualification dependencies
+        uses: qwts/playbook-engineering/.github/actions/bounded-command@5455a3f5939369ea843b1bbb4d2573739f4381a6
+        with:
+          task: Install locked qualification dependencies
+          executable: npm
+          arguments-json: '["ci"]'
+          timeout-seconds: '600'
+          attempts: '2'
+          retry-delay-seconds: '5'
       # An unqualified check is a measurement, not a workflow failure: the run
       # must reach the summary so every row is visible together.
       - name: Self-test
@@ -122,6 +150,7 @@ jobs:
     needs: [select, qualify]
     if: always()
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
