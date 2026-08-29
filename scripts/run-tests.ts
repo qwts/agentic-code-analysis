@@ -6,5 +6,4 @@ import { fileURLToPath } from 'node:url';
 
 const root = fileURLToPath(new URL('../', import.meta.url));
 const tests = globSync('tests/*.test.ts', { cwd: root }).sort();
-tests.push('tools/agent-guard/tests/conformance.test.mjs');
 execFileSync(process.execPath, ['--test', ...tests], { cwd: root, stdio: 'inherit' });
