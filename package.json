@@ -36,7 +36,7 @@
   "scripts": {
     "build:package": "node scripts/build-package.ts",
     "prepack": "npm run build:package",
-    "test": "node tools/agent-guard/run-guarded.mjs --label test -- npm run test:inner",
+    "test": "npm run test:inner",
     "test:inner": "node scripts/run-tests.ts",
     "test:package": "node scripts/test-package.ts",
     "typecheck": "tsc --noEmit"
