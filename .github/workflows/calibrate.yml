@@ -60,7 +60,7 @@ jobs:
     name: Select checks
     needs: policy
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 22
     outputs:
       checks: ${{ steps.list.outputs.checks }}
     steps:
