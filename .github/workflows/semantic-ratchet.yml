@@ -1,0 +1,114 @@
+# Reusable advisory semantic dimension for file-size ratchets (ENG-0160).
+#
+# Lives here since qwts/agent-sop#379 moved it out of agent-sop. Consumers keep
+# their deterministic ratchet as the merge gate and call this workflow by
+# commit for model-judged context-footprint findings. The analyzer checkout
+# below is trusted and pinned; the caller's source is read as evidence, never
+# executed.
+name: Semantic ratchet
+
+on:
+  workflow_call:
+    inputs:
+      model:
+        description: Exact Hugging Face model/provider route qualified against the pinned aca exam
+        type: string
+        required: true
+      base-ref:
+        description: Git ref used to select changed files
+        type: string
+        default: origin/main
+      qualify:
+        description: Run the live context-footprint calibration exam instead of screening changed files
+        type: boolean
+        default: false
+    secrets:
+      HF_TOKEN:
+        description: Hugging Face token; an absent token skips advisory screening and fails qualification
+        required: false
+
+permissions:
+  contents: read
+
+jobs:
+  context-footprint:
+    name: context-footprint
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Check out caller repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Fetch agentic-code-analysis
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: qwts/agentic-code-analysis
+          ref: 0b49ecb70a9c6ef7f44f190256822bced9d4fa20
+          path: .aca
+          persist-credentials: false
+
+      - name: Set up Node
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 24
+
+      - name: Install pinned analyzer dependencies
+        run: |
+          # ci-runtime: exception owner=semantic-ratchet max=10m review=analyzer-runtime-change reason=bootstrap-cannot-pin-the-new-shared-action-before-merge
+          timeout --signal=TERM --kill-after=10s 600s npm --prefix .aca clean-install
+
+      # A pull request can commit a file under .cache/aca whose name matches a
+      # real content-addressed verdict. Remove caller-controlled entries before
+      # restoring the trusted Actions cache so they cannot suppress a judge call.
+      - name: Discard checked-out semantic verdicts
+        if: ${{ !inputs.qualify }}
+        run: rm -rf -- .cache/aca
+
+      - name: Restore semantic verdicts
+        if: ${{ !inputs.qualify }}
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: .cache/aca
+          key: aca-context-footprint-${{ runner.os }}-${{ github.sha }}
+          restore-keys: |
+            aca-context-footprint-${{ runner.os }}-
+
+      - name: Validate route and scope configuration
+        env:
+          ACA_MODEL: ${{ inputs.model }}
+          QUALIFY: ${{ inputs.qualify }}
+        run: |
+          if [ "$QUALIFY" != "true" ]; then
+            test -f aca.config.json || {
+              echo '::error::aca.config.json is required so screening never defaults to judging the whole repository'
+              exit 2
+            }
+          fi
+          case "$ACA_MODEL" in
+            *:cheapest|*:preferred)
+              echo '::error::dynamic Hugging Face routing cannot carry pinned calibration evidence'
+              exit 2
+              ;;
+          esac
+
+      - name: Screen changed files
+        if: ${{ !inputs.qualify }}
+        env:
+          ACA_PROVIDER: openai
+          ACA_MODEL: ${{ inputs.model }}
+          BASE_REF: ${{ inputs.base-ref }}
+          OPENAI_BASE_URL: https://router.huggingface.co/v1
+          OPENAI_API_KEY: ${{ secrets.HF_TOKEN }}
+        run: node .aca/src/cli.ts context-footprint --base "$BASE_REF"
+
+      - name: Qualify route
+        if: ${{ inputs.qualify }}
+        env:
+          ACA_PROVIDER: openai
+          ACA_MODEL: ${{ inputs.model }}
+          OPENAI_BASE_URL: https://router.huggingface.co/v1
+          OPENAI_API_KEY: ${{ secrets.HF_TOKEN }}
+        run: node .aca/src/cli.ts context-footprint --self-test --json

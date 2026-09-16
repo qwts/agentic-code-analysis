@@ -34,6 +34,7 @@ Designs are accepted — read them before changing anything:
 - [docs/design/check-agent-context-cost.md](docs/design/check-agent-context-cost.md) — value per token of instruction files, host-verified savings
 - [docs/design/check-skill-information-architecture.md](docs/design/check-skill-information-architecture.md) — whole-skill ordering, cohesion, and progressive disclosure
 - [docs/design/check-agent-rule-conflict.md](docs/design/check-agent-rule-conflict.md) — instruction contradictions, load-set attribution, partitioned whole-corpus judgment
+- [docs/reference/semantic-ratchets.md](docs/reference/semantic-ratchets.md) — advisory semantic screen beside numeric size ratchets; contract of the reusable `semantic-ratchet.yml` workflow (ENG-0160)
 - [docs/decisions/](docs/decisions/README.md) — ACA records; supersede, never rewrite
 - [docs/plan/issues.md](docs/plan/issues.md) — implementation order (#3 → #4 → #5/#6)
 

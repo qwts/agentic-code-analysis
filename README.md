@@ -163,4 +163,5 @@ promotion.
 - [Decisions (ACA series)](https://github.com/qwts/agentic-code-analysis/blob/main/docs/decisions/README.md)
 - [Release procedure](https://github.com/qwts/agentic-code-analysis/blob/main/docs/release.md) — package verification, calibration, and npm handoff
 - [Enforced standards](https://github.com/qwts/agentic-code-analysis/tree/main/docs/standards)
+- [Semantic ratchets](https://github.com/qwts/agentic-code-analysis/blob/main/docs/reference/semantic-ratchets.md) — advisory `context-footprint` screen beside numeric size ratchets (ENG-0160) and the reusable `semantic-ratchet.yml` workflow
 - [Contributing](https://github.com/qwts/agentic-code-analysis/blob/main/CONTRIBUTING.md) and [agent context](https://github.com/qwts/agentic-code-analysis/blob/main/AGENTS.md)
