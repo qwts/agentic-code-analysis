@@ -25,7 +25,7 @@ test('exact-SHA evidence uses the immutable workflow path', () => {
 });
 
 test('dispatch-only paid calibration authorizes before checkout or secrets', () => {
-  const policy = calibrate.indexOf('uses: qwts/playbook-engineering/.github/actions/ci-policy@');
+  const policy = calibrate.indexOf('uses: qwts/qwts-agent-ci/.github/actions/ci-policy@');
   assert.ok(policy >= 0);
   assert.ok(policy < calibrate.indexOf('actions/checkout@'));
   assert.ok(policy < calibrate.indexOf('ANTHROPIC_API_KEY'));
