@@ -3,3 +3,8 @@ node_modules/
 .guard/
 dist/
 *.tgz
+
+# Classification-axis measurement outputs (ACA-0080 spike); regenerate, never commit
+jev-artifacts/
+jev-run-*/
+jev-conf-*/

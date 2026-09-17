@@ -43,6 +43,7 @@
   },
   "devDependencies": {
     "@types/node": "^24.0.0",
+    "@typesafe-ai/sdk": "^0.6.0",
     "typescript": "^7.0.0"
   },
   "dependencies": {
