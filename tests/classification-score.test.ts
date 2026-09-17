@@ -50,35 +50,149 @@ test('AnyOf labels need one hit and AllOf labels need every one', () => {
   assert.equal(complete?.labelHits, 1);
 });
 
-test('labels are pooled across the check-specific carriers, including findings', () => {
-  const pooled = scoreReport(
+// The real manifests use three expectation dialects, not one. Scoring only
+// top-level string arrays silently reported review-readiness,
+// commit-coherence and seam-audit as "labels not asked" (Cursor Bugbot, #90).
+
+test('pair-fixture criteria objects are scored, anchored to their file and line', () => {
+  const expected = {
+    verdict: 'fail',
+    criteria: [
+      { criterion: 'leftover-debug', file: 'src/report.ts', line: 8 },
+      { criterion: 'silenced-test', file: 'tests/report.test.ts', line: 9 },
+    ],
+  };
+  const hit = scoreReport(
     report([
       {
-        name: 'f',
-        expected: { blockingAllOf: ['hardwired-clock'], residualAllOf: ['hardwired-network'], actionsAnyOf: ['extract'] },
-        actual: { verdict: 'fail', blocking: ['hardwired-clock'], residual: ['hardwired-network'], actions: ['extract'] },
+        name: 'debris-multi-file',
+        expected,
+        actual: {
+          verdict: 'fail',
+          findings: [
+            { criterion: 'leftover-debug', file: 'src/report.ts', line: 8 },
+            { criterion: 'silenced-test', file: 'tests/report.test.ts', line: 9 },
+          ],
+        },
+      },
+    ]),
+    'review-readiness',
+  );
+  assert.equal(hit?.labelAsked, 1, 'object criteria must be read as a constraint, not skipped');
+  assert.equal(hit?.labelHits, 1);
+
+  // Pair criteria are all-of: one of two detected is a miss.
+  const partial = scoreReport(
+    report([{ name: 'debris-multi-file', expected, actual: { verdict: 'fail', findings: [{ criterion: 'leftover-debug', file: 'src/report.ts', line: 8 }] } }]),
+    'review-readiness',
+  );
+  assert.equal(partial?.labelHits, 0);
+
+  // Right criterion, wrong file is not a detection.
+  const wrongFile = scoreReport(
+    report([
+      {
+        name: 'debris-multi-file',
+        expected,
+        actual: {
+          verdict: 'fail',
+          findings: [
+            { criterion: 'leftover-debug', file: 'src/other.ts', line: 8 },
+            { criterion: 'silenced-test', file: 'tests/report.test.ts', line: 9 },
+          ],
+        },
+      },
+    ]),
+    'review-readiness',
+  );
+  assert.equal(wrongFile?.labelHits, 0);
+});
+
+test('commit-coherence findings anchor through their files array', () => {
+  const row = scoreReport(
+    report([
+      {
+        name: 'mixed-rename-and-retry',
+        expected: { verdict: 'fail', criteria: [{ criterion: 'mixed-refactor-and-behavior', file: 'src/http.ts' }] },
+        actual: { verdict: 'fail', findings: [{ criterion: 'mixed-refactor-and-behavior', files: ['src/user.ts', 'src/http.ts'] }] },
+      },
+    ]),
+    'commit-coherence',
+  );
+  assert.equal(row?.labelHits, 1);
+});
+
+test('seam-audit footprint entries match the formatted "dependency (criterion)" strings', () => {
+  const expected = {
+    assessment: 'new-violating',
+    verdict: 'fail',
+    blockingAllOf: [
+      { dependency: 'Date.now', criterion: 'ambient-state' },
+      { dependency: 'fetch', criterion: 'ambient-io' },
+    ],
+  };
+  const hit = scoreReport(
+    report([{ name: 'new-hardwired', expected, actual: { assessment: 'new-violating', verdict: 'fail', blocking: ['Date.now (ambient-state)', 'globalThis.fetch (ambient-io)'], residual: [] } }]),
+    'seam-audit',
+  );
+  assert.equal(hit?.labelAsked, 1);
+  assert.equal(hit?.labelHits, 1, 'dependency matches by case-insensitive substring');
+
+  // A residual expectation is not satisfied by a blocking item: the buckets
+  // are never pooled.
+  const wrongBucket = scoreReport(
+    report([
+      {
+        name: 'legacy-held-residual',
+        expected: { assessment: 'held', verdict: 'pass', residualAllOf: [{ dependency: 'Date.now' }] },
+        actual: { assessment: 'held', verdict: 'pass', blocking: ['Date.now (ambient-state)'], residual: [] },
       },
     ]),
     'seam-audit',
   );
-  assert.equal(pooled?.labelHits, 1);
+  assert.equal(wrongBucket?.labelAsked, 1);
+  assert.equal(wrongBucket?.labelHits, 0);
 
-  const fromFindings = scoreReport(
-    report([{ name: 'f', expected: { criteria: ['debris'] }, actual: { verdict: 'fail', findings: [{ criterion: 'debris', file: 'a.ts', line: 3 }] } }]),
-    'review-readiness',
+  // Criterion mismatch on a matching dependency is still a miss.
+  const wrongCriterion = scoreReport(
+    report([{ name: 'new-hardwired', expected, actual: { assessment: 'new-violating', verdict: 'fail', blocking: ['Date.now (ambient-io)', 'fetch (ambient-io)'], residual: [] } }]),
+    'seam-audit',
   );
-  assert.equal(fromFindings?.labelHits, 1);
+  assert.equal(wrongCriterion?.labelHits, 0);
 });
 
-test('nested arrays are not mistaken for labels', () => {
-  // agent-rule-conflict carries sharedSessions as string[][]; treating it as a
-  // label set would invent a constraint the fixture never stated.
+test('seam-audit emptyFootprint is scored as a classification claim', () => {
+  const expected = { assessment: 'new-compliant', verdict: 'pass', emptyFootprint: true };
+  const clean = scoreReport(report([{ name: 'new-injected', expected, actual: { assessment: 'new-compliant', verdict: 'pass', blocking: [], residual: [] } }]), 'seam-audit');
+  assert.equal(clean?.labelAsked, 1);
+  assert.equal(clean?.labelHits, 1);
+
+  const dirty = scoreReport(
+    report([{ name: 'new-injected', expected, actual: { assessment: 'new-compliant', verdict: 'pass', blocking: ['Date.now (ambient-state)'], residual: [] } }]),
+    'seam-audit',
+  );
+  assert.equal(dirty?.labelHits, 0);
+});
+
+test('an unreadable expectation key is reported, never read as unasked', () => {
+  // agent-rule-conflict carries sharedSessions as string[][]. Scoring it is
+  // out of scope, but silently dropping it is how the object dialects went
+  // unnoticed in the first place.
   const row = scoreReport(
-    report([{ name: 'f', expected: { criteriaAnyOf: ['contradiction'], sharedSessions: [['a', 'b']] }, actual: { verdict: 'fail', criteria: ['contradiction'], sharedSessions: [['a', 'b']] } }]),
+    report([{ name: 'f', expected: { criteriaAnyOf: ['contradiction'], sharedSessions: [['a', 'b']] }, actual: { verdict: 'fail', criteria: ['contradiction'] } }]),
     'agent-rule-conflict',
   );
   assert.equal(row?.labelAsked, 1);
   assert.equal(row?.labelHits, 1);
+  assert.deepEqual(row?.unreadable, ['sharedSessions']);
+
+  const table = classificationTable([
+    {
+      name: 'agent-rule-conflict',
+      raw: JSON.stringify(report([{ name: 'f', expected: { sharedSessions: [['a', 'b']] }, actual: { verdict: 'fail', criteria: [] } }], { check: 'agent-rule-conflict' })),
+    },
+  ]).join('\n');
+  assert.match(table, /cannot read[\s\S]*agent-rule-conflict: sharedSessions/);
 });
 
 test('a fixture the run never reached is absent evidence, not a miss', () => {
