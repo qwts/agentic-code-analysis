@@ -1,0 +1,103 @@
+# Open agent-branch pull requests under the qwts-claude-agent App, so the
+# repository's review gate keeps an author distinct from its reviewer (#91).
+#
+# A Claude Code remote session authenticates as qwts, the repository owner, so a
+# pull request it opens directly is owner-authored: CODEOWNERS (`* @qwts`) and
+# the inherited "one approving human review" then have no reviewer left, and the
+# only exit is an admin bypass. Minting an installation token here instead makes
+# qwts-claude-agent[bot] the author and frees qwts to review.
+#
+# The App private key stays in repository secrets and is never handed to the
+# session container. Configure once, with the App installed on this repository
+# and granted pull-requests: write:
+#
+#   vars.CLAUDE_AGENT_APP_ID         the qwts-claude-agent App's numeric id
+#   secrets.CLAUDE_AGENT_PRIVATE_KEY its PEM private key
+#
+# Until both exist the job reports a notice and does nothing, so merging this
+# ahead of the credentials cannot redden the branch.
+#
+# The token comes from a separate App rather than the default GITHUB_TOKEN, so
+# the pull request does trigger `pull_request` workflows. It opens as a draft,
+# which ci.yml deliberately skips; mark it ready for review to run the gate.
+# The body is a stub: authorship belongs to the App, content to the session,
+# which fills the description in over the API afterwards.
+name: Agent PR
+run-name: Agent PR
+
+on:
+  push:
+    branches: ['claude/**']
+
+permissions:
+  contents: read
+
+# Serialize per branch so two quick pushes cannot both pass the existence check
+# below and race to create the same pull request. Queue rather than cancel: a
+# cancelled run could be the one mid-create.
+concurrency:
+  group: agent-pr-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  open:
+    name: Open draft pull request
+    if: github.event.deleted != true && github.event.head_commit != null
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - id: credentials
+        name: Check the App credentials are configured
+        env:
+          APP_ID: ${{ vars.CLAUDE_AGENT_APP_ID }}
+          PRIVATE_KEY_PRESENT: ${{ secrets.CLAUDE_AGENT_PRIVATE_KEY != '' }}
+        run: |
+          if [ -z "$APP_ID" ] || [ "$PRIVATE_KEY_PRESENT" != 'true' ]; then
+            echo '::notice::qwts-claude-agent App credentials are not configured; no pull request opened.'
+            echo 'configured=false' >> "$GITHUB_OUTPUT"
+          else
+            echo 'configured=true' >> "$GITHUB_OUTPUT"
+          fi
+
+      - id: app-token
+        name: Mint a qwts-claude-agent installation token
+        if: steps.credentials.outputs.configured == 'true'
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
+        with:
+          app-id: ${{ vars.CLAUDE_AGENT_APP_ID }}
+          private-key: ${{ secrets.CLAUDE_AGENT_PRIVATE_KEY }}
+
+      # Branch and commit text reach the shell only through the environment, so
+      # neither is expanded as a workflow expression inside the script.
+      - name: Open the pull request as qwts-claude-agent[bot]
+        if: steps.credentials.outputs.configured == 'true'
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+          REPOSITORY: ${{ github.repository }}
+          BASE: ${{ github.event.repository.default_branch }}
+          BRANCH: ${{ github.ref_name }}
+          HEAD_SHA: ${{ github.sha }}
+          HEAD_MESSAGE: ${{ github.event.head_commit.message }}
+        run: |
+          set -euo pipefail
+          open_count="$(gh pr list --repo "$REPOSITORY" --head "$BRANCH" --state open --json number --jq 'length')"
+          if [ "$open_count" != '0' ]; then
+            echo "::notice::$BRANCH already has an open pull request."
+            exit 0
+          fi
+
+          title="$(printf '%s' "$HEAD_MESSAGE" | head -n 1)"
+          [ -n "$title" ] || title="$BRANCH"
+
+          body="$(printf '%s\n' \
+            "Opened by the Agent PR workflow so this branch is authored by the agent App rather than by its reviewer (#91)." \
+            '' \
+            "Branch \`$BRANCH\` at \`$HEAD_SHA\`. The session that pushed it fills in this description." )"
+
+          gh pr create \
+            --repo "$REPOSITORY" \
+            --base "$BASE" \
+            --head "$BRANCH" \
+            --title "$title" \
+            --body "$body" \
+            --draft

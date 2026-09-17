@@ -58,5 +58,8 @@ Designs are accepted — read them before changing anything:
    never the fixtures; bump the pinned prompt version on any prompt change.
 5. **Workflow:** issue-first; branch from `main`; commit under the bot
    identity and sign via the Git Data API (signed-commit skill); PRs need one
-   approving human review. Token-efficient output and docs — findings, not
-   ceremony.
+   approving human review. A remote session authenticating as `qwts` cannot
+   supply that reviewer, so it pushes a `claude/**` branch and lets
+   `.github/workflows/agent-pr.yml` open the draft PR under the agent App,
+   then fills in the description over the API (#91). Token-efficient output
+   and docs — findings, not ceremony.
