@@ -94,6 +94,55 @@ rejected, the cascade is not worth building and the measurement cost was one
 script. If it matches opus on the pass majority, the threshold policy has
 evidence behind it.
 
+## Evidence (2026-09-16)
+
+Added while this record is still `Proposed`, answering the question it set
+itself: the threshold "must be evaluated on this repo's own corpus and stated
+as a number." The candidate is `typesafe/jev-1.13.0` — the model string the
+API returned, not the `jev-1` label requested.
+
+**Two blockers recorded in #90 were wrong.** The JavaScript SDK is published as
+`@typesafe-ai/sdk` (#90 searched `typesafe-ai` and read the 404 as absence),
+and `docs.typesafe.ai` resolves. No wire contract had to be guessed.
+
+**Classification axis, test-honesty fixtures, 10 runs.** Assessment 7–8/8,
+verdict 8/8, criterion labels 4/4. One fixture (`unreviewable-snapshot`)
+changes answer between runs on an identical payload, landing correct 8 times
+in 10; every other fixture is stable. **A single self-test run is therefore too
+noisy to set a threshold from** — a fact this record did not previously state,
+and which matters because the exam is normally run once.
+
+**Confidence, not probability, is the gating signal.** On the run that missed,
+the losing label's *probability* was an unremarkable 0.51; its *confidence* was
+0.318 against a floor of 0.822 across every stable fixture. Probability
+describes the choice, confidence describes whether to trust it, and only the
+second separates the error.
+
+**Real corpus: 234 test files across 13 local repositories** — 227 pass, 7
+fail, at a cost of roughly $0.04 and under a minute wall-clock. Of the 7, all 7
+are real on inspection, including two security tests asserting
+`expect(true).toBe(true)` under the names `ST-302: repo privacy (simulated)`
+and `ST-003: CI uses official actions (placeholder)`.
+
+**False-negative rate: 0, against independent detection.** A mechanical grep
+for tautological assertions over the same 234 files finds exactly three; the
+route flagged all three. It also flagged four the grep cannot see — a test
+named for a history limit it never exercises, a security test exercising
+`JSON.parse` rather than the validator under test — so its recall strictly
+exceeds the mechanical detector's. No known-bad file was passed.
+
+**Confidence on real files is materially lower than on fixtures**, which are
+roughly half the size. A 0.80 threshold settles ~5% of real files; 0.60 settles
+~70%. The cascade's economics therefore live in a confidence band the fixtures
+do not validate, and the fixture-derived gap at 0.70 does not transfer.
+
+What this does **not** establish: it covers one check; three
+independently-confirmed positives is a thin base for a published threshold; the
+227 passes were not audited, so subtle slop neither the route nor the grep sees
+would not appear here; and no qualified judge was run over the same files, so
+these are agreement and recall figures, not a measured false-negative rate
+against opus.
+
 ## Consequences
 
 - A classifier route can be compared against every route already measured,

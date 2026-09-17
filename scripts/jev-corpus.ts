@@ -1,0 +1,111 @@
+// Spike (ACA-0080): what fraction of REAL test files would a System One
+// screen settle without calling the qualified judge?
+//
+// The calibration fixtures cannot answer this. They are adversarial by
+// construction — dense with planted dishonesty — so their pass rate says
+// nothing about a working repository, and the pass rate is the number the
+// whole cascade's economics turn on. The error this design cannot recover
+// from is a confident pass on a file that should fail, and that risk lives in
+// ordinary clean-looking code rather than in the fixtures.
+//
+// Uses the check's production evidence path (buildEvidence, the same globs
+// and companion-context bounds a real run uses), so a file is presented to
+// Jev exactly as it would be to the judge. No judge is called and no verdict
+// is published: this counts what a screen would absorb, nothing more.
+import { execFileSync } from 'node:child_process';
+import { readFileSync } from 'node:fs';
+import { homedir } from 'node:os';
+import { join } from 'node:path';
+import { choice, TypeSafeClient } from '@typesafe-ai/sdk';
+import { ASSESSMENTS, rubricText, systemPrompt, userPrompt } from '../src/checks/test-honesty/judge-io.ts';
+import { CONCURRENCY, mapPool } from '../src/checks/test-honesty/pool.ts';
+import { scopeTestFiles, testFileGlobs } from '../src/checks/test-honesty/scope.ts';
+import { buildEvidence } from '../src/checks/test-honesty/unit-context.ts';
+
+export interface ScreenRow {
+  file: string;
+  verdict: string;
+  confidence: number;
+}
+
+/** Files a screen would settle without calling the judge: a pass it is
+ * confident enough about. Anything else — a fail, a warn, or a pass below the
+ * threshold — escalates, so only `pass` is eligible however high its
+ * confidence. A fail the route is certain of still needs the judge's prose,
+ * which is the whole reason it cannot be admitted as one (ACA-0080). */
+export function settledAt(rows: readonly ScreenRow[], threshold: number): ScreenRow[] {
+  return rows.filter((row) => row.verdict === 'pass' && row.confidence >= threshold);
+}
+
+function resolveApiKey(): string {
+  const fromEnv = process.env.TYPESAFE_API_KEY?.trim();
+  if (fromEnv) return fromEnv;
+  const path = join(homedir(), '.config', 'typesafe', 'api-key');
+  const fromFile = readFileSync(path, 'utf8').trim();
+  if (!fromFile) throw new Error(`empty key at ${path}`);
+  return fromFile;
+}
+
+/** Candidate test files, discovered with git so ignored and vendored paths
+ * stay out without reimplementing the corpus rules. */
+function trackedFiles(repoRoot: string): string[] {
+  const out = execFileSync('git', ['-C', repoRoot, 'ls-files'], { encoding: 'utf8', maxBuffer: 64 * 1024 * 1024 });
+  return out.split('\n').filter(Boolean);
+}
+
+async function main(): Promise<void> {
+  process.env.TYPESAFE_API_KEY = resolveApiKey();
+  const repoRoot = process.argv[2];
+  const limit = Number(process.argv[3] ?? '40');
+  if (!repoRoot) throw new Error('usage: node scripts/jev-corpus.ts <repo-root> [limit]');
+
+  const globs = testFileGlobs(repoRoot);
+  const files = scopeTestFiles(trackedFiles(repoRoot), globs).slice(0, limit);
+  if (files.length === 0) throw new Error(`no test files in ${repoRoot}`);
+
+  const system = systemPrompt(rubricText());
+  const client = new TypeSafeClient();
+  const questions = {
+    assessment: choice(
+      'Judged against the rubric, is this test file honest?',
+      Object.fromEntries(ASSESSMENTS.map((a) => [a, null])) as Record<(typeof ASSESSMENTS)[number], null>,
+    ),
+    verdict: choice('What verdict should this file receive?', { pass: null, warn: null, fail: null }),
+  };
+
+  let inputTokens = 0;
+  const rows = await mapPool(files, CONCURRENCY, async (file) => {
+    const content = readFileSync(join(repoRoot, file), 'utf8');
+    const evidence = buildEvidence(repoRoot, file, content, globs);
+    const { answers, usage } = await client.systemOne({
+      state: { rubric: system, evidence: userPrompt(evidence) },
+      questions,
+    });
+    inputTokens += usage.input_tokens;
+    const verdict = answers.verdict.choice;
+    return { file, verdict, confidence: answers.verdict.confidence, assessment: answers.assessment.choice };
+  });
+
+  const pass = rows.filter((r) => r.verdict === 'pass');
+  const at = (t: number): number => settledAt(rows, t).length;
+  const pct = (n: number): string => `${((n / rows.length) * 100).toFixed(0)}%`;
+
+  console.log(`${repoRoot}  —  ${rows.length} test files`);
+  console.log(`  verdicts: pass ${pass.length}, warn ${rows.filter((r) => r.verdict === 'warn').length}, fail ${rows.filter((r) => r.verdict === 'fail').length}`);
+  console.log('  settled by the screen (confident pass), by threshold:');
+  for (const t of [0.6, 0.7, 0.8, 0.9]) console.log(`    >=${t.toFixed(2)}  ${at(t)}/${rows.length}  (${pct(at(t))} of judge calls avoided)`);
+  console.log(`  cost: ${inputTokens.toLocaleString()} input tokens = $${((inputTokens / 1e6) * 0.045).toFixed(5)}`);
+
+  const low = rows.filter((r) => r.verdict === 'pass' && r.confidence < 0.7).slice(0, 5);
+  if (low.length > 0) {
+    console.log('  low-confidence passes (these would still reach the judge):');
+    for (const r of low) console.log(`    ${r.confidence.toFixed(2)}  ${r.file}`);
+  }
+}
+
+if (process.argv[1]?.endsWith('jev-corpus.ts')) {
+  main().catch((err: unknown) => {
+    console.error(`jev-corpus: ${(err as Error).message}`);
+    process.exit(1);
+  });
+}
