@@ -8,10 +8,11 @@
 // from is a confident pass on a file that should fail, and that risk lives in
 // ordinary clean-looking code rather than in the fixtures.
 //
-// Uses the check's production evidence path (buildEvidence, the same globs
-// and companion-context bounds a real run uses), so a file is presented to
-// Jev exactly as it would be to the judge. No judge is called and no verdict
-// is published: this counts what a screen would absorb, nothing more.
+// Uses the check's production selection and evidence path — both scope
+// stages (the core include/exclude pass, then the check-local test-file
+// pass) and buildEvidence with the same companion-context bounds — so a file
+// is presented to Jev exactly as it would be to the judge. No judge is called
+// and no verdict is published: this counts what a screen would absorb.
 import { execFileSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
 import { homedir } from 'node:os';
@@ -21,11 +22,26 @@ import { ASSESSMENTS, rubricText, systemPrompt, userPrompt } from '../src/checks
 import { CONCURRENCY, mapPool } from '../src/checks/test-honesty/pool.ts';
 import { scopeTestFiles, testFileGlobs } from '../src/checks/test-honesty/scope.ts';
 import { buildEvidence } from '../src/checks/test-honesty/unit-context.ts';
+import { filterScope } from '../src/core/change-scope.ts';
+import { loadConfig, type AcaConfig } from '../src/core/config.ts';
 
 export interface ScreenRow {
   file: string;
   verdict: string;
   confidence: number;
+}
+
+/** The corpus a real run would judge: both scope stages, in the order
+ * production applies them — the core include/exclude pass, then the
+ * check-local test-file pass. Running only the second admits files the
+ * consuming repo excluded, and a repo that excludes its own planted
+ * calibration fixtures would have them measured as real code. */
+export function corpusFiles(
+  tracked: string[],
+  config: Pick<AcaConfig, 'include' | 'exclude'>,
+  globs: readonly string[],
+): string[] {
+  return scopeTestFiles(filterScope(tracked, config), globs);
 }
 
 /** Files a screen would settle without calling the judge: a pass it is
@@ -59,8 +75,14 @@ async function main(): Promise<void> {
   const limit = Number(process.argv[3] ?? '40');
   if (!repoRoot) throw new Error('usage: node scripts/jev-corpus.ts <repo-root> [limit]');
 
+  // Both scope stages, in the order a real run applies them: the core
+  // include/exclude pass first, then the check-local test-file pass. Running
+  // only the second admitted this repo's own planted calibration fixtures —
+  // excluded by aca.config.json — into a corpus reported as real code, which
+  // is the contamination PR #94's review caught.
+  const config = loadConfig(repoRoot);
   const globs = testFileGlobs(repoRoot);
-  const files = scopeTestFiles(trackedFiles(repoRoot), globs).slice(0, limit);
+  const files = corpusFiles(trackedFiles(repoRoot), config, globs).slice(0, limit);
   if (files.length === 0) throw new Error(`no test files in ${repoRoot}`);
 
   const system = systemPrompt(rubricText());
@@ -74,15 +96,20 @@ async function main(): Promise<void> {
   };
 
   let inputTokens = 0;
+  // Provenance, on the same footing as the fixture script: the aggregate is
+  // only tied to a candidate if the run records which model served it, and a
+  // mixed-version run must read as mixed rather than as either version.
+  const servedModels = new Set<string>();
   const unscreenable: { file: string; note: string }[] = [];
   const settled = await mapPool(files, CONCURRENCY, async (file): Promise<ScreenRow | undefined> => {
     const content = readFileSync(join(repoRoot, file), 'utf8');
     const evidence = buildEvidence(repoRoot, file, content, globs);
     try {
-      const { answers, usage } = await client.systemOne({
+      const { answers, model: served, usage } = await client.systemOne({
         state: { rubric: system, evidence: userPrompt(evidence) },
         questions,
       });
+      servedModels.add(served);
       inputTokens += usage.input_tokens;
       return { file, verdict: answers.verdict.choice, confidence: answers.verdict.confidence };
     } catch (err) {
@@ -102,6 +129,7 @@ async function main(): Promise<void> {
   const pct = (n: number): string => `${((n / rows.length) * 100).toFixed(0)}%`;
 
   console.log(`${repoRoot}  —  ${rows.length} test files screened of ${files.length}`);
+  console.log(`  served by: ${[...servedModels].sort().join(', ')}`);
   if (unscreenable.length > 0) {
     console.log(`  unscreenable: ${unscreenable.length} (excluded from every ratio below, would escalate)`);
     for (const u of unscreenable.slice(0, 3)) console.log(`    ${u.file} — ${u.note}`);

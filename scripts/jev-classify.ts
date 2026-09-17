@@ -149,6 +149,10 @@ async function main(): Promise<void> {
   const rows = await mapPool(manifest.fixtures, CONCURRENCY, async (fixture): Promise<FixtureRow> => {
     const evidence = evidenceOf(fixture, contentOf);
     const { answers, model: served, usage } = await client.systemOne({
+      // The requested model is sent, not merely recorded: an artifact whose
+      // `requestedModel` never reached the API would be a fabricated
+      // provenance field, which is the failure this record exists to refuse.
+      model,
       state: { rubric: system, evidence: userPrompt(evidence) },
       questions,
     });

@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { criteriaFrom, gradeFixture, noulKey, NOUL_THRESHOLD } from '../scripts/jev-classify.ts';
-import { settledAt } from '../scripts/jev-corpus.ts';
+import { corpusFiles, settledAt } from '../scripts/jev-corpus.ts';
 import { CRITERIA } from '../src/checks/test-honesty/judge-io.ts';
 
 // Nouls keyed the way the script asks them, so a test that passes here is
@@ -79,4 +79,24 @@ test('the settle threshold is inclusive at its boundary', () => {
   const rows = [{ file: 'a', verdict: 'pass', confidence: 0.7 }];
   assert.equal(settledAt(rows, 0.7).length, 1);
   assert.equal(settledAt(rows, 0.71).length, 0);
+});
+
+test('the corpus honors the consuming repo\'s excludes, not just the test globs', () => {
+  // This repository's own aca.config.json excludes src/checks/*/fixtures/**.
+  // A corpus built from the test globs alone admits the planted calibration
+  // fixtures and reports them as real code (PR #94 review).
+  const config = { include: ['src/**', 'tests/**'], exclude: ['src/checks/*/fixtures/**'] };
+  const globs = ['**/*.test.*'];
+  const tracked = [
+    'src/checks/test-honesty/fixtures/tautology.test.ts',
+    'src/core/config.test.ts',
+  ];
+  assert.deepEqual(corpusFiles(tracked, config, globs), ['src/core/config.test.ts']);
+});
+
+test('the corpus drops files outside include, and non-tests inside it', () => {
+  const config = { include: ['src/**'], exclude: [] };
+  const globs = ['**/*.test.*'];
+  const tracked = ['vendor/dep.test.ts', 'src/a.test.ts', 'src/a.ts'];
+  assert.deepEqual(corpusFiles(tracked, config, globs), ['src/a.test.ts']);
 });
