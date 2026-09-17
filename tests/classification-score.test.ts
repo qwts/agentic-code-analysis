@@ -174,10 +174,28 @@ test('seam-audit emptyFootprint is scored as a classification claim', () => {
   assert.equal(dirty?.labelHits, 0);
 });
 
+test('a scalar constraint on an unknown key is reported, not skipped', () => {
+  // The real agent-rule-conflict manifest states `sharedSessions: "some"` — a
+  // string, not an array. Non-array values were skipped outright, which is the
+  // same silent drop as the object dialects, found by running this scorer
+  // against a live calibrate run (qwen3.8-max, run 35173318435).
+  const row = scoreReport(
+    report([
+      {
+        name: 'within-file-contradiction',
+        expected: { assessment: 'conflicts-found', verdict: 'fail', criteriaAnyOf: ['direct-contradiction'], sharedSessions: 'some' },
+        actual: { assessment: 'conflicts-found', verdict: 'fail', criteria: ['direct-contradiction'], sharedSessions: [['codex-local@.']] },
+      },
+    ]),
+    'agent-rule-conflict',
+  );
+  assert.equal(row?.assessmentHits, 1);
+  assert.equal(row?.labelHits, 1);
+  assert.deepEqual(row?.unreadable, ['sharedSessions'], 'a scalar constraint must be named, not silently dropped');
+});
+
 test('an unreadable expectation key is reported, never read as unasked', () => {
-  // agent-rule-conflict carries sharedSessions as string[][]. Scoring it is
-  // out of scope, but silently dropping it is how the object dialects went
-  // unnoticed in the first place.
+  // A nested array is neither a label list nor an entry list.
   const row = scoreReport(
     report([{ name: 'f', expected: { criteriaAnyOf: ['contradiction'], sharedSessions: [['a', 'b']] }, actual: { verdict: 'fail', criteria: ['contradiction'] } }]),
     'agent-rule-conflict',
