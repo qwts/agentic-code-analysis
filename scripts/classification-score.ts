@@ -194,6 +194,9 @@ function satisfied(constraint: LabelConstraint, actual: Record<string, unknown>)
 }
 
 export function scoreReport(body: Record<string, unknown>, fallbackName: string): ClassificationRow | undefined {
+  // Defensive for direct callers: `null` satisfies the declared type at a
+  // JSON boundary and would throw on the first property read.
+  if (typeof body !== 'object' || body === null || Array.isArray(body)) return undefined;
   const fixtures = body['fixtures'];
   // An ungraded check (no manifest) reports only {passed, lines}. There is no
   // per-fixture record to re-score, so it gets no row rather than a zero.
@@ -268,13 +271,22 @@ export function classificationTable(results: readonly SelfTestResultFile[]): str
       unusable.push(result.name);
       continue;
     }
-    let body: Record<string, unknown>;
+    let parsed: unknown;
     try {
-      body = JSON.parse(raw) as Record<string, unknown>;
+      parsed = JSON.parse(raw);
     } catch {
       unusable.push(result.name);
       continue;
     }
+    // Valid JSON is not a usable report on its own: `null` parses cleanly and
+    // would throw on the first property read, taking every other artifact's
+    // result down with it rather than listing this one as unusable (Codex,
+    // PR #90). One dead artifact must never suppress the rest of the table.
+    if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) {
+      unusable.push(result.name);
+      continue;
+    }
+    const body = parsed as Record<string, unknown>;
     const row = scoreReport(body, result.name);
     if (row) rows.push(row);
     else unusable.push(String(body['check'] ?? result.name));
