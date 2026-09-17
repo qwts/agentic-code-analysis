@@ -102,8 +102,8 @@ function isEntryObject(value: unknown): value is Exclude<ExpectedEntry, string> 
  * every entry; a bare string array demands one; object entries are always
  * all-of, because every dialect that uses them requires all.
  *
- * A key whose entries are neither — agent-rule-conflict's `sharedSessions`,
- * or any future shape — is reported rather than dropped. Silently reading an
+ * A key whose value is neither — agent-rule-conflict's `sharedSessions`, or
+ * any future shape — is reported rather than dropped. Silently reading an
  * unrecognized constraint as "not asked" is the failure this function exists
  * to avoid (Cursor Bugbot, PR #90).
  */
@@ -111,7 +111,16 @@ function labelConstraints(expect: Record<string, unknown>): { constraints: Label
   const constraints: LabelConstraint[] = [];
   const unreadable: string[] = [];
   for (const [key, value] of Object.entries(expect)) {
-    if (NOT_A_LABEL.has(key) || !Array.isArray(value) || value.length === 0) continue;
+    if (NOT_A_LABEL.has(key)) continue;
+    if (!Array.isArray(value)) {
+      // A scalar on an unknown key is still a constraint this scorer does not
+      // read: agent-rule-conflict states `sharedSessions: "some"`. Skipping it
+      // silently is the same defect as dropping the object dialects, so it is
+      // reported rather than ignored.
+      if (value !== undefined && value !== null) unreadable.push(key);
+      continue;
+    }
+    if (value.length === 0) continue;
     const base = key.replace(/(AnyOf|AllOf)$/, '');
     if (value.every((entry) => typeof entry === 'string' && entry !== '')) {
       constraints.push({ base, all: key.endsWith('AllOf'), entries: value as string[] });
