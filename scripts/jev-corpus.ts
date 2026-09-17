@@ -74,29 +74,53 @@ async function main(): Promise<void> {
   };
 
   let inputTokens = 0;
-  const rows = await mapPool(files, CONCURRENCY, async (file) => {
+  const unscreenable: { file: string; note: string }[] = [];
+  const settled = await mapPool(files, CONCURRENCY, async (file): Promise<ScreenRow | undefined> => {
     const content = readFileSync(join(repoRoot, file), 'utf8');
     const evidence = buildEvidence(repoRoot, file, content, globs);
-    const { answers, usage } = await client.systemOne({
-      state: { rubric: system, evidence: userPrompt(evidence) },
-      questions,
-    });
-    inputTokens += usage.input_tokens;
-    const verdict = answers.verdict.choice;
-    return { file, verdict, confidence: answers.verdict.confidence, assessment: answers.assessment.choice };
+    try {
+      const { answers, usage } = await client.systemOne({
+        state: { rubric: system, evidence: userPrompt(evidence) },
+        questions,
+      });
+      inputTokens += usage.input_tokens;
+      return { file, verdict: answers.verdict.choice, confidence: answers.verdict.confidence };
+    } catch (err) {
+      // A file the route cannot read is not a pass and not a fail — it is
+      // absent evidence. Recorded and excluded from every ratio rather than
+      // scored, and it would escalate to the judge in a real cascade. One
+      // unreadable file never suppresses the rest of the sweep.
+      unscreenable.push({ file, note: (err as Error).message.slice(0, 80) });
+      return undefined;
+    }
   });
+  const rows: ScreenRow[] = settled.filter((row) => row !== undefined);
+  if (rows.length === 0) throw new Error(`no file in ${repoRoot} could be screened`);
 
   const pass = rows.filter((r) => r.verdict === 'pass');
   const at = (t: number): number => settledAt(rows, t).length;
   const pct = (n: number): string => `${((n / rows.length) * 100).toFixed(0)}%`;
 
-  console.log(`${repoRoot}  —  ${rows.length} test files`);
+  console.log(`${repoRoot}  —  ${rows.length} test files screened of ${files.length}`);
+  if (unscreenable.length > 0) {
+    console.log(`  unscreenable: ${unscreenable.length} (excluded from every ratio below, would escalate)`);
+    for (const u of unscreenable.slice(0, 3)) console.log(`    ${u.file} — ${u.note}`);
+  }
   console.log(`  verdicts: pass ${pass.length}, warn ${rows.filter((r) => r.verdict === 'warn').length}, fail ${rows.filter((r) => r.verdict === 'fail').length}`);
   console.log('  settled by the screen (confident pass), by threshold:');
   for (const t of [0.6, 0.7, 0.8, 0.9]) console.log(`    >=${t.toFixed(2)}  ${at(t)}/${rows.length}  (${pct(at(t))} of judge calls avoided)`);
   console.log(`  cost: ${inputTokens.toLocaleString()} input tokens = $${((inputTokens / 1e6) * 0.045).toFixed(5)}`);
 
-  const low = rows.filter((r) => r.verdict === 'pass' && r.confidence < 0.7).slice(0, 5);
+  // Named individually rather than counted: a non-pass is a candidate true
+  // positive, and the false-negative question cannot be worked without
+  // knowing which files to read.
+  const flagged = rows.filter((r) => r.verdict !== 'pass');
+  if (flagged.length > 0) {
+    console.log('  flagged (candidate true positives — read these):');
+    for (const r of flagged) console.log(`    ${r.verdict.toUpperCase()} conf=${r.confidence.toFixed(2)}  ${r.file}`);
+  }
+
+  const low = settledAt(rows, 0).filter((r) => r.confidence < 0.7).slice(0, 5);
   if (low.length > 0) {
     console.log('  low-confidence passes (these would still reach the judge):');
     for (const r of low) console.log(`    ${r.confidence.toFixed(2)}  ${r.file}`);
