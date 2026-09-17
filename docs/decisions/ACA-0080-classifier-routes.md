@@ -118,7 +118,8 @@ the losing label's *probability* was an unremarkable 0.51; its *confidence* was
 describes the choice, confidence describes whether to trust it, and only the
 second separates the error.
 
-**Real corpus: 234 test files across 13 local repositories** — 227 pass, 7
+**Real corpus: 234 test files across 13 local repositories** (**partly
+contaminated — see Corrections**) — 227 pass, 7
 fail, at a cost of roughly $0.04 and under a minute wall-clock. Of the 7, all 7
 are real on inspection, including two security tests asserting
 `expect(true).toBe(true)` under the names `ST-302: repo privacy (simulated)`
@@ -135,6 +136,7 @@ exceeds the mechanical detector's. No known-bad file was passed.
 roughly half the size. A 0.80 threshold settles ~5% of real files; 0.60 settles
 ~70%. The cascade's economics therefore live in a confidence band the fixtures
 do not validate, and the fixture-derived gap at 0.70 does not transfer.
+(**Every confidence number above is naive-framing — see Corrections.**)
 
 What this does **not** establish: it covers one check; three
 independently-confirmed positives is a thin base for a published threshold; the
@@ -162,3 +164,71 @@ against opus.
   tuning knob.
 - Nothing here qualifies any route or closes #80. It settles what a classifier
   candidate would have to prove and how it would be admitted if it did.
+
+## Corrections (2026-09-16, same day)
+
+Two defects in the measurement above were found after it was written. Both
+move numbers this record relies on, so they are recorded here rather than
+silently edited away.
+
+**The corpus skipped a scope stage.** `scripts/jev-corpus.ts` applied the
+check-local test-file globs but not the consuming repo's `include`/`exclude`
+globs, which a real run applies first. In this repository that admitted
+exactly seven planted calibration fixtures — `commit-coherence` and
+`review-readiness` fixture trees, including one named `forgotten-debris` — as
+though they were real code, and they sorted first, so they led the default
+run. The local-repository figures above are contaminated to that extent: the
+"234 real test files" were not all real, and because the run's per-file output
+was not retained and the thirteen repositories were not recorded, the 7-fail
+list and the 0-false-negative claim cannot now be re-derived from evidence.
+They are withdrawn as measurements and kept only as the reason the sweep was
+worth running. Fixed, with the two-stage selection extracted as `corpusFiles`
+and pinned by test. The openclaw figures are unaffected: that repository has
+no `aca.config.json`, so its exclude list was empty either way.
+
+**The framing was naive, and it cost roughly half the settle rate.** Every
+number above was produced by dumping the generative judge's prose rubric into
+`state` and asking Choice questions whose every option description was `null`
+— that is, asking the model to choose between `honest`/`dishonest` and
+`pass`/`warn`/`fail` with no definition of any label. TypeSafe documents that
+option descriptions, Score levels and Noul criteria all accept structure, and
+that state should hold the material while the questions define the judgment.
+Re-run with the material structured (`test_file`, `unit_under_test`,
+`snapshots`, `blocking_criteria`) and every label described, on this
+repository's 78 real test files:
+
+| settle threshold | naive | structured |
+| --- | --- | --- |
+| >=0.70 | 46% | 71% |
+| >=0.80 | 23% | 47% |
+| >=0.90 | 3% | 21% |
+
+Structured framing also costs ~20% less per file, because the prose rubric
+preamble leaves `state`. On the calibration fixtures it lifts mean verdict
+confidence from 0.688 to ~0.905.
+
+**This retracts a conclusion drawn above.** The record blamed run-to-run
+instability on the model, and inferred from it that "a single self-test run is
+too noisy to set a threshold from." Under structured framing the fixture that
+flipped (`unreviewable-snapshot`) settles at 0.95 confidence, and the
+low-confidence readings that produced the noise were the model responding
+honestly to an underspecified question. The instability was ours.
+
+**A design defect the comparison exposed.** Questions are evaluated
+independently, so nothing makes `assessment` and `verdict` agree: a run can
+answer `verdict: fail` at 0.95 while answering `assessment: honest`. Asking
+both as free-standing Choices invites exactly that contradiction. The
+composite-scoring shape — ask the four criteria atomically, derive assessment
+and verdict in code — is coherent by construction and is what a real screening
+adapter should do. Not built here.
+
+**Full upstream openclaw sweep** (naive framing, 15,910 files screened of
+16,111, $3.69): pass 15,832, warn 9, fail 69, 201 unscreenable (1.3%, all
+`max_tokens_exceeded` — `buildEvidence` bounds companion context but not the
+test file itself). Settle 50% at 0.60, 21% at 0.70, 4% at 0.80.
+
+**What this means for the record's question.** The threshold "must be
+evaluated on this repo's own corpus and stated as a number" — and it still
+must, but no number measured so far is a fair estimate of what this route can
+do, because none of them asked the question well. A threshold published from
+naive-framing evidence would understate the route by roughly half.
