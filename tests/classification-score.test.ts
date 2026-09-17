@@ -246,3 +246,24 @@ test('unusable artifacts are named instead of silently dropped', () => {
   ]).join('\n');
   assert.match(table, /No per-fixture record for: seam-audit, doc-drift\./);
 });
+
+test('valid-but-unusable JSON cannot suppress the rest of the table', () => {
+  // `null` parses cleanly and used to throw on the first property read,
+  // exiting the whole command instead of listing one dead artifact
+  // (Codex, PR #90).
+  const good = JSON.stringify({
+    check: 'test-honesty',
+    provider: 'anthropic',
+    model: 'claude-opus-5',
+    fixtures: [{ name: 'a', status: 'ok', expected: { assessment: 'honest', verdict: 'pass' }, actual: { assessment: 'honest', verdict: 'pass', criteria: [] } }],
+  });
+  for (const raw of ['null', '123', '"text"', '[]', 'true']) {
+    const table = classificationTable([
+      { name: 'dead', raw },
+      { name: 'test-honesty', raw: good },
+    ]).join('\n');
+    assert.match(table, /\| test-honesty \|.*\| 1\/1 \|/, `a "${raw}" artifact must not suppress a usable row`);
+    assert.match(table, /No per-fixture record for: dead\./, `a "${raw}" artifact must be named as unusable`);
+  }
+  assert.equal(scoreReport(null as unknown as Record<string, unknown>, 'x'), undefined);
+});
